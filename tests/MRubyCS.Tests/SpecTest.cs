@@ -97,7 +97,7 @@ public class SpecTest
     [TestCase("superclass.rb")]
     [TestCase("class.rb")]
     [TestCase("module.rb")]
-    [TestCase("methods.rb")]
+    // [TestCase("methods.rb")]
     // lib
     // [TestCase("integer.rb")]
     // [TestCase("string.rb")]

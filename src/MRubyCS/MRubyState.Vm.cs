@@ -1778,13 +1778,19 @@ partial class MRubyState
                     {
                         Markers.Lambda();
                         bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
-                        var proc = NewClosure(irep.Children[bb.B]);
-                        if (opcode == OpCode.Lambda)
-                            proc.SetFlag(MRubyObjectFlags.ProcStrict);
-                        else if (opcode == OpCode.Method)
+                        RProc proc;
+                        if (opcode == OpCode.Method)
                         {
-                            proc.SetFlag(MRubyObjectFlags.ProcStrict);
-                            proc.SetFlag(MRubyObjectFlags.ProcScope);
+                            proc = NewProc(irep.Children[bb.B]);
+                            proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
+                        }
+                        else
+                        {
+                            proc = NewClosure(irep.Children[bb.B]);
+                            if (opcode == OpCode.Lambda)
+                            {
+                                proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
+                            }
                         }
                         registers[bb.A] = MRubyValue.From(proc);
                         goto Next;

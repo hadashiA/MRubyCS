@@ -292,7 +292,7 @@ partial class MRubyState
 
     public MRubyValue DupObject(MRubyValue obj)
     {
-        if (obj.Object is RObject src)
+        if (obj.Object is { } src)
         {
             if (src.VType == MRubyVType.SClass)
             {
@@ -314,7 +314,7 @@ partial class MRubyState
 
     public RString InspectObject(MRubyValue value)
     {
-        if (value.Object is RObject obj)
+        if (value.Object is { } obj)
         {
             if (obj.InstanceVariables.Length > 0)
             {
@@ -385,12 +385,12 @@ partial class MRubyState
             if (callInfo.Proc is { } upper)
             {
                 var methodId = callInfo.MethodId;
-                if (upper?.Scope is REnv { Context: null } x)
+                if (upper.Scope is REnv { Context: null } x)
                 {
                     methodId = x.MethodId;
                 }
 
-                var stackSize = upper!.Irep.RegisterVariableCount;
+                var stackSize = upper.Irep.RegisterVariableCount;
                 env = new REnv
                 {
                     Context = context,
