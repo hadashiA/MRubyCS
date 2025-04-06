@@ -276,17 +276,21 @@ public class RString : RObject, ISpanFormattable, IUtf8SpanFormattable, IEquatab
         return RStringRangeType.OutOfRange;
     }
 
-    public override int GetHashCode()
+    internal static uint GetHashCode(ReadOnlySpan<byte> span)
     {
         const uint OffsetBasis = 2166136261u;
         const uint FnvPrime = 16777619u;
         var hash = OffsetBasis;
-        foreach (var b in AsSpan())
+        foreach (var b in span)
         {
             hash ^= b;
             hash *= FnvPrime;
         }
-        return unchecked((int)hash);
+        return hash;
+    }
+    public override int GetHashCode()
+    {
+        return unchecked((int)GetHashCode(AsSpan()));
     }
 
     public bool Equals(RString? other)
