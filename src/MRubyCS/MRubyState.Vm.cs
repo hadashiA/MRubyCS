@@ -450,7 +450,7 @@ partial class MRubyState
                     {
                         var id = irep.Symbols[bb.B];
                         var c = callInfo.Proc?.Scope?.TargetClass ?? ObjectClass;
-                        if (c.InstanceVariables.TryGet(id, out var value))
+                        if (c.ClassInstanceVariables.TryGet(id, out var value))
                         {
                             registerA = value;
                             goto Next;
@@ -459,7 +459,7 @@ partial class MRubyState
                         var x = c;
                         while (x is { VType: MRubyVType.SClass })
                         {
-                            if (!x.InstanceVariables.TryGet(id, out value))
+                            if (!x.ClassInstanceVariables.TryGet(id, out value))
                             {
                                 x = null;
                                 break;
@@ -474,7 +474,7 @@ partial class MRubyState
                         while (proc != null)
                         {
                             x = proc.Scope?.TargetClass ?? ObjectClass;
-                            if (x.InstanceVariables.TryGet(id, out value))
+                            if (x.ClassInstanceVariables.TryGet(id, out value))
                             {
                                 registerA = value;
                                 goto Next;
@@ -813,7 +813,7 @@ partial class MRubyState
                             ? (RClass)callInfo.Scope // set RClass.Super in OpCode.Super
                             : ClassOf(self);
                         var methodId = callInfo.MethodId;
-                        if (!TryFindMethod(receiverClass, methodId, out var method, out _))
+                        if (!TryFindMethod(receiverClass, methodId, out var method, out receiverClass))
                         {
                             method = PrepareMethodMissing(ref callInfo, self, methodId,
                                 opcode == OpCode.Super
@@ -1778,13 +1778,19 @@ partial class MRubyState
                     {
                         Markers.Lambda();
                         bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
-                        var proc = NewClosure(irep.Children[bb.B]);
-                        if (opcode == OpCode.Lambda)
-                            proc.SetFlag(MRubyObjectFlags.ProcStrict);
-                        else if (opcode == OpCode.Method)
+                        RProc proc;
+                        if (opcode == OpCode.Method)
                         {
-                            proc.SetFlag(MRubyObjectFlags.ProcStrict);
-                            proc.SetFlag(MRubyObjectFlags.ProcScope);
+                            proc = NewProc(irep.Children[bb.B]);
+                            proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
+                        }
+                        else
+                        {
+                            proc = NewClosure(irep.Children[bb.B]);
+                            if (opcode == OpCode.Lambda)
+                            {
+                                proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
+                            }
                         }
                         registers[bb.A] = MRubyValue.From(proc);
                         goto Next;
@@ -1873,9 +1879,16 @@ partial class MRubyState
                         bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
                         registerA = ref registers[bb.A];
                         var id = irep.Symbols[bb.B];
-                        var outerClass = registerA.IsNil
-                            ? callInfo.Proc?.Scope?.TargetClass ?? ObjectClass
-                            : registerA.As<RClass>();
+                        RClass outerClass;
+                        if (registerA.IsNil)
+                        {
+                            outerClass = callInfo.Proc?.Scope?.TargetClass ?? ObjectClass;
+                        }
+                        else
+                        {
+                            EnsureClassOrModule(registerA);
+                            outerClass = registerA.As<RClass>();
+                        }
 
                         RClass definedModule;
                         if (ConstDefinedAt(id, outerClass))
@@ -2016,7 +2029,7 @@ partial class MRubyState
             catch (MRubyRaiseException ex)
             {
                 Exception = ex;
-                if (TryRaiseJump(ref callInfo))
+                if (TryRaiseJump(ref context.CurrentCallInfo))
                 {
                     callInfo = ref context.CurrentCallInfo;
                     irep = callInfo.Proc!.Irep;

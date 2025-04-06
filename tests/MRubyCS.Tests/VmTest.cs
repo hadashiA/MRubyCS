@@ -13,6 +13,13 @@ public class VmTest
     {
         mrb = MRubyState.Create();
         compiler = MRubyCompiler.Create(mrb);
+
+        mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("__log"u8), (state, _) =>
+        {
+            var arg = state.GetArg(0);
+            TestContext.Out.WriteLine(state.Stringify(arg).ToString());
+            return MRubyValue.Nil;
+        });
     }
 
     [TearDown]
@@ -26,7 +33,7 @@ public class VmTest
     {
         var result = Exec("""
                           def fibonacci(n)
-                            return n if n <= 1 
+                            return n if n <= 1
                             fibonacci(n - 1) + fibonacci(n - 2)
                           end
 
@@ -99,11 +106,11 @@ public class VmTest
                               123
                             end
                           end
-                          
+
                           class A
                             include M
                           end
-                          
+
                           A.new.foo
                           """u8);
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
@@ -148,7 +155,7 @@ public class VmTest
         var result = Exec("""
                           class Foo
                             attr_reader :a
-                            
+
                             def initialize(a)
                               @a = a
                             end
@@ -179,12 +186,12 @@ public class VmTest
         var result = Exec("""
                           class A
                             attr_reader :x
-                          
+
                             def foo
                               @x = 123
                             end
                           end
-                          
+
                           a = A.new
                           a.instance_eval { foo }
                           a.x
@@ -202,11 +209,34 @@ public class VmTest
                           A.class_eval do
                             def foo = 123
                           end
-                          
+
                           A.new.foo
                           """u8);
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
     }
+//
+//     [Test]
+//     public void Mod()
+//     {
+//       var result = Exec("""
+//                         def labeled_module(name, &block)
+//                           Module.new do
+//                             class_eval(&block)
+//                           end
+//                         end
+//
+//                         module M1
+//                         end
+//
+//                         b = labeled_module('b') do
+//                           include M1
+//                         end
+//                         c = labeled_module('c') do
+//                           include b
+//                         end
+//                         """u8);
+//       Assert.That(result, Is.EqualTo(MRubyValue.True));
+//     }
 
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {

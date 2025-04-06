@@ -91,12 +91,6 @@ partial class MRubyState
             if (className.IsSymbol)
             {
                 var path = ClassPath.Find(this, c);
-                if (path.Length <= 1)
-                {
-                    var name = NameOf(className.SymbolValue);
-                    c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(name));
-                    return name.Dup();
-                }
                 var pathName = path.ToRString(this);
                 c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(pathName));
                 return pathName.Dup();
@@ -112,7 +106,7 @@ partial class MRubyState
             ? "Module"u8
             : "Class"u8;
         var h = RuntimeHelpers.GetHashCode(c);
-        var instantName = NewString(Utf8String.Format($"#<{prefix}:{h}>"));
+        var instantName = NewString($"#<{prefix}:0x{h:x}>");
         c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(instantName));
         return instantName;
     }
@@ -230,9 +224,14 @@ partial class MRubyState
 
     public MRubyValue GetInstanceVariable(MRubyValue obj, Symbol key)
     {
-        if (obj.Object is RObject x)
+        if (obj.Object is RClass c)
         {
-            return x.InstanceVariables.Get(key);
+            return c.ClassInstanceVariables.Get(key);
+        }
+
+        if (obj.Object is { } o)
+        {
+            return o.InstanceVariables.Get(key);
         }
         return MRubyValue.Nil;
     }
@@ -240,11 +239,14 @@ partial class MRubyState
     public void SetInstanceVariable(MRubyValue obj, Symbol key, MRubyValue value)
     {
         EnsureNotFrozen(obj);
-        // if (value.IsNamespace)
-        // {
-        //     TrySetClassPathLink(obj.As<RClass>(), value.As<RClass>(), key);
-        // }
-        obj.As<RObject>().InstanceVariables.Set(key, value);
+        if (obj.Object is RClass c)
+        {
+            c.ClassInstanceVariables.Set(key, value);
+        }
+        else
+        {
+            obj.As<RObject>().InstanceVariables.Set(key, value);
+        }
     }
 
     public MRubyValue RemoveInstanceVariable(MRubyValue obj, Symbol key)
@@ -290,7 +292,7 @@ partial class MRubyState
 
     public MRubyValue DupObject(MRubyValue obj)
     {
-        if (obj.Object is RObject src)
+        if (obj.Object is { } src)
         {
             if (src.VType == MRubyVType.SClass)
             {
@@ -312,7 +314,7 @@ partial class MRubyState
 
     public RString InspectObject(MRubyValue value)
     {
-        if (value.Object is RObject obj)
+        if (value.Object is { } obj)
         {
             if (obj.InstanceVariables.Length > 0)
             {
@@ -383,12 +385,12 @@ partial class MRubyState
             if (callInfo.Proc is { } upper)
             {
                 var methodId = callInfo.MethodId;
-                if (upper?.Scope is REnv { Context: null } x)
+                if (upper.Scope is REnv { Context: null } x)
                 {
                     methodId = x.MethodId;
                 }
 
-                var stackSize = upper!.Irep.RegisterVariableCount;
+                var stackSize = upper.Irep.RegisterVariableCount;
                 env = new REnv
                 {
                     Context = context,

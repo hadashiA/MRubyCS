@@ -73,7 +73,6 @@ public class RProc(Irep irep, int programCounter, RClass procClass) : RObject(MR
         return proc.Scope as REnv;
     }
 
-
     internal void UpdateScope(ICallScope scope)
     {
         this.scope = scope;
