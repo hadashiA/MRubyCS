@@ -148,7 +148,7 @@ static class IntegerMembers
         var other = state.GetArg(0);
         if (other.IsInteger)
         {
-            if (other.FloatValue == 0)
+            if (other.IntegerValue == 0)
             {
                 RaiseDivideByZeroError(state);
                 return default;
@@ -182,7 +182,7 @@ static class IntegerMembers
     });
 
     [MRubyMethod(RequiredArguments = 1)]
-    public static MRubyMethod Div = new((state, self) =>
+    public static MRubyMethod IntDiv = new((state, self) =>
     {
         var a = state.ToInteger(self);
         var other = state.GetArg(0);
@@ -465,7 +465,7 @@ static class IntegerMembers
     });
 
     public static MRubyMethod ToF = new((state, self) => MRubyValue.From((double)(state.ToInteger(self))));
-    public static MRubyMethod ToI = new((state, self) => MRubyValue.From(state.ToInteger(self)));
+    public static MRubyMethod ToI = new((state, self) => self);
 
     internal static bool NumShift(MRubyState state, long val, long width, out long num)
     {

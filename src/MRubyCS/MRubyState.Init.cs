@@ -338,6 +338,8 @@ public partial class MRubyState
         DefineMethod(IntegerClass, Names.OpMod, IntegerMembers.Mod);
         DefineMethod(IntegerClass, Names.OpPlus, IntegerMembers.OpPlus);
         DefineMethod(IntegerClass, Names.OpMinus, IntegerMembers.OpMinus);
+        DefineMethod(IntegerClass, Intern("div"u8), IntegerMembers.IntDiv);
+        DefineMethod(IntegerClass, Intern("fdiv"u8), IntegerMembers.FDiv);
         DefineMethod(IntegerClass, Intern("abs"u8), IntegerMembers.Abs);
         DefineMethod(IntegerClass, Intern("quo"u8), IntegerMembers.Quo);
         DefineMethod(IntegerClass, Intern("ceil"u8), IntegerMembers.Ceil);
@@ -345,13 +347,12 @@ public partial class MRubyState
         DefineMethod(IntegerClass, Intern("round"u8), IntegerMembers.Round);
         DefineMethod(IntegerClass, Intern("next"u8), IntegerMembers.Next);
         DefineMethod(IntegerClass, Intern("succ"u8), IntegerMembers.Next);
-
         DefineMethod(IntegerClass, Intern("truncate"u8), IntegerMembers.Truncate);
         DefineMethod(IntegerClass, Names.Hash, IntegerMembers.Hash);
         DefineMethod(IntegerClass, Intern("divmod"u8), IntegerMembers.DivMod);
         DefineMethod(IntegerClass, Intern("to_f"u8), IntegerMembers.ToF);
         DefineMethod(IntegerClass, Names.ToI, IntegerMembers.ToI);
-
+        DefineMethod(IntegerClass, Intern("to_int"u8), IntegerMembers.ToI);
         DefineMethod(IntegerClass, Names.OpAnd, IntegerMembers.OpAnd);
         DefineMethod(IntegerClass, Names.OpOr, IntegerMembers.OpOr);
         DefineMethod(IntegerClass, Names.OpXor, IntegerMembers.OpXor);
@@ -368,7 +369,6 @@ public partial class MRubyState
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
         DefineMethod(FloatClass, Names.OpCmp, NumericMembers.OpCmp);
         DefineMethod(FloatClass, Intern("divmod"u8), FloatMembers.DivMod);
-
     }
 
     void InitString()
