@@ -335,7 +335,6 @@ public partial class MRubyState
         DefineMethod(IntegerClass, Names.OpDiv, IntegerMembers.OpDiv);
         DefineMethod(IntegerClass, Names.ToS, IntegerMembers.ToS);
         DefineMethod(IntegerClass, Names.Inspect, IntegerMembers.ToS);
-        DefineMethod(IntegerClass, Names.Inspect, IntegerMembers.ToS);
         DefineMethod(IntegerClass, Names.OpMod, IntegerMembers.Mod);
         DefineMethod(IntegerClass, Names.OpPlus, IntegerMembers.OpPlus);
         DefineMethod(IntegerClass, Names.OpMinus, IntegerMembers.OpMinus);
