@@ -642,7 +642,7 @@ partial class MRubyState
                         var env = callInfo.Proc?.FindUpperEnvTo(bbb.C);
                         if (env != null && bbb.B < env.Stack.Length)
                         {
-                            registers[bbb.A] = env.Stack.Span[bbb.B];
+                            registers[bbb.A] = env.Stack[bbb.B];
                         }
                         else
                         {
@@ -657,7 +657,7 @@ partial class MRubyState
                         var env = callInfo.Proc?.FindUpperEnvTo(bbb.C);
                         if (env != null && bbb.B < env.Stack.Length)
                         {
-                            env.Stack.Span[bbb.B] = registers[bbb.A];
+                            env.Stack[bbb.B] = registers[bbb.A];
                         }
                         goto Next;
                     }
@@ -943,7 +943,7 @@ partial class MRubyState
                         if (proc.Scope is REnv env)
                         {
                             callInfo.MethodId = env.MethodId;
-                            registers[0] = env.Stack.Span[0];
+                            registers[0] = env.Stack[0];
                         }
                         goto Next;
                     }
@@ -987,7 +987,7 @@ partial class MRubyState
                         var aspec = new ArgumentSpec(bits);
 
                         var argc = callInfo.ArgumentCount;
-                        var argv = registers.Slice(1, argc);
+                        var argv = registers[1..];
 
                         var m1 = aspec.MandatoryArguments1Count;
 
@@ -1306,7 +1306,7 @@ partial class MRubyState
                             {
                                 Raise(Names.LocalJumpError, "unexpected yield"u8);
                             }
-                            stack = env!.Stack.Span[1..];
+                            stack = env!.Stack[1..];
                         }
 
                         var block = stack[offset];
