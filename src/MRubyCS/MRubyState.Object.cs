@@ -428,7 +428,8 @@ partial class MRubyState
                 env = new REnv
                 {
                     Context = context,
-                    Stack = context.Stack.AsMemory(callInfo.StackPointer, stackSize),
+                    StackPointer = callInfo.StackPointer,
+                    StackSize = stackSize,
                     MethodId = methodId,
                     BlockArgumentOffset = callInfo.BlockArgumentOffset,
                     TargetClass = callInfo.Scope.TargetClass
@@ -452,7 +453,7 @@ partial class MRubyState
                 Raise(Names.ArgumentError, "self is lost (probably ran out of memory when the block became independent)"u8);
             }
             targetClass = env.TargetClass;
-            return env.Stack.Span[0];
+            return env.Stack[0];
         }
 
         targetClass = ObjectClass;
@@ -464,7 +465,7 @@ partial class MRubyState
         ref var callInfo = ref context.CurrentCallInfo;
         if (callInfo.Proc?.Scope is REnv env)
         {
-            return env.Stack.Span;
+            return env.Stack;
         }
         Raise(Names.TypeError, "Can't get closure env from proc"u8);
         return default; // not reached

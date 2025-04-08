@@ -197,7 +197,7 @@ partial class MRubyState
         var nextStack = context.Stack.AsSpan(nextCallInfo.StackPointer);
         nextStack[0] = self;
 
-        if (args.Length > MRubyCallInfo.CallMaxArgs)
+        if (args.Length >= MRubyCallInfo.CallMaxArgs)
         {
             // TODO: packing
             throw new NotImplementedException();
@@ -209,12 +209,7 @@ partial class MRubyState
         }
         nextCallInfo.KeywordArgumentCount = 0;
 
-        if (block is not { } proc)
-        {
-            throw new NotSupportedException();
-        }
-
-        return Exec(proc.Irep, proc.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
+        return Exec(block.Irep, block.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
     }
 
     public MRubyValue Exec(ReadOnlySpan<byte> bytecode)
@@ -255,10 +250,15 @@ partial class MRubyState
 
     internal MRubyValue SendMeta(MRubyValue self)
     {
-        // ref var callInfo = ref context.CurrentCallInfo;
+        ref var callInfo = ref context.CurrentCallInfo;
+
+        if (GetArgumentCount() <= 0)
+        {
+            RaiseArgumentNumberError(1);
+        }
 
         var methodId = GetArgAsSymbol(0);
-        // if (callInfo.CallerType != CallerType.InVmLoop)
+        if (callInfo.CallerType != CallerType.InVmLoop)
         {
             var block = GetBlockArg();
             var args = GetRestArg(1);
@@ -266,16 +266,71 @@ partial class MRubyState
             return Send(self, methodId, args, kargs, block.IsNil ? null : block.As<RProc>());
         }
 
-        // var registers = context.Stack.AsSpan(callInfo.StackPointer + 1);
-        // var c = ClassOf(self);
-        // if (!TryFindMethod(c, methodId, out var method, out _) || method == MRubyMethod.Nop)
-        // {
-        //     throw new NotImplementedException();
-        // }
-        //
-        // callInfo.MethodId = methodId;
-        // callInfo.Scope = c;
+        var registers = context.Stack.AsSpan(callInfo.StackPointer + 1);
+        var receiverClass = ClassOf(self);
 
+        if (TryFindMethod(receiverClass, methodId, out var method, out receiverClass))
+        {
+            callInfo.MethodId = methodId;
+        }
+        else
+        {
+            method = PrepareMethodMissing(ref callInfo, self, methodId);
+        }
+        callInfo.MethodId = methodId;
+        callInfo.Scope = receiverClass;
+
+        if (callInfo.ArgumentPacked)
+        {
+            var packedArgv = registers[0].As<RArray>();
+            registers[0] = MRubyValue.From(packedArgv.SubSequence(1, packedArgv.Length - 1));
+        }
+        else
+        {
+            registers[1..].CopyTo(registers); // copy args
+            registers[callInfo.ArgumentCount] = registers[callInfo.ArgumentCount + 1]; // copy kargs or blocka
+            if (callInfo.KeywordArgumentCount > 0)
+            {
+                registers[callInfo.ArgumentCount + 1] = registers[callInfo.ArgumentCount + 2]; // copy block
+            }
+        }
+
+        // var block = stack[blockArgumentOffset];
+        // if (!block.IsNil) EnsureValueIsBlock(block);
+
+        if (method.Kind == MRubyMethodKind.CSharpFunc)
+        {
+            callInfo.CallerType = CallerType.MethodCalled;
+            callInfo.ProgramCounter = 0;
+
+            return method.Invoke(this, self);
+        }
+        else
+        {
+            callInfo.CallerType = CallerType.VmExecuted;
+            callInfo.Proc = method.Proc;
+            callInfo.ProgramCounter = method.Proc!.ProgramCounter;
+
+            var nregs = method.Proc.Irep.RegisterVariableCount;
+            var keep = callInfo.BlockArgumentOffset + 1;
+            if (nregs > keep)
+            {
+                context.ExtendStack(callInfo.StackPointer + keep);
+                context.ClearStack(callInfo.StackPointer + keep, nregs - keep);
+            }
+
+            // dummy. pop after `__send__` called.
+            ref var nextCallInfo = ref context.PushCallStack();
+            nextCallInfo.MethodId = default;
+            nextCallInfo.Proc = null;
+            nextCallInfo.StackPointer = callInfo.StackPointer;
+            callInfo.ArgumentCount = 0;
+            callInfo.KeywordArgumentCount = 0;
+            callInfo.CallerType = CallerType.InVmLoop;
+            callInfo.Scope = receiverClass;
+
+            return self;
+        }
     }
 
     internal MRubyValue EvalUnder(MRubyValue self, RProc block, RClass c)
@@ -316,6 +371,15 @@ partial class MRubyState
         {
             registerVariableCount = (ushort)stackKeep;
         }
+        // else
+        // {
+        //     if (context.CurrentCallInfo.Scope is REnv env &&
+        //         (stackKeep == 0 || irep.LocalVariables.Length < env.Stack.Length))
+        //     {
+        //         context.CurrentCallInfo.Scope = null!;
+        //         env.CaptureStack();
+        //     }
+        // }
 
         ReadOnlySpan<byte> sequence = irep.Sequence.AsSpan(pc);
 
@@ -578,7 +642,7 @@ partial class MRubyState
                         var env = callInfo.Proc?.FindUpperEnvTo(bbb.C);
                         if (env != null && bbb.B < env.Stack.Length)
                         {
-                            registers[bbb.A] = env.Stack.Span[bbb.B];
+                            registers[bbb.A] = env.Stack[bbb.B];
                         }
                         else
                         {
@@ -593,7 +657,7 @@ partial class MRubyState
                         var env = callInfo.Proc?.FindUpperEnvTo(bbb.C);
                         if (env != null && bbb.B < env.Stack.Length)
                         {
-                            env.Stack.Span[bbb.B] = registers[bbb.A];
+                            env.Stack[bbb.B] = registers[bbb.A];
                         }
                         goto Next;
                     }
@@ -879,7 +943,7 @@ partial class MRubyState
                         if (proc.Scope is REnv env)
                         {
                             callInfo.MethodId = env.MethodId;
-                            registers[0] = env.Stack.Span[0];
+                            registers[0] = env.Stack[0];
                         }
                         goto Next;
                     }
@@ -923,7 +987,7 @@ partial class MRubyState
                         var aspec = new ArgumentSpec(bits);
 
                         var argc = callInfo.ArgumentCount;
-                        var argv = registers.Slice(1, argc);
+                        var argv = registers[1..];
 
                         var m1 = aspec.MandatoryArguments1Count;
 
@@ -1242,7 +1306,7 @@ partial class MRubyState
                             {
                                 Raise(Names.LocalJumpError, "unexpected yield"u8);
                             }
-                            stack = env!.Stack.Span[1..];
+                            stack = env!.Stack[1..];
                         }
 
                         var block = stack[offset];
