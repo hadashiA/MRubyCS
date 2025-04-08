@@ -13,7 +13,8 @@ public interface ICallScope
 /// </summary>
 class REnv() : RBasic(MRubyVType.Env, default!), ICallScope
 {
-    public Memory<MRubyValue> Stack { get; set; } = Memory<MRubyValue>.Empty;
+    public required int StackPointer { get; init; }
+    public required int StackSize { get; init; }
     public required int BlockArgumentOffset { get; init; }
     public required MRubyContext? Context { get; init; }
     public required RClass TargetClass { get; init; }
@@ -21,14 +22,26 @@ class REnv() : RBasic(MRubyVType.Env, default!), ICallScope
 
     public bool OnStack => Context != null;
 
+    public Span<MRubyValue> Stack
+    {
+        get
+        {
+            if (capturedStack.HasValue) return capturedStack.Value.Span;
+            if (Context is null) return Span<MRubyValue>.Empty;
+            return Context.Stack.AsSpan(StackPointer, StackSize);
+        }
+    }
+
+    Memory<MRubyValue>? capturedStack;
+
     public void CaptureStack()
     {
-        if (Stack.Length == 0)
+        if (StackSize == 0)
         {
-            Stack = Memory<MRubyValue>.Empty;
+            capturedStack = Memory<MRubyValue>.Empty;
         }
 
-        Stack = new Memory<MRubyValue>(Stack.ToArray());
+        capturedStack = new Memory<MRubyValue>(Stack.ToArray());
     }
 }
 

@@ -260,7 +260,7 @@ class MRubyContext
         }
 
         // currentCallInfo.
-        CallStack[CallDepth].Clear();
+        currentCallInfo.Clear();
         CallDepth--;
     }
 
@@ -443,7 +443,7 @@ class MRubyContext
     {
         if (callInfo.ArgumentPacked)
         {
-            return Stack[callInfo.StackPointer + 1].As<RArray>().AsSpan();
+            return Stack[callInfo.StackPointer + 1].As<RArray>().AsSpan(startIndex, callInfo.ArgumentCount - startIndex);
         }
         return Stack.AsSpan(callInfo.StackPointer + 1 + startIndex, callInfo.ArgumentCount - startIndex);
     }

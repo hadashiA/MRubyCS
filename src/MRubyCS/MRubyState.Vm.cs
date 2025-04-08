@@ -197,7 +197,7 @@ partial class MRubyState
         var nextStack = context.Stack.AsSpan(nextCallInfo.StackPointer);
         nextStack[0] = self;
 
-        if (args.Length > MRubyCallInfo.CallMaxArgs)
+        if (args.Length >= MRubyCallInfo.CallMaxArgs)
         {
             // TODO: packing
             throw new NotImplementedException();
@@ -209,12 +209,7 @@ partial class MRubyState
         }
         nextCallInfo.KeywordArgumentCount = 0;
 
-        if (block is not { } proc)
-        {
-            throw new NotSupportedException();
-        }
-
-        return Exec(proc.Irep, proc.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
+        return Exec(block.Irep, block.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
     }
 
     public MRubyValue Exec(ReadOnlySpan<byte> bytecode)
