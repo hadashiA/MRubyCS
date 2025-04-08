@@ -521,6 +521,23 @@ end
 ##
 class Integer
   ##
+  # Calls the given block once for each Integer
+  # from +self+ downto +num+.
+  #
+  # ISO 15.2.8.3.15
+  def downto(num, &block)
+    return to_enum(:downto, num) unless block
+
+    i = self.to_i
+    while i >= num
+      block.call(i)
+      i -= 1
+    end
+    self
+  end
+
+
+  ##
   # Calls the given block +self+ times.
   #
   # ISO 15.2.8.3.22
@@ -530,6 +547,23 @@ class Integer
     i = 0
     while i < self
       block.call i
+      i += 1
+    end
+    self
+  end
+
+
+  ##
+  # Calls the given block once for each Integer
+  # from +self+ upto +num+.
+  #
+  # ISO 15.2.8.3.27
+  def upto(num, &block)
+    return to_enum(:upto, num) unless block
+
+    i = self.to_i
+    while i <= num
+      block.call(i)
       i += 1
     end
     self

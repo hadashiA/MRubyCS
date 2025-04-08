@@ -83,6 +83,38 @@ partial class MRubyState
         return result;
     }
 
+    internal ReadOnlySpan<byte> TypeNameOf(MRubyValue value)
+    {
+        if (value is { VType: MRubyVType.Object, Object: { } obj })
+        {
+            var c = obj.Class;
+            if (c.InstanceVariables.TryGet(Names.ClassNameKey, out var className))
+            {
+                // no name (yet)
+                if (className.IsSymbol)
+                {
+                    var path = ClassPath.Find(this, c);
+                    if (path.Length <= 1)
+                    {
+                        var name = NameOf(className.SymbolValue);
+                        c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(name));
+                        return name.AsSpan();
+                    }
+                    var pathName = path.ToRString(this);
+                    c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(pathName));
+                    return pathName.AsSpan();
+                }
+                // already cached
+                if (className.VType == MRubyVType.String)
+                {
+                    return className.As<RString>().AsSpan();
+                }
+            }
+        }
+        return Utf8String.Format($"{value.VType}");
+        ;
+    }
+
     public RString NameOf(RClass c)
     {
         if (c.InstanceVariables.TryGet(Names.ClassNameKey, out var className))
@@ -197,6 +229,8 @@ partial class MRubyState
     {
         switch (value.VType)
         {
+            case MRubyVType.Float:
+                return NewStringOwned(Utf8String.Format($"{value.FloatValue}"));
             case MRubyVType.String:
                 return value.As<RString>();
             case MRubyVType.Symbol:
@@ -436,28 +470,45 @@ partial class MRubyState
         return default; // not reached
     }
 
-    internal RString StringifyInteger(MRubyValue value, int bases)
+    internal unsafe RString StringifyInteger(MRubyValue value, int bases)
     {
-        if (bases is not (2 or 10 or 16))
+        if (bases is < 2 or > 36)
         {
             Raise(Names.ArgumentError, Utf8String.Format($"invalid radix {bases}"));
         }
-
-        var x = value.IntegerValue;
-        var f = bases switch
+        var n = value.IntegerValue;
+        if (n is 0)
         {
-            2 => new StandardFormat('b'),
-            16 => new StandardFormat('x'),
-            _ => new StandardFormat('d')
-        };
-
-        Span<byte> buf = stackalloc byte[8];
-        int bytesWritten;
-        while (!Utf8Formatter.TryFormat(x, buf, out bytesWritten, f))
-        {
-            buf = stackalloc byte[buf.Length * 2];
+            return NewString("0"u8);
         }
-        return NewString(buf[..bytesWritten]);
+
+        ReadOnlySpan<byte> digitMap = "0123456789abcdefghijklmnopqrstuvwxyz"u8;
+        var buf = stackalloc byte[65];
+        var last = buf + 64;
+        var b = last;
+        if (n < 0)
+        {
+            do
+            {
+                if (b-- == buf) goto Error;
+                *b = digitMap[-(int)(n % bases)];
+            } while ((n /= bases) != 0);
+            if (b-- == buf) goto Error;
+            *b = (byte)'-';
+        }
+        else
+        {
+            do
+            {
+                if (b-- == buf) goto Error;
+                *b = digitMap[(int)(n % bases)];
+            } while ((n /= bases) != 0);
+        }
+
+        return NewString(new ReadOnlySpan<byte>(b, (int)(last - b)));
+
+        Error: ;
+        throw new IndexOutOfRangeException();
     }
 
     MRubyValue ConvertType(MRubyValue value, MRubyVType vtype, Symbol convertMethodId)

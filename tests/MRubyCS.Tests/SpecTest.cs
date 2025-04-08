@@ -99,7 +99,7 @@ public class SpecTest
     [TestCase("module.rb")]
     // [TestCase("methods.rb")]
     // lib
-    // [TestCase("integer.rb")]
+    [TestCase("integer.rb")]
     // [TestCase("string.rb")]
     // [TestCase("array.rb")]
     // error
