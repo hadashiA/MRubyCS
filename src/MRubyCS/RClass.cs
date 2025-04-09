@@ -80,16 +80,17 @@ public class RClass : RObject, ICallScope
 
     public RClass AsOrigin()
     {
-        if (HasFlag(MRubyObjectFlags.ClassPrepended))
+        var result = this;
+        if (result.HasFlag(MRubyObjectFlags.ClassPrepended))
         {
-            var result = Super;
+            result = Super;
             while (!result.HasFlag(MRubyObjectFlags.ClassOrigin))
             {
                 result = result.Super;
             }
             return result;
         }
-        return this;
+        return result;
     }
 
     public RClass GetRealClass()
@@ -143,13 +144,17 @@ public class RClass : RObject, ICallScope
         methodTable = new MethodTable();
     }
 
+    internal void ShareInstanceVariablesTo(RClass to)
+    {
+        to.InstanceVariables = InstanceVariables;
+    }
+
     internal bool TryIncludeModule(RClass insertPos, RClass m, bool searchSuper)
     {
-        var origin = AsOrigin();
+        var mt = AsOrigin().MethodTable;
 
         while (m != null!)
         {
-            var p = Super;
             var originalSeen = false;
             var superclassSeen = false;
 
@@ -161,12 +166,13 @@ public class RClass : RObject, ICallScope
             {
                 goto SKIP;
             }
-            if (origin.MethodTable == m.MethodTable)
+            if (mt == m.MethodTable)
             {
                 // circular references
                 return false;
             }
 
+            var p = Super;
             while (p != null!)
             {
                 if (this == p)
@@ -208,13 +214,15 @@ public class RClass : RObject, ICallScope
         var mod = VType == MRubyVType.IClass ? Class : this;
         mod = mod.AsOrigin();
 
-        return new RClass(VType == MRubyVType.IClass ? mod.Class : mod, MRubyVType.IClass)
+        return new RClass(mod.VType == MRubyVType.IClass ? mod.Class : mod, MRubyVType.IClass)
         {
             Super = insertionClass,
             InstanceVType = MRubyVType.Class,
             methodTable = mod.methodTable,
+            InstanceVariables = mod.InstanceVariables
         };
     }
 
     internal void SetSuper(RClass newSuper) => super = newSuper;
+    //internal void SetInstanceVariables( newSuper) => super = newSuper;
 }

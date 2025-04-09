@@ -36,7 +36,7 @@ partial class MRubyState
     public RClass GetArgAsClass(int index)
     {
         var arg = GetArg(index);
-        EnsureValueType(arg, MRubyVType.Class);
+        EnsureClassOrModule(arg);
         return arg.As<RClass>();
     }
 

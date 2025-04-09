@@ -61,6 +61,12 @@ struct ClassPath
         }
 
         var result = state.NewString(32);
+        if (this[length - 1] is { } top && top != state.ObjectClass)
+        {
+            result.Concat(state.NameOf(top));
+            result.Concat("::"u8);
+        }
+
         for (var i = length - 1; i >= 1; i--)
         {
             var outer = this[i];

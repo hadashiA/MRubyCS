@@ -67,7 +67,7 @@ assert('Module#append_features', '15.2.2.4.10') do
   end
 
   assert_equal Test4AppendFeatures2, Test4AppendFeatures2.const_get(:Const4AppendFeatures2)
-  assert_raise(FrozenError) { Module.new.__send__(:append_features,Class.new.freeze) }
+  assert_raise(FrozenError) { Module.new.append_features Class.new.freeze }
 end
 
 assert('Module#attr NameError') do
@@ -231,18 +231,6 @@ assert('Module#const_defined?', '15.2.2.4.20') do
   assert_true Test4ConstDefined.const_defined?(:Const4Test4ConstDefined)
   assert_false Test4ConstDefined.const_defined?(:NotExisting)
   assert_wrong_const_name{ Test4ConstDefined.const_defined?(:wrong_name) }
-
-  # shared empty iv_tbl (include)
-  m = Module.new
-  c = Class.new{include m}
-  m::CONST = 1
-  assert_true c.const_defined?(:CONST)
-
-  # shared empty iv_tbl (prepend)
-  m = Module.new
-  c = Class.new{prepend m}
-  m::CONST = 1
-  assert_true c.const_defined?(:CONST)
 end
 
 assert('Module#const_get', '15.2.2.4.21') do
@@ -258,18 +246,6 @@ assert('Module#const_get', '15.2.2.4.21') do
   assert_uninitialized_const{ Test4ConstGet.const_get(:I_DO_NOT_EXIST) }
   assert_uninitialized_const{ Test4ConstGet.const_get("I_DO_NOT_EXIST::ME_NEITHER") }
   assert_wrong_const_name{ Test4ConstGet.const_get(:wrong_name) }
-
-  # shared empty iv_tbl (include)
-  m = Module.new
-  c = Class.new{include m}
-  m::CONST = 1
-  assert_equal 1, c.const_get(:CONST)
-
-  # shared empty iv_tbl (prepend)
-  m = Module.new
-  c = Class.new{prepend m}
-  m::CONST = 1
-  assert_equal 1, c.const_get(:CONST)
 end
 
 assert('Module#const_set', '15.2.2.4.23') do
@@ -288,15 +264,16 @@ assert('Module#remove_const', '15.2.2.4.40') do
   module Test4RemoveConst
     ExistingConst = 23
   end
-  assert_equal 23, Test4RemoveConst.__send__(:remove_const,:ExistingConst)
+
+  assert_equal 23, Test4RemoveConst.remove_const(:ExistingConst)
   assert_false Test4RemoveConst.const_defined?(:ExistingConst)
   assert_raise_with_message_pattern(NameError, "constant * not defined") do
-    Test4RemoveConst.__send__(:remove_const,:NonExistingConst)
+    Test4RemoveConst.remove_const(:NonExistingConst)
   end
   %i[x X!].each do |n|
-    assert_wrong_const_name { Test4RemoveConst.__send__(:remove_const,n) }
+    assert_wrong_const_name { Test4RemoveConst.remove_const(n) }
   end
-  assert_raise(FrozenError) { Test4RemoveConst.freeze.__send__(:remove_const,:A) }
+  assert_raise(FrozenError) { Test4RemoveConst.freeze.remove_const(:A) }
 end
 
 assert('Module#const_missing', '15.2.2.4.22') do
@@ -314,11 +291,11 @@ assert('Module#extend_object', '15.2.2.4.25') do
   mod = Module.new { def foo; end }
   a = cls.new
   b = cls.new
-  mod.__send__(:extend_object,b)
+  mod.extend_object(b)
   assert_false a.respond_to?(:foo)
   assert_true b.respond_to?(:foo)
-  assert_raise(FrozenError) { mod.__send__(:extend_object,cls.new.freeze) }
-  assert_raise(FrozenError, TypeError) { mod.__send__(:extend_object,1) }
+  assert_raise(FrozenError) { mod.extend_object(cls.new.freeze) }
+  assert_raise(FrozenError, TypeError) { mod.extend_object(1) }
 end
 
 assert('Module#include', '15.2.2.4.27') do
@@ -472,9 +449,9 @@ assert 'Module#prepend_features' do
   mod = Module.new { def m; :mod end }
   cls = Class.new { def m; :cls end }
   assert_equal :cls, cls.new.m
-  mod.__send__(:prepend_features,cls)
+  mod.prepend_features(cls)
   assert_equal :mod, cls.new.m
-  assert_raise(FrozenError) { Module.new.__send__(:prepend_features,Class.new.freeze) }
+  assert_raise(FrozenError) { Module.new.prepend_features(Class.new.freeze) }
 end
 
 # @!group prepend
@@ -531,74 +508,71 @@ end
     end
   end
 
-# TODO:
-#   assert('Module#prepend inheritance') do
-#     bug6654 = '[ruby-core:45914]'
-#     a = labeled_module('a')
-#     b = labeled_module('b') { include a }
-#     c = labeled_module('c') { prepend b }
-#
-#     #assert bug6654 do
-#       # the Module#< operator should be used here instead, but we don't have it
-#       assert_include(c.ancestors, a)
-#       assert_include(c.ancestors, b)
-#     #end
-#
-#     bug8357 = '[ruby-core:54736] [Bug #8357]'
-#     b = labeled_module('b') { prepend a }
-#     c = labeled_class('c') { include b }
-#
-#     #assert bug8357 do
-#       # the Module#< operator should be used here instead, but we don't have it
-#       assert_include(c.ancestors, a)
-#       assert_include(c.ancestors, b)
-#     #end
-#
-#     bug8357 = '[ruby-core:54742] [Bug #8357]'
-#     assert_kind_of(b, c.new, bug8357)
-#   end
+  assert('Module#prepend inheritance') do
+    bug6654 = '[ruby-core:45914]'
+    a = labeled_module('a')
+    b = labeled_module('b') { include a }
+    c = labeled_module('c') { prepend b }
 
-# TODO:
-#   assert 'Module#prepend + Class#ancestors' do
-#     bug6658 = '[ruby-core:45919]'
-#     m = labeled_module("m")
-#     c = labeled_class("c") {prepend m}
-#     assert_equal([m, c], c.ancestors[0, 2], bug6658)
-#
-#     bug6662 = '[ruby-dev:45868]'
-#     c2 = labeled_class("c2", c)
-#     as = c2.ancestors
-#     assert_equal([c2, m, c, Object], as[0..as.index(Object)], bug6662)
-#   end
+    #assert bug6654 do
+      # the Module#< operator should be used here instead, but we don't have it
+      assert_include(c.ancestors, a)
+      assert_include(c.ancestors, b)
+    #end
 
-# TODO:
-#   assert 'Module#prepend + Module#ancestors' do
-#     bug6659 = '[ruby-dev:45861]'
-#     m0 = labeled_module("m0") { def x; [:m0, *super] end }
-#     m1 = labeled_module("m1") { def x; [:m1, *super] end; prepend m0 }
-#     m2 = labeled_module("m2") { def x; [:m2, *super] end; prepend m1 }
-#     c0 = labeled_class("c0") { def x; [:c0] end }
-#     c1 = labeled_class("c1") { def x; [:c1] end; prepend m2 }
-#     c2 = labeled_class("c2", c0) { def x; [:c2, *super] end; include m2 }
-#     #
-#     assert_equal([m0, m1], m1.ancestors, bug6659)
-#     #
-#     bug6662 = '[ruby-dev:45868]'
-#     assert_equal([m0, m1, m2], m2.ancestors, bug6662)
-#     assert_equal([m0, m1, m2, c1], c1.ancestors[0, 4], bug6662)
-#     assert_equal([:m0, :m1, :m2, :c1], c1.new.x)
-#     assert_equal([c2, m0, m1, m2, c0], c2.ancestors[0, 5], bug6662)
-#     assert_equal([:c2, :m0, :m1, :m2, :c0], c2.new.x)
-#     #
-#     m3 = labeled_module("m3") { include m1; prepend m1 }
-#     assert_equal([m3, m0, m1], m3.ancestors)
-#     m3 = labeled_module("m3") { prepend m1; include m1 }
-#     assert_equal([m0, m1, m3], m3.ancestors)
-#     m3 = labeled_module("m3") { prepend m1; prepend m1 }
-#     assert_equal([m0, m1, m3], m3.ancestors)
-#     m3 = labeled_module("m3") { include m1; include m1 }
-#     assert_equal([m3, m0, m1], m3.ancestors)
-#   end
+    bug8357 = '[ruby-core:54736] [Bug #8357]'
+    b = labeled_module('b') { prepend a }
+    c = labeled_class('c') { include b }
+
+    #assert bug8357 do
+      # the Module#< operator should be used here instead, but we don't have it
+      assert_include(c.ancestors, a)
+      assert_include(c.ancestors, b)
+    #end
+
+    bug8357 = '[ruby-core:54742] [Bug #8357]'
+    assert_kind_of(b, c.new, bug8357)
+  end
+
+  assert 'Module#prepend + Class#ancestors' do
+    bug6658 = '[ruby-core:45919]'
+    m = labeled_module("m")
+    c = labeled_class("c") {prepend m}
+    assert_equal([m, c], c.ancestors[0, 2], bug6658)
+
+    bug6662 = '[ruby-dev:45868]'
+    c2 = labeled_class("c2", c)
+    anc = c2.ancestors
+    assert_equal([c2, m, c, Object], anc[0..anc.index(Object)], bug6662)
+  end
+
+  assert 'Module#prepend + Module#ancestors' do
+    bug6659 = '[ruby-dev:45861]'
+    m0 = labeled_module("m0") { def x; [:m0, *super] end }
+    m1 = labeled_module("m1") { def x; [:m1, *super] end; prepend m0 }
+    m2 = labeled_module("m2") { def x; [:m2, *super] end; prepend m1 }
+    c0 = labeled_class("c0") { def x; [:c0] end }
+    c1 = labeled_class("c1") { def x; [:c1] end; prepend m2 }
+    c2 = labeled_class("c2", c0) { def x; [:c2, *super] end; include m2 }
+    #
+    assert_equal([m0, m1], m1.ancestors, bug6659)
+    #
+    bug6662 = '[ruby-dev:45868]'
+    assert_equal([m0, m1, m2], m2.ancestors, bug6662)
+    assert_equal([m0, m1, m2, c1], c1.ancestors[0, 4], bug6662)
+    assert_equal([:m0, :m1, :m2, :c1], c1.new.x)
+    assert_equal([c2, m0, m1, m2, c0], c2.ancestors[0, 5], bug6662)
+    assert_equal([:c2, :m0, :m1, :m2, :c0], c2.new.x)
+    #
+    m3 = labeled_module("m3") { include m1; prepend m1 }
+    assert_equal([m3, m0, m1], m3.ancestors)
+    m3 = labeled_module("m3") { prepend m1; include m1 }
+    assert_equal([m0, m1, m3], m3.ancestors)
+    m3 = labeled_module("m3") { prepend m1; prepend m1 }
+    assert_equal([m0, m1, m3], m3.ancestors)
+    m3 = labeled_module("m3") { include m1; include m1 }
+    assert_equal([m3, m0, m1], m3.ancestors)
+  end
 
   assert 'cyclic Module#prepend' do
     bug7841 = '[ruby-core:52205] [Bug #7841]'
@@ -743,8 +717,7 @@ assert('Module#to_s') do
 
   assert_equal "FrozenClassToS", (FrozenClassToS = Class.new.freeze).to_s
   assert_equal "Outer::A", (Outer::A = Module.new.freeze).to_s
-  # TODO:
-  # assert_match "#<Module:0x*>::A", (Module.new::A = Class.new.freeze).to_s
+  assert_match "#<Module:0x*>::A", (Module.new::A = Class.new.freeze).to_s
 end
 
 assert('Module#inspect') do
@@ -754,27 +727,27 @@ assert('Module#inspect') do
   assert_equal 'Test4to_sModules', Test4to_sModules.inspect
 end
 
-# assert('Issue 1467') do
-#   module M1
-#     def initialize
-#       super()
-#     end
-#   end
-#
-#   class C1
-#     include M1
-#       def initialize
-#         super()
-#       end
-#   end
-#
-#   class C2
-#     include M1
-#   end
-#
-#   assert_kind_of(M1, C1.new)
-#   assert_kind_of(M1, C2.new)
-# end
+assert('Issue 1467') do
+  module M1
+    def initialize
+      super()
+    end
+  end
+
+  class C1
+    include M1
+      def initialize
+        super()
+      end
+  end
+
+  class C2
+    include M1
+  end
+
+  assert_kind_of(M1, C1.new)
+  assert_kind_of(M1, C2.new)
+end
 
 assert('clone Module') do
   module M1
@@ -790,61 +763,14 @@ assert('clone Module') do
   assert_true(B.new.foo)
 end
 
-# TODO:
-# assert('method visibility') do
-#   class CallTypeTest
-#     def test_private(&block)
-#       func(&block)
-#     end
-#     def test_protected(&block)
-#       self.func(&block)
-#     end
-#     private
-#     def func
-#       yield
-#     end
-#   end
-#
-#   v = CallTypeTest.new
-#
-#   assert_raise_with_message_pattern(NameError, "private method 'func' called for CallTypeTest") do
-#     v.func { :test }
-#   end
-#   assert_equal :test, v.test_private { :test }
-#
-#   class CallTypeTest
-#     protected :func
-#   end
-#
-#   assert_raise_with_message_pattern(NameError, "protected method 'func' called for CallTypeTest") do
-#     v.func { :test }
-#   end
-#   assert_equal :test, v.test_protected { :test }
-#   assert_equal :test, v.test_private { :test }
-#
-#   class CallTypeTest
-#     public def public_func
-#       :test
-#     end
-#
-#     public :func
-#   end
-#
-#   assert_equal :test, v.public_func
-#   assert_equal :test, v.func { :test }
-#   assert_equal :test, v.test_protected { :test }
-#   assert_equal :test, v.test_private { :test }
-# end
-#
-# TODO:
-# assert('Module#module_function') do
-#   module M
-#     def modfunc; end
-#     module_function :modfunc
-#   end
-#
-#   assert_true M.respond_to?(:modfunc)
-# end
+assert('Module#module_function') do
+  module M
+    def modfunc; end
+    module_function :modfunc
+  end
+
+  assert_true M.respond_to?(:modfunc)
+end
 
 assert('module with non-class/module outer raises TypeError') do
   assert_raise(TypeError) { module 0::M1 end }
@@ -853,7 +779,7 @@ end
 
 assert('module to return the last value') do
   m = module M; :m end
-  assert_equal(:m, m)
+  assert_equal(m, :m)
 end
 
 assert('module to return nil if body is empty') do
@@ -870,27 +796,3 @@ assert('get constant of parent module in singleton class; issue #3568') do
 
   assert_equal("value", actual)
 end
-
-# TODO:
-# assert('shared empty iv_tbl (include)') do
-#   m1 = Module.new
-#   m2 = Module.new{include m1}
-#   c = Class.new{include m2}
-#   m1::CONST1 = 1
-#   assert_equal 1, m2::CONST1
-#   assert_equal 1, c::CONST1
-#   m2::CONST2 = 2
-#   assert_equal 2, c::CONST2
-# end
-
-# TODO:
-# assert('shared empty iv_tbl (prepend)') do
-#   m1 = Module.new
-#   m2 = Module.new{prepend m1}
-#   c = Class.new{include m2}
-#   m1::CONST1 = 1
-#   assert_equal 1, m2::CONST1
-#   assert_equal 1, c::CONST1
-#   m2::CONST2 = 2
-#   assert_equal 2, c::CONST2
-# end

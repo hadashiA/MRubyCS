@@ -261,6 +261,22 @@ static class ArrayMembers
         return MRubyValue.From(result);
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Index = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var arg = state.GetArg(0);
+        var span = array.AsSpan();
+        for (var i = 0; i < span.Length; i++)
+        {
+            if (state.ValueEquals(span[i], arg))
+            {
+                return MRubyValue.From(i);
+            }
+        }
+        return MRubyValue.Nil;
+    });
+
     // [MRubyMethod(OptionalArguments = 1)]
     // public static MRubyMethod Join = new((state, self) =>
     // {

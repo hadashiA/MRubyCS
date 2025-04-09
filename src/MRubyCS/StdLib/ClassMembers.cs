@@ -17,6 +17,8 @@ static class ClassMembers
             InstanceVType = superClass.InstanceVType
         };
 
+        superClass.SetFlag(MRubyObjectFlags.ClassInherited);
+
         var newClassValue = MRubyValue.From(newClass);
         if (state.TryFindMethod(newClass.Class, Names.Initialize, out var method, out _) &&
             method == Initialize)
