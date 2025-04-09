@@ -15,6 +15,7 @@ public enum MRubyMethodKind
 public readonly unsafe struct MRubyMethod : IEquatable<MRubyMethod>
 {
     public static readonly MRubyMethod Nop = new((_, _) => MRubyValue.Nil);
+    public static readonly MRubyMethod Undef = new((_, _) => MRubyValue.Nil);
     public static readonly MRubyMethod True = new((_, _) => MRubyValue.True);
     public static readonly MRubyMethod False = new((_, _) => MRubyValue.False);
     public static readonly MRubyMethod Identity = new((_, self) => self);

@@ -186,7 +186,10 @@ partial class MRubyState
     public void AliasMethod(RClass c, Symbol aliasMethodId, Symbol methodId)
     {
         if (aliasMethodId == methodId) return;
-        TryFindMethod(c, methodId, out var method, out _);
+        if (!TryFindMethod(c, methodId, out var method, out _))
+        {
+            RaiseNameError(methodId, NewString($"undefined method '{NameOf(methodId)}' for class '{NameOf(c)}"));
+        }
         DefineMethod(c, aliasMethodId, method);
     }
 
@@ -194,9 +197,9 @@ partial class MRubyState
     {
         if (!TryFindMethod(c, methodId, out _, out _))
         {
-            Raise(Names.NameError, NewString($"undefined method '{NameOf(methodId)}' for class '{StringifyModule(c)}'"));
+            Raise(Names.NameError, NewString($"undefined method '{NameOf(methodId)}' for class '{NameOf(c)}'"));
         }
-        DefineMethod(c, methodId, MRubyMethod.Nop);
+        DefineMethod(c, methodId, MRubyMethod.Undef);
     }
 
     public void DefineClassMethod(RClass c, Symbol methodId, MRubyMethod method)
@@ -221,7 +224,7 @@ partial class MRubyState
 
     public bool RespondTo(RClass c, Symbol methodId)
     {
-        return TryFindMethod(c, methodId, out var method, out _) && method != MRubyMethod.Nop;
+        return TryFindMethod(c, methodId, out var method, out _) && method != MRubyMethod.Undef;
     }
 
     public bool TryFindMethod(RClass c, Symbol methodId, out MRubyMethod method, out RClass imp)
@@ -304,7 +307,7 @@ partial class MRubyState
         else
         {
             added = Names.MethodAdded;
-            if (RespondTo(c, added))
+            if (RespondTo(c.Class, added))
             {
                 var receiver = MRubyValue.From(c);
                 Send(receiver, added, MRubyValue.From(methodId));
