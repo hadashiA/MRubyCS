@@ -214,29 +214,6 @@ public class VmTest
                           """u8);
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
     }
-//
-//     [Test]
-//     public void Mod()
-//     {
-//       var result = Exec("""
-//                         def labeled_module(name, &block)
-//                           Module.new do
-//                             class_eval(&block)
-//                           end
-//                         end
-//
-//                         module M1
-//                         end
-//
-//                         b = labeled_module('b') do
-//                           include M1
-//                         end
-//                         c = labeled_module('c') do
-//                           include b
-//                         end
-//                         """u8);
-//       Assert.That(result, Is.EqualTo(MRubyValue.True));
-//     }
 
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {

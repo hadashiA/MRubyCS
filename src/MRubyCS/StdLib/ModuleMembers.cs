@@ -75,9 +75,27 @@ static class ModuleMembers
     public static MRubyMethod ModuleFunction = new((state, self) =>
     {
         state.EnsureValueType(self, MRubyVType.Module);
+        var argv = state.GetRestArg(0);
+        if (argv.Length <= 0)
+        {
+            return self;
+        }
 
-        state.Raise(Names.NotImplementedError, "not implemented"u8);
-        return MRubyValue.Nil;
+        var mod = self.As<RClass>();
+
+        foreach (var arg in argv)
+        {
+            state.EnsureValueType(arg, MRubyVType.Symbol);
+            if (!state.TryFindMethod(mod, arg.SymbolValue, out var method, out _))
+            {
+                state.RaiseNameError(
+                    arg.SymbolValue,
+                    state.NewString($"undefined method '{state.NameOf(arg.SymbolValue)}' for class {state.NameOf(mod)}"));
+            }
+
+            state.DefineClassMethod(mod, arg.SymbolValue, method);
+        }
+        return self;
     });
 
     [MRubyMethod(RestArguments = true)]
