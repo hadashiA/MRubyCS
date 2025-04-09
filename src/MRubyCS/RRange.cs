@@ -40,6 +40,7 @@ public sealed class RRange : RObject
     {
         var begin = Begin.IsNil ? 0 : (int)Begin.IntegerValue;
         var end = End.IsNil ? -1 : (int)End.IntegerValue;
+        var exclusive = !End.IsNil && Exclusive;
 
         if (begin + targetLength < 0)
         {
@@ -64,7 +65,7 @@ public sealed class RRange : RObject
         }
 
         if (end < 0) end += targetLength;
-        if (!Exclusive && (!truncate || end > targetLength)) end++; // include end point
+        if (!exclusive && (!truncate || end < targetLength)) end++; // include end point
 
         calculatedLength = end - begin;
         if (calculatedLength < 0) calculatedLength = 0;
