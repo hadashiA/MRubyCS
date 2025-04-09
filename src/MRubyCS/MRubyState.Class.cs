@@ -62,11 +62,12 @@ partial class MRubyState
             var origin = new RClass(c, MRubyVType.IClass)
             {
                 Super = c.Super,
-                InstanceVType = c.InstanceVType,
+                InstanceVType = MRubyVType.Undef,
             };
             origin.SetFlag(MRubyObjectFlags.ClassOrigin | MRubyObjectFlags.ClassInherited);
             c.SetSuper(origin);
             c.MoveMethodTableTo(origin);
+            c.ShareInstanceVariablesTo(origin);
             c.SetFlag(MRubyObjectFlags.ClassPrepended);
         }
 

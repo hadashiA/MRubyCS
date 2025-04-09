@@ -2,7 +2,7 @@ namespace MRubyCS;
 
 public class RObject : RBasic
 {
-    internal VariableTable InstanceVariables { get; } = new();
+    internal VariableTable InstanceVariables { get; set; } = new();
 
     internal RObject(MRubyVType vType, RClass klass) : base(vType, klass)
     {
