@@ -19,7 +19,7 @@ mruby/cs is a new [mruby](https://github.com/mruby/mruby) virtual machine implem
 
 - **High compatibility with Ruby-level APIs  (Work in progress)**
   It is intended for use in software with a certain amount of resources, such as games. For this reason, we are focusing on Ruby API compatibility.
-  At release, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) tests from the mruby repository.
+  At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) tests from the mruby repository.
 
 - **Rich Library Integration & Extensibility**  
   Compared to the original C implementation, calling C#’s extensive libraries from Ruby is straightforward, making the VM highly extensible.
