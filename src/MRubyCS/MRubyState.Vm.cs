@@ -68,6 +68,16 @@ partial class MRubyState
         return arg.As<RString>();
     }
 
+    public RArray GetArgAsArray(int index)
+    {
+        var arg = GetArg(index);
+        if (arg.VType != MRubyVType.Array)
+        {
+            Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Array"));
+        }
+        return arg.As<RArray>();
+    }
+
     public ReadOnlySpan<MRubyValue> GetRestArg(int startIndex) =>
         context.GetRestArg(startIndex);
 

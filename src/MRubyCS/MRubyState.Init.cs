@@ -385,11 +385,15 @@ public partial class MRubyState
     {
         ArrayClass = DefineClass(Intern("Array"u8), ObjectClass, MRubyVType.Array);
 
+        DefineClassMethod(ArrayClass, Names.OpAref, ArrayMembers.Create);
+
         DefineMethod(ArrayClass, Names.OpEq, ArrayMembers.OpEq);
         DefineMethod(ArrayClass, Names.QEql, ArrayMembers.Eql);
         DefineMethod(ArrayClass, Names.OpLShift, ArrayMembers.Push);
         DefineMethod(ArrayClass, Names.OpAdd, ArrayMembers.OpAdd);
         DefineMethod(ArrayClass, Names.OpAref, ArrayMembers.OpAref);
+        DefineMethod(ArrayClass, Names.OpAdd, ArrayMembers.Plus);
+        DefineMethod(ArrayClass, Names.OpMul, ArrayMembers.Times);
         DefineMethod(ArrayClass, Names.Initialize, ArrayMembers.Initialize);
         DefineMethod(ArrayClass, Intern("push"u8), ArrayMembers.Push);
         DefineMethod(ArrayClass, Intern("size"u8), ArrayMembers.Size);
