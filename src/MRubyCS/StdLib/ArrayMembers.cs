@@ -1,7 +1,19 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+
 namespace MRubyCS.StdLib;
 
 static class ArrayMembers
 {
+    public static MRubyMethod Create = new((state, self) =>
+    {
+        var args = state.GetRestArg(0);
+        var array = state.NewArray(args);
+        array.Class = self.As<RClass>();
+        return MRubyValue.From(array);
+    });
+
     public static MRubyMethod OpAref = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -99,6 +111,20 @@ static class ArrayMembers
     });
 
     [MRubyMethod]
+    public static MRubyMethod Plus = new((state, self) =>
+    {
+        var a1 = self.As<RArray>();
+        var a2 = state.GetArgAsArray(0);
+
+        var result = state.NewArray(a1.Length + a2.Length);
+        result.EnsureModifiable(a1.Length + a2.Length, true);
+
+        a1.AsSpan().CopyTo(result.AsSpan());
+        a2.AsSpan().CopyTo(result.AsSpan(a1.Length));
+        return MRubyValue.From(result);
+    });
+
+    [MRubyMethod]
     public static MRubyMethod Size = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -125,7 +151,6 @@ static class ArrayMembers
         var subSequence = array.SubSequence(0, (int)size);
         return MRubyValue.From(subSequence);
     });
-
 
     [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod Last = new((state, self) =>
@@ -218,6 +243,42 @@ static class ArrayMembers
         return MRubyValue.From(newArray);
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Times = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var arg = state.GetArg(0);
+
+        if (arg.Object is RString separator)
+        {
+            return MRubyValue.From(JoinArray(state, array, separator, new Stack<RArray>()));
+        }
+
+        var times = state.ToInteger(arg);
+        if (times == 0)
+        {
+            return MRubyValue.From(state.NewArray());
+        }
+        if (times < 0)
+        {
+            state.Raise(Names.ArgumentError, "nagative argument"u8);
+        }
+        else if (Array.MaxLength / times < array.Length)
+        {
+            state.Raise(Names.ArgumentError, "array size too big"u8);
+        }
+
+        var source = array.AsSpan();
+        var newLength = array.Length * (int)times;
+        var result = state.NewArray(newLength);
+        result.EnsureModifiable(newLength, true);
+        for (var i = 0; i < times; i++)
+        {
+            source.CopyTo(result.AsSpan(array.Length * i));
+        }
+        return MRubyValue.From(result);
+    });
+
     public static MRubyMethod ReverseBang = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -277,58 +338,20 @@ static class ArrayMembers
         return MRubyValue.Nil;
     });
 
-    // [MRubyMethod(OptionalArguments = 1)]
-    // public static MRubyMethod Join = new((state, self) =>
-    // {
-    //     RString? separator = null;
-    //     if (state.TryGetArg(0, out var arg0))
-    //     {
-    //         state.EnsureValueType(arg0, MRubyVType.String);
-    //         separator = arg0.As<RString>();
-    //     }
-    //
-    //     var array = self.As<RArray>();
-    //     var span = array.AsSpan();
-    //
-    //     // check recursive
-    //     foreach (var x in span)
-    //     {
-    //         if (x == self)
-    //         {
-    //             state.Raise(Names.ArgumentError, "recursive array join"u8);
-    //         }
-    //     }
-    //
-    //     var result = state.NewString(array.Length * 2);
-    //     var first = true;
-    //     foreach (var x in span)
-    //     {
-    //         if (!first && separator != null)
-    //         {
-    //             result.Concat(separator);
-    //         }
-    //         first = false;
-    //
-    //         if (x.Object is RString str)
-    //         {
-    //             result.Concat(str);
-    //         }
-    //         else if (x.Object is RArray arr)
-    //         {
-    //             state.Send(x, state.Intern("join"u8));
-    //             result.Concat(Join(state, x).As<RString>());
-    //         }
-    //         switch (x.VType)
-    //         {
-    //             case MRubyVType.String:
-    //                 result.Concat(x.As<RString>());
-    //                 break;
-    //             case MRubyVType.Array:
-    //                 re
-    //                 break;
-    //         }
-    //     }
-    // });
+    [MRubyMethod(OptionalArguments = 1)]
+    public static MRubyMethod Join = new((state, self) =>
+    {
+        RString? separator = null;
+        if (state.TryGetArg(0, out var arg0))
+        {
+            state.EnsureValueType(arg0, MRubyVType.String);
+            separator = arg0.As<RString>();
+        }
+
+        var array = self.As<RArray>();
+        var result = JoinArray(state, array, separator, new Stack<RArray>());
+        return MRubyValue.From(result);
+    });
 
     // internal method to convert multi-value to single value
     public static MRubyMethod SValue = new((state, self) =>
@@ -349,5 +372,49 @@ static class ArrayMembers
             return (int)index.IntegerValue;
         }
         return (int)state.GetArgAsInteger(0);
+    }
+
+    static RString JoinArray(MRubyState state, RArray array, RString separator, Stack<RArray> stack)
+    {
+        var span = array.AsSpan();
+
+        // check recursive
+        foreach (var x in stack)
+        {
+            if (x == array)
+            {
+                state.Raise(Names.ArgumentError, "recursive array join"u8);
+            }
+        }
+
+        stack.Push(array);
+
+        var result = state.NewString(array.Length * 2);
+        var first = true;
+        foreach (var x in span)
+        {
+            if (!first && separator != null)
+            {
+                result.Concat(separator);
+            }
+            first = false;
+
+            if (x.Object is RString str)
+            {
+                result.Concat(str);
+            }
+            else if (x.Object is RArray nested)
+            {
+                var joinedValue = JoinArray(state, nested, separator, stack);
+                result.Concat(joinedValue);
+            }
+            else
+            {
+                result.Concat(state.Stringify(x));
+            }
+        }
+
+        stack.Pop();
+        return result;
     }
 }
