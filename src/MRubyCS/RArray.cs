@@ -110,6 +110,19 @@ public sealed class RArray : RObject
         return new RArray(this, start, length);
     }
 
+    public void Clear()
+    {
+        if (dataOwned)
+        {
+            AsSpan().Clear();
+            Length = 0;
+        }
+        else
+        {
+            EnsureModifiable(0, true);
+        }
+    }
+
     public void Push(MRubyValue newItem)
     {
         var currentLength = Length;
@@ -155,10 +168,11 @@ public sealed class RArray : RObject
             return;
         }
 
-        var start = Length;
-        var newLength = start + other.Length;
+        var currentLength = Length;
+        var newLength = currentLength + other.Length;
+        var source = other.AsSpan();
         EnsureModifiable(newLength, true);
-        other.AsSpan().CopyTo(data.AsSpan(start));
+        source.CopyTo(AsSpan(currentLength));
     }
 
     public void CopyTo(RArray other)

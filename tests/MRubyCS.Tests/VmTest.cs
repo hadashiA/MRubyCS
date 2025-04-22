@@ -215,6 +215,16 @@ public class VmTest
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
     }
 
+
+    [Test]
+    public void Equals()
+    {
+        var result = Exec("""
+                          ["a"] == ["a"]
+                          """u8);
+        Assert.That(result, Is.EqualTo(MRubyValue.True));
+    }
+
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
         var irep = compiler.Compile(code);

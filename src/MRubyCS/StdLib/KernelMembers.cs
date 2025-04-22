@@ -4,7 +4,7 @@ namespace MRubyCS.StdLib;
 
 static class KernelMembers
 {
-    public static MRubyMethod CaseEqq = new((state, self) =>
+    public static MRubyMethod InternalCaseEqq = new((state, self) =>
     {
         if (self.IsNil)
         {
@@ -40,6 +40,12 @@ static class KernelMembers
             }
         }
         return MRubyValue.False;
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod InternalToInt = new((state, self) =>
+    {
+        return MRubyValue.From(state.ToInteger(self));
     });
 
     public static MRubyMethod BlockGiven = new((state, self) =>

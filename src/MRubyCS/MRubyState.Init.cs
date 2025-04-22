@@ -111,7 +111,7 @@ public partial class MRubyState
         PrepareSingletonClass(ClassClass);
 
         // name basic classes
-        DefineConst(BasicObjectClass, Names.BasicObjectClass, MRubyValue.From(BasicObjectClass));
+        DefineConst(ObjectClass, Names.BasicObjectClass, MRubyValue.From(BasicObjectClass));
         DefineConst(ObjectClass, Names.ObjectClass, MRubyValue.From(ObjectClass));
         DefineConst(ObjectClass, Names.ModuleClass, MRubyValue.From(ModuleClass));
         DefineConst(ObjectClass, Names.ClassClass, MRubyValue.From(ClassClass));
@@ -242,7 +242,9 @@ public partial class MRubyState
         DefineMethod(KernelModule, Names.QRespondToMissing, MRubyMethod.False);
         DefineMethod(KernelModule, Names.ToS, KernelMembers.ToS);
         DefineMethod(KernelModule, Intern("lambda"u8), KernelMembers.Lambda);
-        DefineMethod(KernelModule, Intern("__case_eqq"u8), KernelMembers.CaseEqq);
+        // internally used
+        DefineMethod(KernelModule, Intern("__case_eqq"u8), KernelMembers.InternalCaseEqq);
+        DefineMethod(KernelModule, Intern("__to_int"u8), KernelMembers.InternalToInt);
 
         IncludeModule(ObjectClass, KernelModule);
     }
@@ -392,10 +394,12 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Names.OpLShift, ArrayMembers.Push);
         DefineMethod(ArrayClass, Names.OpAdd, ArrayMembers.OpAdd);
         DefineMethod(ArrayClass, Names.OpAref, ArrayMembers.OpAref);
+        DefineMethod(ArrayClass, Names.OpAset, ArrayMembers.OpAset);
         DefineMethod(ArrayClass, Names.OpAdd, ArrayMembers.Plus);
         DefineMethod(ArrayClass, Names.OpMul, ArrayMembers.Times);
         DefineMethod(ArrayClass, Names.Initialize, ArrayMembers.Initialize);
         DefineMethod(ArrayClass, Intern("push"u8), ArrayMembers.Push);
+        DefineMethod(ArrayClass, Intern("concat"u8), ArrayMembers.Concat);
         DefineMethod(ArrayClass, Intern("size"u8), ArrayMembers.Size);
         DefineMethod(ArrayClass, Intern("length"u8), ArrayMembers.Size);
         DefineMethod(ArrayClass, Intern("empty?"u8), ArrayMembers.Empty);
@@ -403,10 +407,15 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Intern("last"u8), ArrayMembers.Last);
         DefineMethod(ArrayClass, Intern("reverse!"u8), ArrayMembers.ReverseBang);
         DefineMethod(ArrayClass, Intern("pop"u8), ArrayMembers.Pop);
+        DefineMethod(ArrayClass, Intern("clear"u8), ArrayMembers.Clear);
         DefineMethod(ArrayClass, Intern("index"u8), ArrayMembers.Index);
+        DefineMethod(ArrayClass, Intern("join"u8), ArrayMembers.Join);
         DefineMethod(ArrayClass, Names.ToS, ArrayMembers.ToS);
         DefineMethod(ArrayClass, Names.Inspect, ArrayMembers.ToS);
-        DefineMethod(ArrayClass, Intern("__svalue"u8), ArrayMembers.SValue);
+
+        DefineMethod(ArrayClass, Intern("__ary_eq"u8), ArrayMembers.InternalEq);
+        DefineMethod(ArrayClass, Intern("__svalue"u8), ArrayMembers.InternalSValue);
+
     }
 
     void InitHash()

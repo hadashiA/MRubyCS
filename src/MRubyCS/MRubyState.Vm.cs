@@ -326,7 +326,7 @@ partial class MRubyState
             var keep = callInfo.BlockArgumentOffset + 1;
             if (nregs > keep)
             {
-                context.ExtendStack(callInfo.StackPointer + keep);
+                context.ExtendStack(callInfo.StackPointer + nregs);
                 context.ClearStack(callInfo.StackPointer + keep, nregs - keep);
             }
 

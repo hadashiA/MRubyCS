@@ -7,6 +7,7 @@ namespace MRubyCS.StdLib;
 
 static class StringMembers
 {
+    [MRubyMethod]
     public static MRubyMethod Inspect = new((state, self) =>
     {
         var str = self.As<RString>();
@@ -23,6 +24,7 @@ static class StringMembers
         return MRubyValue.From(state.NewString(output.AsSpan(0, written)));
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpEq = new((state, self) =>
     {
         var other = state.GetArg(0);
@@ -33,6 +35,7 @@ static class StringMembers
         return MRubyValue.False;
     });
 
+    [MRubyMethod]
     public static MRubyMethod ToSym = new((state, self) =>
     {
         var str = self.As<RString>();
@@ -40,6 +43,7 @@ static class StringMembers
         return MRubyValue.From(sym);
     });
 
+    [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod ToI = new((state, self) =>
     {
         var str = self.As<RString>();
