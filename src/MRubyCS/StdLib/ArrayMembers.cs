@@ -37,6 +37,8 @@ static class ArrayMembers
                             return MRubyValue.From(array.SubSequence(calculatedIndex, calculatedLength));
                         }
                         return MRubyValue.Nil;
+                    case MRubyVType.Float:
+                        return array[(int)index.FloatValue];
                     default:
                         return array[(int)state.ToInteger(index)];
                 }

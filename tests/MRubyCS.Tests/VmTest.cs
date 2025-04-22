@@ -220,7 +220,9 @@ public class VmTest
     public void Equals()
     {
         var result = Exec("""
-                          ["a"] == ["a"]
+                          a = [1,2,3]
+                          a[0] = 2
+                          a[1]
                           """u8);
         Assert.That(result, Is.EqualTo(MRubyValue.True));
     }

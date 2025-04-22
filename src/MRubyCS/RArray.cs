@@ -15,6 +15,27 @@ public sealed class RArray : RObject
         private set;
     }
 
+    public MRubyValue this[int index]
+    {
+        get
+        {
+            if (index < 0)
+            {
+                index += Length;
+            }
+            if ((uint)index < (uint)Length)
+            {
+                return data[offset + index];
+            }
+            return MRubyValue.Nil;
+        }
+        set
+        {
+            EnsureModifiable(index + 1);
+            data[offset + index] = value;
+        }
+    }
+
     MRubyValue[] data;
     int offset;
     bool dataOwned;
@@ -64,37 +85,6 @@ public sealed class RArray : RObject
         this.offset = offset;
         data = shared.data;
         dataOwned = false;
-    }
-
-    internal override RObject Clone()
-    {
-        var clone = new RArray(data.Length, Class);
-        InstanceVariables.CopyTo(clone.InstanceVariables);
-        return clone;
-    }
-
-    internal void PushRange(ReadOnlySpan<MRubyValue>newItems)
-    {
-        var start = Length;
-        EnsureModifiable(Length + newItems.Length, true);
-        newItems.CopyTo(data.AsSpan(start));
-    }
-
-    public MRubyValue this[int index]
-    {
-        get
-        {
-            if ((uint)index < (uint)Length)
-            {
-                return data[index];
-            }
-            return MRubyValue.Nil;
-        }
-        set
-        {
-            EnsureModifiable(index + 1, true);
-            data[index] = value;
-        }
     }
 
     public override string ToString()
@@ -185,13 +175,27 @@ public sealed class RArray : RObject
         other.Length = Length;
     }
 
+    internal override RObject Clone()
+    {
+        var clone = new RArray(data.Length, Class);
+        InstanceVariables.CopyTo(clone.InstanceVariables);
+        return clone;
+    }
+
+    internal void PushRange(ReadOnlySpan<MRubyValue>newItems)
+    {
+        var start = Length;
+        EnsureModifiable(Length + newItems.Length, true);
+        newItems.CopyTo(data.AsSpan(start));
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnsureModifiable(int capacity, bool expandLength = false)
     {
-        if (data.Length < capacity)
+        if (data.Length - offset < capacity)
         {
             var newLength = data.Length * 2;
-            if (newLength < capacity)
+            if (newLength - offset < capacity)
             {
                 newLength = capacity;
             }
@@ -210,7 +214,7 @@ public sealed class RArray : RObject
         }
         else if (!dataOwned)
         {
-            data = data.ToArray();
+            data = AsSpan().ToArray();
             dataOwned = true;
         }
 
