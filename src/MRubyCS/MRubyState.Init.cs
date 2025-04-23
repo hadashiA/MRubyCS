@@ -407,6 +407,7 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Intern("last"u8), ArrayMembers.Last);
         DefineMethod(ArrayClass, Intern("reverse!"u8), ArrayMembers.ReverseBang);
         DefineMethod(ArrayClass, Intern("pop"u8), ArrayMembers.Pop);
+        DefineMethod(ArrayClass, Intern("delete_at"u8), ArrayMembers.DeleteAt);
         DefineMethod(ArrayClass, Intern("clear"u8), ArrayMembers.Clear);
         DefineMethod(ArrayClass, Intern("index"u8), ArrayMembers.Index);
         DefineMethod(ArrayClass, Intern("join"u8), ArrayMembers.Join);

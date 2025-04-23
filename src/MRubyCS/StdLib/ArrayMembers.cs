@@ -52,7 +52,7 @@ static class ArrayMembers
                 if (length > array.Length - i) length = array.Length - i;
                 return MRubyValue.From(array.SubSequence(i, (int)length));
             default:
-                state.RaiseArgumentError(argc, 1, 2);
+                state.RaiseArgumentNumberError(argc, 1, 2);
                 return default;
         }
     });
@@ -96,7 +96,7 @@ static class ArrayMembers
                 state.SpliceArray(array, (int)n, (int)m, v);
                 return v;
             default:
-                state.RaiseArgumentError(argc, 2, 3);
+                state.RaiseArgumentNumberError(argc, 2, 3);
                 return default;
         }
     });
@@ -194,12 +194,22 @@ static class ArrayMembers
     public static MRubyMethod First = new((state, self) =>
     {
         var array = self.As<RArray>();
-        if (state.GetArgumentCount() <= 0)
+        var argc = state.GetArgumentCount();
+        switch (argc)
         {
-            return array.Length <= 0 ? MRubyValue.Nil : array[0];
+            case <= 0:
+                return array.Length <= 0 ? MRubyValue.Nil : array[0];
+            case > 1:
+                state.RaiseArgumentNumberError(argc, 0, 1);
+                break;
         }
 
         var size = state.GetArgAsInteger(0);
+        if (size < 0)
+        {
+            state.Raise(Names.ArgumentError, "nagative array size"u8);
+        }
+
         var subSequence = array.SubSequence(0, (int)size);
         return MRubyValue.From(subSequence);
     });
@@ -208,12 +218,21 @@ static class ArrayMembers
     public static MRubyMethod Last = new((state, self) =>
     {
         var array = self.As<RArray>();
-        if (state.GetArgumentCount() <= 0)
+        var argc = state.GetArgumentCount();
+        switch (argc)
         {
-            return array.Length <= 0 ? MRubyValue.Nil : array[^1];
+            case <= 0:
+                return array.Length <= 0 ? MRubyValue.Nil : array[^1];
+            case > 1:
+                state.RaiseArgumentNumberError(argc, 0, 1);
+                break;
         }
 
         var size = state.GetArgAsInteger(0);
+        if (size < 0)
+        {
+            state.Raise(Names.ArgumentError, "nagative array size"u8);
+        }
         var subSequence = array.SubSequence(array.Length - (int)size, (int)size);
         return MRubyValue.From(subSequence);
     });
@@ -345,6 +364,14 @@ static class ArrayMembers
             right--;
         }
         return self;
+    });
+
+    public static MRubyMethod DeleteAt = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var arg = state.GetArg(0);
+        var index = state.ToInteger(arg);
+        return array.DeleteAt((int)index);
     });
 
     public static MRubyMethod ToS = new((state, self) =>

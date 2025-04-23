@@ -165,6 +165,19 @@ public sealed class RArray : RObject
         source.CopyTo(AsSpan(currentLength));
     }
 
+    public MRubyValue DeleteAt(int index)
+    {
+        if (index < 0) index += Length;
+        if (index < 0 || index >= Length) return MRubyValue.Nil;
+
+        var value = data[offset + index];
+        var src = AsSpan(index + 1);
+        var dst = AsSpan(index);
+        src.CopyTo(dst);
+        Length--;
+        return value;
+    }
+
     public void CopyTo(RArray other)
     {
         if (other.Length < Length)
