@@ -102,34 +102,12 @@ static class ArrayMembers
     });
 
     [MRubyMethod(RequiredArguments = 1)]
-    public static MRubyMethod Initialize = new((state, self) =>
+    public static MRubyMethod Replace = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg0 = state.GetArg(0);
-        var arg1 = state.GetArg(1);
-        var block = state.GetBlockArg();
+        var other = state.GetArgAsArray(0);
 
-        if (arg0.Object is RArray src && arg1.IsNil && block.IsNil)
-        {
-            src.CopyTo(array);
-            return self;
-        }
-
-        var size = state.ToInteger(arg0);
-        array.EnsureModifiable((int)size, true);
-        var span = array.AsSpan();
-        for (var i = 0; i < size; i++)
-        {
-            if (block.Object is RProc proc)
-            {
-                var procSelf = state.GetProcSelf(proc, out var targetClass);
-                span[i] = state.YieldWithClass(targetClass, procSelf, [MRubyValue.From(i)], proc);
-            }
-            else
-            {
-                span[i] = arg1;
-            }
-        }
+        other.ReplaceTo(array);
         return self;
     });
 

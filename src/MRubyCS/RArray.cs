@@ -31,7 +31,7 @@ public sealed class RArray : RObject
         }
         set
         {
-            EnsureModifiable(index + 1);
+            EnsureModifiable(index + 1, index >= Length);
             data[offset + index] = value;
         }
     }
@@ -184,8 +184,14 @@ public sealed class RArray : RObject
         {
             other.EnsureModifiable(Length);
         }
-        AsSpan().CopyTo(other.AsSpan());
         other.Length = Length;
+        AsSpan().CopyTo(other.AsSpan());
+    }
+
+    public void ReplaceTo(RArray other)
+    {
+        other.Length = 0;
+        CopyTo(other);
     }
 
     internal override RObject Clone()

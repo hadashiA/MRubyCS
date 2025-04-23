@@ -397,7 +397,6 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Names.OpAset, ArrayMembers.OpAset);
         DefineMethod(ArrayClass, Names.OpAdd, ArrayMembers.Plus);
         DefineMethod(ArrayClass, Names.OpMul, ArrayMembers.Times);
-        DefineMethod(ArrayClass, Names.Initialize, ArrayMembers.Initialize);
         DefineMethod(ArrayClass, Intern("push"u8), ArrayMembers.Push);
         DefineMethod(ArrayClass, Intern("concat"u8), ArrayMembers.Concat);
         DefineMethod(ArrayClass, Intern("size"u8), ArrayMembers.Size);
@@ -411,8 +410,10 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Intern("clear"u8), ArrayMembers.Clear);
         DefineMethod(ArrayClass, Intern("index"u8), ArrayMembers.Index);
         DefineMethod(ArrayClass, Intern("join"u8), ArrayMembers.Join);
+        DefineMethod(ArrayClass, Intern("replace"u8), ArrayMembers.Replace);
         DefineMethod(ArrayClass, Names.ToS, ArrayMembers.ToS);
         DefineMethod(ArrayClass, Names.Inspect, ArrayMembers.ToS);
+        DefineMethod(ArrayClass, Names.InitializeCopy, ArrayMembers.Replace);
 
         DefineMethod(ArrayClass, Intern("__ary_eq"u8), ArrayMembers.InternalEq);
         DefineMethod(ArrayClass, Intern("__svalue"u8), ArrayMembers.InternalSValue);
