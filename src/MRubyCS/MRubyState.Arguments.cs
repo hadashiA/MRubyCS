@@ -7,8 +7,12 @@ namespace MRubyCS;
 partial class MRubyState
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsRecursiveCalling(RObject receiver, Symbol methodId) =>
-        context.IsRecursiveCalling(receiver, methodId);
+    public bool IsRecursiveCalling(Symbol methodId, MRubyValue self) =>
+        context.IsRecursiveCalling(methodId, self);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsRecursiveCalling(Symbol methodId, MRubyValue self, MRubyValue arg0) =>
+        context.IsRecursiveCalling(methodId, self, arg0);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int GetArgumentCount() => context.GetArgumentCount();

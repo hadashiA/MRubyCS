@@ -109,10 +109,10 @@ static class NamingRule
             }
 
             var i = 0;
-            while (i < name.Length && AsciiCode.IsDigit(name[i])) i++;
+            while (i < name.Length && AsciiCode.IsIdentifier(name[i])) i++;
             if (localId)
             {
-                if (name[i] is (byte)'!' or (byte)'?' or (byte)'=')
+                if (i < name.Length && name[i] is (byte)'!' or (byte)'?' or (byte)'=')
                 {
                     i++;
                 }

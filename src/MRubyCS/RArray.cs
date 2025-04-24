@@ -156,13 +156,15 @@ public sealed class RArray : RObject
         return result;
     }
 
-    public void Unshift(MRubyValue newItem)
+    public void Unshift(ReadOnlySpan<MRubyValue> newItems)
     {
-        EnsureModifiable(Length + 1, true);
-        var src = AsSpan();
-        var dst = AsSpan(1, Length);
-        src.CopyTo(dst);
-        src[0] = newItem;
+        if (newItems.Length <= 0) return;
+
+        var currentLength = Length;
+        EnsureModifiable(Length + newItems.Length, true);
+        var span = AsSpan();
+        AsSpan(0,currentLength).CopyTo(AsSpan(newItems.Length));
+        newItems.CopyTo(span);
     }
 
     public void Concat(RArray other)

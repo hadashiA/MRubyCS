@@ -27,12 +27,11 @@ static class ArrayMembers
                 switch (index.VType)
                 {
                     case MRubyVType.Range:
-                        if (index.As<RRange>()
-                                .Calculate(
-                                    array.Length,
-                                    true,
-                                    out var calculatedIndex,
-                                    out var calculatedLength) != RangeCalculateResult.TypeMismatch)
+                        if (index.As<RRange>().Calculate(
+                                array.Length,
+                                true,
+                                out var calculatedIndex,
+                                out var calculatedLength) != RangeCalculateResult.TypeMismatch)
                         {
                             return MRubyValue.From(array.SubSequence(calculatedIndex, calculatedLength));
                         }
@@ -367,7 +366,7 @@ static class ArrayMembers
     {
         var array = self.As<RArray>();
         var result = state.NewString("["u8);
-        if (state.IsRecursiveCalling(array, Names.Inspect))
+        if (state.IsRecursiveCalling(Names.Inspect, self))
         {
             result.Concat("...]"u8);
         }
@@ -459,7 +458,7 @@ static class ArrayMembers
         return self;
     });
 
-    [MRubyMethod(RequiredArguments = 1)]
+    [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod Shift = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -472,13 +471,13 @@ static class ArrayMembers
         return array.Shift();
     });
 
-    [MRubyMethod(RequiredArguments = 1)]
+    [MRubyMethod(RestArguments = true)]
     public static MRubyMethod Unshift = new((state, self) =>
     {
         var array = self.As<RArray>();
         state.EnsureNotFrozen(array);
-        var item = state.GetArg(0);
-        array.Unshift(item);
+        var newItems = state.GetRestArg(0);
+        array.Unshift(newItems);
         return self;
     });
 
@@ -539,12 +538,13 @@ static class ArrayMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod InternalEq = new((state, self) =>
     {
-        var array = self.As<RArray>();
         var arg = state.GetArg(0);
         if (self == arg)
         {
             return MRubyValue.True;
         }
+
+        var array = self.As<RArray>();
         if (arg.VType != MRubyVType.Array)
         {
             return MRubyValue.False;
@@ -557,6 +557,17 @@ static class ArrayMembers
         return arg;
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod InternalCmp = new((state, self) =>
+    {
+        var arg = state.GetArg(0);
+        if (self == arg) return MRubyValue.From(0);
+        if (arg.VType != MRubyVType.Array)
+        {
+            return MRubyValue.Nil;
+        }
+        return arg;
+    });
 
     // internal method to convert multi-value to single value
     public static MRubyMethod InternalSValue = new((state, self) =>

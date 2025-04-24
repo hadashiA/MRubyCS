@@ -105,7 +105,16 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Cmp = new((state, self) =>
     {
-        throw new NotSupportedException();
+        var other = state.GetArg(0);
+        if (state.IsRecursiveCalling(Names.OpCmp, self, other))
+        {
+            return MRubyValue.Nil;
+        }
+        if (self == other)
+        {
+            return MRubyValue.From(0);
+        }
+        return MRubyValue.Nil;
     });
 
     public static MRubyMethod Class = new((state, self) =>

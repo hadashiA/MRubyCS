@@ -278,13 +278,27 @@ class MRubyContext
         return Stack.AsMemory(stackPointer);
     }
 
-    public bool IsRecursiveCalling(RObject receiver, Symbol methodId, int offset = 0)
+    public bool IsRecursiveCalling(Symbol methodId, MRubyValue self, int offset = 0)
+    {
+        for (var i = CallDepth - 1 - offset; i >= 0; i--)
+        {
+            ref var callInfo = ref CallStack[i];
+            if (callInfo.MethodId == methodId && Stack[callInfo.StackPointer] == self)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public bool IsRecursiveCalling(Symbol methodId, MRubyValue self, MRubyValue arg0, int offset = 0)
     {
         for (var i = CallDepth - 1 - offset; i >= 0; i--)
         {
             ref var callInfo = ref CallStack[i];
             if (callInfo.MethodId == methodId &&
-                Stack[callInfo.StackPointer].Object == receiver)
+                Stack[callInfo.StackPointer] == self &&
+                Stack[callInfo.StackPointer + 1] == arg0)
             {
                 return true;
             }

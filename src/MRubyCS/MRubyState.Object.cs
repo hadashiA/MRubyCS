@@ -346,6 +346,16 @@ partial class MRubyState
         return obj;
     }
 
+    public RString Inspect(MRubyValue value)
+    {
+        var converted = Send(value, Names.Inspect);
+        if (converted.Object is RString str)
+        {
+            return str;
+        }
+        return Stringify(converted);
+    }
+
     public RString InspectObject(MRubyValue value)
     {
         if (value.Object is { } obj)
@@ -353,7 +363,7 @@ partial class MRubyState
             if (obj.InstanceVariables.Length > 0)
             {
                 var s = NewString($"-<{NameOf(obj.Class)}:{obj.GetHashCode()} ");
-                if (context.IsRecursiveCalling(obj, Names.Inspect))
+                if (context.IsRecursiveCalling(Names.Inspect, value))
                 {
                     s.Concat(" ...>"u8);
                     return s;

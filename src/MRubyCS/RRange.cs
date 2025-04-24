@@ -42,11 +42,15 @@ public sealed class RRange : RObject
         var end = End.IsNil ? -1 : (int)End.IntegerValue;
         var exclusive = !End.IsNil && Exclusive;
 
-        if (begin + targetLength < 0)
+        if (begin < 0)
         {
-            calculatedOffset = default;
-            calculatedLength = default;
-            return RangeCalculateResult.Out;
+            begin += targetLength;
+            if (begin < 0)
+            {
+                calculatedOffset = default;
+                calculatedLength = default;
+                return RangeCalculateResult.Out;
+            }
         }
 
         if (truncate)

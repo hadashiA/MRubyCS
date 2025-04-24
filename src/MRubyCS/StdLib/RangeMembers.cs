@@ -98,4 +98,64 @@ static class RangeMembers
         }
         return MRubyValue.From(result);
     });
+
+    public static MRubyMethod InternalNumToA = new((state, self) =>
+    {
+        var range = self.As<RRange>();
+        if (range.End.IsNil)
+        {
+            state.Raise(Names.RangeError, "cannot convert endless range to an array"u8);
+        }
+
+        if (range.Begin.IsInteger)
+        {
+            if (range.End.IsInteger)
+            {
+                var a = range.Begin.IntegerValue;
+                var b = range.End.IntegerValue;
+                var len = b - a;
+                if (!range.Exclusive) len++;
+
+                var array = state.NewArray((int)len);
+                array.EnsureModifiable((int)len, true);
+                for (var i = 0; i < len; i++)
+                {
+                    array[i] = MRubyValue.From(a + i);
+                }
+
+                return MRubyValue.From(array);
+            }
+
+            if (range.End.IsFloat)
+            {
+                var a = (float)range.Begin.IntegerValue;
+                var b = range.End.FloatValue;
+                if (a > b)
+                {
+                    return MRubyValue.From(state.NewArray(0));
+                }
+
+                var array = state.NewArray((int)(b - a) + 1);
+                var i = 0;
+                if (range.Exclusive)
+                {
+                    while (a < b)
+                    {
+                        array[i++] = MRubyValue.From((int)a);
+                        a += 1f;
+                    }
+                }
+                else
+                {
+                    while (a <= b)
+                    {
+                        array[i++] = MRubyValue.From((int)a);
+                        a += 1f;
+                    }
+                }
+                return MRubyValue.From(array);
+            }
+        }
+        return MRubyValue.Nil;
+    });
 }

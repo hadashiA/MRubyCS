@@ -1,5 +1,4 @@
 using System.Text;
-using MRubyCS;
 using MRubyCS.Internals;
 
 namespace MRubyCS.Tests;
@@ -7,6 +6,14 @@ namespace MRubyCS.Tests;
 [TestFixture]
 public class NamingRuleTest
 {
+    [Test]
+    [TestCase("foo", ExpectedResult = true)]
+    public bool IsSymbolName(string value)
+    {
+        var utf8 = Encoding.UTF8.GetBytes(value);
+        return NamingRule.IsSymbolName(utf8);
+    }
+
     [Test]
     [TestCase("", "\"\"")]
     [TestCase("abcde123", "\"abcde123\"")]
