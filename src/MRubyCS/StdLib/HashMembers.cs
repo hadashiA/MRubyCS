@@ -1,6 +1,6 @@
 namespace MRubyCS.StdLib;
 
-public class HashMembers
+static class HashMembers
 {
     [MRubyMethod]
     public static MRubyMethod Initialize = new((state, self) =>

@@ -283,7 +283,8 @@ class MRubyContext
         for (var i = CallDepth - 1 - offset; i >= 0; i--)
         {
             ref var callInfo = ref CallStack[i];
-            if (callInfo.MethodId == methodId && Stack[callInfo.StackPointer] == self)
+            if (callInfo.MethodId == methodId &&
+                Stack[callInfo.StackPointer] == self)
             {
                 return true;
             }

@@ -416,7 +416,7 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Intern("unshift"u8), ArrayMembers.Unshift);
         DefineMethod(ArrayClass, Intern("slice"u8), ArrayMembers.OpAref);
         DefineMethod(ArrayClass, Names.ToS, ArrayMembers.ToS);
-        DefineMethod(ArrayClass, Names.Inspect, ArrayMembers.ToS);
+        DefineMethod(ArrayClass, Names.Inspect, ArrayMembers.Inspect);
         DefineMethod(ArrayClass, Names.InitializeCopy, ArrayMembers.Replace);
 
         DefineMethod(ArrayClass, Intern("__ary_eq"u8), ArrayMembers.InternalEq);

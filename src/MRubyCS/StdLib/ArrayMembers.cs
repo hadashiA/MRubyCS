@@ -110,7 +110,7 @@ static class ArrayMembers
         return self;
     });
 
-    [MRubyMethod(RequiredArguments = 1)]
+    [MRubyMethod(RestArguments = true)]
     public static MRubyMethod Push = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -122,10 +122,7 @@ static class ArrayMembers
         array.EnsureModifiable(start + args.Length, true);
 
         var span = array.AsSpan(start, args.Length);
-        foreach (var t in args)
-        {
-            span[0] = t;
-        }
+        args.CopyTo(span);
         return self;
     });
 
@@ -363,6 +360,34 @@ static class ArrayMembers
     });
 
     public static MRubyMethod ToS = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var result = state.NewString("["u8);
+        if (state.IsRecursiveCalling(Names.ToS, self))
+        {
+            result.Concat("...]"u8);
+        }
+        else
+        {
+            var first = true;
+            foreach (var x in array.AsSpan())
+            {
+                if (!first)
+                {
+                    result.Concat(", "u8);
+                }
+                first = false;
+
+                var value = state.Stringify(state.Send(x, Names.ToS));
+                result.Concat(value);
+            }
+            result.Concat("]"u8);
+        }
+        return MRubyValue.From(result);
+    });
+
+
+    public static MRubyMethod Inspect = new((state, self) =>
     {
         var array = self.As<RArray>();
         var result = state.NewString("["u8);

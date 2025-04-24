@@ -217,11 +217,11 @@ public class VmTest
 
 
     [Test]
-    public void Equals()
+    public void CheckRecursive()
     {
         var result = Exec("""
-                          a = [1,2,3]
-                          a.shift
+                          a = [2, 3,   4, 5]
+                          a[4] = a
                           a.to_s
                           """u8);
         Assert.That(result, Is.EqualTo(MRubyValue.True));
