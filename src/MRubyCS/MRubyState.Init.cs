@@ -23,7 +23,6 @@ public partial class MRubyState
         mrb.InitHash();
         mrb.InitRange();
         mrb.InitEnumerable();
-        // mrb.InitComparable();
         mrb.InitMrbLib();
         return mrb;
     }
@@ -428,11 +427,13 @@ public partial class MRubyState
     void InitHash()
     {
         HashClass = DefineClass(Intern("Hash"u8), ObjectClass, MRubyVType.Hash);
+        DefineMethod(HashClass, Names.Initialize, HashMembers.Initialize);
         DefineMethod(HashClass, Names.ToS, HashMembers.ToS);
         DefineMethod(HashClass, Names.Inspect, HashMembers.ToS);
         DefineMethod(HashClass, Names.OpEq, HashMembers.OpEq);
         DefineMethod(HashClass, Names.QEql, HashMembers.Eql);
         DefineMethod(HashClass, Names.OpAref, HashMembers.OpAref);
+        DefineMethod(HashClass, Names.OpAset, HashMembers.OpAset);
     }
 
     void InitRange()

@@ -60,6 +60,18 @@ public class HashMembers
         return Default(state, hash, key);
     });
 
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod OpAset = new((state, self) =>
+    {
+        state.EnsureArgumentCount(2);
+        var hash = self.As<RHash>();
+        var key = state.GetArg(0);
+        var value = state.GetArg(1);
+        hash[key] = value;
+        return value;
+    });
+
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpEq = new((state, self) =>
     {
