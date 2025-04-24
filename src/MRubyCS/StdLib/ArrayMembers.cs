@@ -328,6 +328,17 @@ static class ArrayMembers
         return MRubyValue.From(result);
     });
 
+    [MRubyMethod]
+    public static MRubyMethod Reverse = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var result = state.NewArray(array.Length);
+        array.CopyTo(result);
+        result.AsSpan().Reverse();
+        return MRubyValue.From(result);
+    });
+
+    [MRubyMethod]
     public static MRubyMethod ReverseBang = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -395,6 +406,22 @@ static class ArrayMembers
         return MRubyValue.Nil;
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod RIndex = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var arg = state.GetArg(0);
+        var span = array.AsSpan();
+        for (var i = span.Length - 1; i >= 0; i--)
+        {
+            if (state.ValueEquals(span[i], arg))
+            {
+                return MRubyValue.From(i);
+            }
+        }
+        return MRubyValue.Nil;
+    });
+
     [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod Join = new((state, self) =>
     {
@@ -431,6 +458,30 @@ static class ArrayMembers
         }
         return self;
     });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Shift = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        state.EnsureNotFrozen(array);
+        if (state.TryGetArg(0, out var arg0))
+        {
+            var result = array.Shift((int)state.ToInteger(arg0));
+            return MRubyValue.From(result);
+        }
+        return array.Shift();
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Unshift = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        state.EnsureNotFrozen(array);
+        var item = state.GetArg(0);
+        array.Unshift(item);
+        return self;
+    });
+
 
     static int AsIndex(MRubyState state, MRubyValue index)
     {

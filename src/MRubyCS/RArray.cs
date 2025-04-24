@@ -133,19 +133,36 @@ public sealed class RArray : RObject
         return true;
     }
 
+    public MRubyValue Shift()
+    {
+        if (Length <= 0) return MRubyValue.Nil;
+        var result = this[0];
+        offset++;
+        Length--;
+        return result;
+    }
+
+    public RArray Shift(int n)
+    {
+        if (Length <= 0 || n <= 0) return new RArray(0, Class);
+        if (n > Length) n = Length;
+
+        var result = new RArray(this)
+        {
+            Length = n
+        };
+        offset += n;
+        Length -= n;
+        return result;
+    }
+
     public void Unshift(MRubyValue newItem)
     {
+        EnsureModifiable(Length + 1, true);
         var src = AsSpan();
-        if (data.Length <= Length)
-        {
-            data = new MRubyValue[Length * 2];
-        }
-
-        dataOwned = true;
-        var dst = data.AsSpan(1, Length);
+        var dst = AsSpan(1, Length);
         src.CopyTo(dst);
-        dst[0] = newItem;
-        Length++;
+        src[0] = newItem;
     }
 
     public void Concat(RArray other)
@@ -226,8 +243,9 @@ public sealed class RArray : RObject
             else
             {
                 var newData = new MRubyValue[newLength];
-                data.CopyTo(newData, 0);
+                data.AsSpan(offset).CopyTo(newData);
                 data = newData;
+                offset = 0;
                 dataOwned = true;
             }
         }
