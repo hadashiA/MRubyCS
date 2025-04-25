@@ -6,6 +6,8 @@ namespace MRubyCS;
 
 public sealed class RArray : RObject
 {
+    public static int MaxLength => 0X7FFFFFC7;
+
     public int Length
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -310,7 +310,7 @@ static class ArrayMembers
         {
             state.Raise(Names.ArgumentError, "nagative argument"u8);
         }
-        else if (Array.MaxLength / times < array.Length)
+        else if (RArray.MaxLength / times < array.Length)
         {
             state.Raise(Names.ArgumentError, "array size too big"u8);
         }
