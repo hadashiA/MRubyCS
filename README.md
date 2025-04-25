@@ -11,17 +11,17 @@ mruby/cs is a new [mruby](https://github.com/mruby/mruby) virtual machine implem
 
 ## Features
 
-- **Implemented in C#**  
+- **Implemented in C#**
   Utilizes the robust capabilities of C# to ensure seamless integration with C#-based game engines.
 
-- **High Performance**  
+- **High Performance**
   Takes advantage of modern C# language features—such as managed pointers, `Span`, and the performance benefits of the .NET runtime’s GC and JIT compiler—to deliver superior speed and efficiency.
 
 - **High compatibility with Ruby-level APIs  (Work in progress)**
   It is intended for use in software with a certain amount of resources, such as games. For this reason, we are focusing on Ruby API compatibility.
   At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) tests from the mruby repository.
 
-- **Rich Library Integration & Extensibility**  
+- **Rich Library Integration & Extensibility**
   Compared to the original C implementation, calling C#’s extensive libraries from Ruby is straightforward, making the VM highly extensible.
 
 ## Limitations (Preview Release)
@@ -54,7 +54,7 @@ dotnet add package MRubyCS
 
 ```ruby
 def fibonacci(n)
-  return n if n <= 1 
+  return n if n <= 1
   fibonacci(n - 1) + fibonacci(n - 2)
 end
 
@@ -125,7 +125,7 @@ var floatValue = MRubyValue.From(1.234f); // create float value
 var objValue = MRubyValue.From(str); // create allocated ruby object value
 ```
 
-### Define ruby class/module/method by C# 
+### Define ruby class/module/method by C#
 
 ``` cs
 // Create MRubyState object.
@@ -137,45 +137,45 @@ var classA = state.DefineClass(Intern("A"u8), c =>
     // Method definition that takes a required argument.
     c.DefineMethod(Intern("plus100"u8), (state, self) =>
     {
-        var arg0 = state.GetArgAsIntegeger(0); // get first argument (index:0)
+        var arg0 = state.GetArgumentAsIntegerAt(0); // get first argument (index:0)
         return MRubyValue.From(arg0 + 100);
     });
 
     // Method definition that takes a block argument.
     c.DefineMethod(Intern("method2"), (state, self) =>
     {
-        var arg0 = state.GetArg(0);
-        var blockArg = state.GetBlockArg();
+        var arg0 = state.GetArgumentAt(0);
+        var blockArg = state.GetBlockArgument();
         if (!blockArg.IsNil)
         {
             // Execute `Proc#call`
             state.Send(blockArg, state.Intern("call"u8), arg0);
         }
     });
-    
+
     // Other complex arguments...
     c.DefineMethod(Intern("method3"), (state, self) =>
     {
-        var keywordArg = state.GetKeywordArg(state.Intern("foo"))
+        var keywordArg = state.GetKeywordArgument(state.Intern("foo"))
         Console.WriteLine($"foo: {keywordArg}");
-        
+
         // argument type checking
         state.EnsureValueType(keywordArg, MrubyVType.Integer);
-        
-        var restArguments = state.GetRestArguments();
+
+        var restArguments = state.GetRestArgumentsAfter(0);
         for (var i = 0; i < restArguments.Length; i++)
         {
             Console.WriteLine($"rest arg({i}: {restArguments[i]})");
         }
     });
-    
+
     // class method
-    c.DefineClassMethod(Intern("classmethod1"), (state, self) => 
+    c.DefineClassMethod(Intern("classmethod1"), (state, self) =>
     {
         var str = state.NewString($"hoge fuga");
         return MRubyValue.From(str);
     });
-    
+
 });
 
 // Monkey patching
@@ -231,7 +231,7 @@ var sym1 = state.Intern("sym"u8)
 var sym2 = state.ToSymbol(state.NewString("sym2"u8));
 ```
 
-### How to compile .mrb 
+### How to compile .mrb
 
 
 MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
