@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace MRubyCS.Internals;
 
 [DebuggerDisplay("Value = {BoxedValue}")]
-internal readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
+readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
 {
     public bool Equals(TypeObjectUnion other)
     {
@@ -28,10 +28,10 @@ internal readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     public readonly RObject RawObject;
-    public ref readonly  nint RawValue
+    public nint RawValue
     {
-         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => ref Unsafe.As<TypeObjectUnion, nint>(ref Unsafe.AsRef(in this));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Unsafe.As<TypeObjectUnion, nint>(ref Unsafe.AsRef(in this));
     }
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -64,7 +64,7 @@ internal readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
 
     public object BoxedValue => IsType ? TypeValue : RawObject;
     public override string ToString() => BoxedValue.ToString()!;
-    
+
     public static bool operator ==(TypeObjectUnion left, TypeObjectUnion right) => ReferenceEquals(left.RawObject,right.RawObject);
 
     public static bool operator !=(TypeObjectUnion left, TypeObjectUnion right) => !ReferenceEquals(left.RawObject,right.RawObject);

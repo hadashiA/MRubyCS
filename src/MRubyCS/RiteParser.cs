@@ -56,7 +56,7 @@ public class RiteParser(MRubyState state)
         var result = default(Irep?);
         while (binSize > 0)
         {
-            var sectionHeader = Unsafe.ReadUnaligned<RiteSectionHeader>(in bin[0]);
+            var sectionHeader = Unsafe.ReadUnaligned<RiteSectionHeader>(ref Unsafe.AsRef(in bin[0]));
             var sectionIdentifier = new ReadOnlySpan<byte>(sectionHeader.SectionIdentifier, 4);
             var sectionSize = BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(sectionHeader.SectionSize, 4));
 
@@ -86,7 +86,7 @@ public class RiteParser(MRubyState state)
             RiteParseException.ThrowBinaryLengthIsTooShort();
         }
 
-        var binaryHeader = Unsafe.ReadUnaligned<RiteBinaryHeader>(in bin[0]);
+        var binaryHeader = Unsafe.ReadUnaligned<RiteBinaryHeader>(ref MemoryMarshal.GetReference(bin));
         var binaryIdentifer = new ReadOnlySpan<byte>(binaryHeader.BinaryIdentifier, 4);
         if (!binaryIdentifer.SequenceEqual("RITE"u8))
         {
@@ -256,7 +256,14 @@ public class RiteParser(MRubyState state)
                     // Float
                     case 5:
                     {
-                        var x = BinaryPrimitives.ReadDoubleLittleEndian(bin);
+                        var x =
+#if NET6_0_OR_GREATER
+                            BinaryPrimitives.ReadDoubleLittleEndian(bin);
+#else
+                            !BitConverter.IsLittleEndian
+                                ? BitConverter.Int64BitsToDouble(BinaryPrimitives.ReverseEndianness(MemoryMarshal.Read<long>(bin)))
+                                : MemoryMarshal.Read<double>(bin);
+#endif
                         bin = bin[sizeof(double)..];
                         poolingValues[i] = MRubyValue.From(x);
                         break;

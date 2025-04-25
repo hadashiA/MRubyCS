@@ -73,7 +73,13 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     {
         // Assume that MRB_USE_FLOAT32 is not defined
         // Assume that MRB_WORDBOX_NO_FLOAT_TRUNCATE is not defined
-        return new (MRubyVType.Float, Unsafe.BitCast<double,long>(value));
+        return new MRubyValue(MRubyVType.Float,
+#if NET6_0_OR_GREATER
+            Unsafe.BitCast<double, long>(value)
+#else
+            Unsafe.As<double, long>(ref value)
+#endif
+);
     }
 
     public RObject? Object

@@ -27,7 +27,10 @@ enum RStringRangeType
     OutOfRange = -1
 }
 
-public class RString : RObject, ISpanFormattable, IUtf8SpanFormattable, IEquatable<RString>
+public class RString : RObject, IEquatable<RString>
+#if NET6_0_OR_GREATER
+    , ISpanFormattable, IUtf8SpanFormattable
+#endif
 {
     public int Length { get; internal set; }
 
@@ -194,6 +197,7 @@ public class RString : RObject, ISpanFormattable, IUtf8SpanFormattable, IEquatab
         return formattable.ToString(formatProvider);
     }
 
+#if NET6_0_OR_GREATER
     public bool TryFormat(
         Span<char> destination,
         out int charsWritten,
@@ -221,6 +225,7 @@ public class RString : RObject, ISpanFormattable, IUtf8SpanFormattable, IEquatab
         bytesWritten = span.Length;
         return true;
     }
+#endif
 
     public int IndexOf(ReadOnlySpan<byte> str, int offset = 0)
     {
