@@ -1,4 +1,4 @@
-# MRubyCS
+<img src="./mrubycs.webp" alt="MRubyCS" />
 
 > [!NOTE]
 > This library is currently in preview
