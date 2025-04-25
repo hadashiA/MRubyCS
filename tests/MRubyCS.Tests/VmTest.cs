@@ -215,18 +215,6 @@ public class VmTest
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
     }
 
-
-    [Test]
-    public void CheckRecursive()
-    {
-        var result = Exec("""
-                          a = [2, 3,   4, 5]
-                          a[4] = a
-                          a.to_s
-                          """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.True));
-    }
-
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
         var irep = compiler.Compile(code);

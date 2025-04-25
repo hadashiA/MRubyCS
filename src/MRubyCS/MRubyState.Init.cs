@@ -377,6 +377,7 @@ public partial class MRubyState
         StringClass = DefineClass(Intern("String"u8), ObjectClass, MRubyVType.String);
         DefineMethod(StringClass, Names.OpEq, StringMembers.OpEq);
         DefineMethod(StringClass, Names.QEql, StringMembers.OpEq);
+        DefineMethod(StringClass, Names.OpCmp, StringMembers.OpCmp);
         DefineMethod(StringClass, Names.Inspect, StringMembers.Inspect);
         DefineMethod(StringClass, Names.ToSym, StringMembers.ToSym);
         DefineMethod(StringClass, Names.ToI, StringMembers.ToI);

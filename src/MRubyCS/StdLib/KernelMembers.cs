@@ -101,7 +101,6 @@ static class KernelMembers
         return MRubyValue.From(state.ValueEquals(self, arg));
     });
 
-
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Cmp = new((state, self) =>
     {

@@ -35,6 +35,18 @@ static class StringMembers
         return MRubyValue.False;
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod OpCmp = new((state, self) =>
+    {
+        var other = state.GetArg(0);
+        if (other.Object is RString otherStr)
+        {
+            var str = self.As<RString>();
+            return MRubyValue.From(str.CompareTo(otherStr));
+        }
+        return MRubyValue.Nil;
+    });
+
     [MRubyMethod]
     public static MRubyMethod ToSym = new((state, self) =>
     {

@@ -31,7 +31,7 @@ static class ArrayMembers
                                 array.Length,
                                 true,
                                 out var calculatedIndex,
-                                out var calculatedLength) != RangeCalculateResult.TypeMismatch)
+                                out var calculatedLength) == RangeCalculateResult.Ok)
                         {
                             return MRubyValue.From(array.SubSequence(calculatedIndex, calculatedLength));
                         }
@@ -59,6 +59,8 @@ static class ArrayMembers
     public static MRubyMethod OpAset = new((state, self) =>
     {
         var array = self.As<RArray>();
+        state.EnsureNotFrozen(array);
+
         var argc = state.GetArgumentCount();
         switch (argc)
         {
