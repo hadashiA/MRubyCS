@@ -10,6 +10,9 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     public IEnumerable<MRubyValue> Keys => table.Keys;
     public IEnumerable<MRubyValue> Values => table.Values;
 
+    public MRubyValue? DefaultValue { get; set; }
+    public RProc? DefaultProc { get; set; }
+
     readonly Dictionary<MRubyValue, MRubyValue> table;
 
     internal RHash(int capacity, IEqualityComparer<MRubyValue> comparer, RClass hashClass) : base(MRubyVType.Hash, hashClass)

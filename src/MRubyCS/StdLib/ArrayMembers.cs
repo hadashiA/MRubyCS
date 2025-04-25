@@ -1,75 +1,118 @@
+using System;
+using System.Collections.Generic;
+
 namespace MRubyCS.StdLib;
 
 static class ArrayMembers
 {
+    public static MRubyMethod Create = new((state, self) =>
+    {
+        var args = state.GetRestArg(0);
+        var array = state.NewArray(args);
+        array.Class = self.As<RClass>();
+        return MRubyValue.From(array);
+    });
+
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
     public static MRubyMethod OpAref = new((state, self) =>
     {
         var array = self.As<RArray>();
+        var argc = state.GetArgumentCount();
+        // if (argc )
 
         var index = state.GetArg(0);
-        if (state.GetArgumentCount() == 1)
+        switch (argc)
         {
-            switch (index.VType)
-            {
-                case MRubyVType.Range:
-                    if (index.As<RRange>()
-                            .Calculate(
+            case 1:
+                switch (index.VType)
+                {
+                    case MRubyVType.Range:
+                        if (index.As<RRange>().Calculate(
                                 array.Length,
                                 true,
                                 out var calculatedIndex,
-                                out var calculatedLength) != RangeCalculateResult.TypeMismatch)
-                    {
-                        return MRubyValue.From(array.SubSequence(calculatedIndex, calculatedLength));
-                    }
-                    return MRubyValue.Nil;
-                default:
-                    return array[(int)state.ToInteger(index)];
-            }
+                                out var calculatedLength) == RangeCalculateResult.Ok)
+                        {
+                            return MRubyValue.From(array.SubSequence(calculatedIndex, calculatedLength));
+                        }
+                        return MRubyValue.Nil;
+                    case MRubyVType.Float:
+                        return array[(int)index.FloatValue];
+                    default:
+                        return array[(int)state.ToInteger(index)];
+                }
+            case 2:
+                var i = (int)state.ToInteger(index);
+                var length = state.GetArgAsInteger(1);
+                if (i < 0) i += array.Length;
+                if (i < 0 || array.Length < i) return MRubyValue.Nil;
+                if (length < 0) return MRubyValue.Nil;
+                if (array.Length == i) return MRubyValue.From(state.NewArray(0));
+                if (length > array.Length - i) length = array.Length - i;
+                return MRubyValue.From(array.SubSequence(i, (int)length));
+            default:
+                state.RaiseArgumentNumberError(argc, 1, 2);
+                return default;
         }
+    });
 
-        var i = (int)state.ToInteger(index);
-        var length = state.GetArgAsInteger(1);
-        if (i < 0) i += array.Length;
-        if (i < 0 || array.Length < i) return MRubyValue.Nil;
-        if (length < 0) return MRubyValue.Nil;
-        if (array.Length == i) return MRubyValue.From(state.NewArray(0));
-        if (length > array.Length - i) length = array.Length - i;
-        return MRubyValue.From(array.SubSequence(i, (int)length));
+    public static MRubyMethod OpAset = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        state.EnsureNotFrozen(array);
+
+        var argc = state.GetArgumentCount();
+        switch (argc)
+        {
+            case 2:
+                var key = state.GetArg(0);
+                var val = state.GetArg(1);
+                if (key.Object is RRange range)
+                {
+                    switch (range.Calculate(array.Length, false, out var calculatedIndex, out var calculatedLength))
+                    {
+                        case RangeCalculateResult.TypeMismatch:
+                            array[(int)state.ToInteger(key)] = val;
+                            break;
+                        case RangeCalculateResult.Ok:
+                            state.SpliceArray(array, calculatedIndex, calculatedLength, val);
+                            break;
+                        case RangeCalculateResult.Out:
+                            state.Raise(Names.RangeError, state.NewString($"`{state.Stringify(key)}` out of range"));
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException();
+                    }
+                }
+                else
+                {
+                    array[(int)state.ToInteger(key)] = val;
+                }
+                return val;
+            case 3:
+                // a[n,m] = v
+                var n = state.GetArgAsInteger(0);
+                var m = state.GetArgAsInteger(1);
+                var v = state.GetArg(2);
+                state.SpliceArray(array, (int)n, (int)m, v);
+                return v;
+            default:
+                state.RaiseArgumentNumberError(argc, 2, 3);
+                return default;
+        }
     });
 
     [MRubyMethod(RequiredArguments = 1)]
-    public static MRubyMethod Initialize = new((state, self) =>
+    public static MRubyMethod Replace = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg0 = state.GetArg(0);
-        var arg1 = state.GetArg(1);
-        var block = state.GetBlockArg();
+        var other = state.GetArgAsArray(0);
 
-        if (arg0.Object is RArray src && arg1.IsNil && block.IsNil)
-        {
-            src.CopyTo(array);
-            return self;
-        }
-
-        var size = state.ToInteger(arg0);
-        array.EnsureModifiable((int)size, true);
-        var span = array.AsSpan();
-        for (var i = 0; i < size; i++)
-        {
-            if (block.Object is RProc proc)
-            {
-                var procSelf = state.GetProcSelf(proc, out var targetClass);
-                span[i] = state.YieldWithClass(targetClass, procSelf, [MRubyValue.From(i)], proc);
-            }
-            else
-            {
-                span[i] = arg1;
-            }
-        }
+        other.ReplaceTo(array);
         return self;
     });
 
-    [MRubyMethod(RequiredArguments = 1)]
+    [MRubyMethod(RestArguments = true)]
     public static MRubyMethod Push = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -81,10 +124,7 @@ static class ArrayMembers
         array.EnsureModifiable(start + args.Length, true);
 
         var span = array.AsSpan(start, args.Length);
-        foreach (var t in args)
-        {
-            span[0] = t;
-        }
+        args.CopyTo(span);
         return self;
     });
 
@@ -96,6 +136,20 @@ static class ArrayMembers
 
         array.TryPop(out var result);
         return result;
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod Plus = new((state, self) =>
+    {
+        var a1 = self.As<RArray>();
+        var a2 = state.GetArgAsArray(0);
+
+        var result = state.NewArray(a1.Length + a2.Length);
+        result.EnsureModifiable(a1.Length + a2.Length, true);
+
+        a1.AsSpan().CopyTo(result.AsSpan());
+        a2.AsSpan().CopyTo(result.AsSpan(a1.Length));
+        return MRubyValue.From(result);
     });
 
     [MRubyMethod]
@@ -116,27 +170,45 @@ static class ArrayMembers
     public static MRubyMethod First = new((state, self) =>
     {
         var array = self.As<RArray>();
-        if (state.GetArgumentCount() <= 0)
+        var argc = state.GetArgumentCount();
+        switch (argc)
         {
-            return array.Length <= 0 ? MRubyValue.Nil : array[0];
+            case <= 0:
+                return array.Length <= 0 ? MRubyValue.Nil : array[0];
+            case > 1:
+                state.RaiseArgumentNumberError(argc, 0, 1);
+                break;
         }
 
         var size = state.GetArgAsInteger(0);
+        if (size < 0)
+        {
+            state.Raise(Names.ArgumentError, "nagative array size"u8);
+        }
+
         var subSequence = array.SubSequence(0, (int)size);
         return MRubyValue.From(subSequence);
     });
-
 
     [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod Last = new((state, self) =>
     {
         var array = self.As<RArray>();
-        if (state.GetArgumentCount() <= 0)
+        var argc = state.GetArgumentCount();
+        switch (argc)
         {
-            return array.Length <= 0 ? MRubyValue.Nil : array[^1];
+            case <= 0:
+                return array.Length <= 0 ? MRubyValue.Nil : array[^1];
+            case > 1:
+                state.RaiseArgumentNumberError(argc, 0, 1);
+                break;
         }
 
         var size = state.GetArgAsInteger(0);
+        if (size < 0)
+        {
+            state.Raise(Names.ArgumentError, "nagative array size"u8);
+        }
         var subSequence = array.SubSequence(array.Length - (int)size, (int)size);
         return MRubyValue.From(subSequence);
     });
@@ -218,6 +290,53 @@ static class ArrayMembers
         return MRubyValue.From(newArray);
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Times = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var arg = state.GetArg(0);
+
+        if (arg.Object is RString separator)
+        {
+            return MRubyValue.From(JoinArray(state, array, separator, new Stack<RArray>()));
+        }
+
+        var times = state.ToInteger(arg);
+        if (times == 0)
+        {
+            return MRubyValue.From(state.NewArray());
+        }
+        if (times < 0)
+        {
+            state.Raise(Names.ArgumentError, "nagative argument"u8);
+        }
+        else if (Array.MaxLength / times < array.Length)
+        {
+            state.Raise(Names.ArgumentError, "array size too big"u8);
+        }
+
+        var source = array.AsSpan();
+        var newLength = array.Length * (int)times;
+        var result = state.NewArray(newLength);
+        result.EnsureModifiable(newLength, true);
+        for (var i = 0; i < times; i++)
+        {
+            source.CopyTo(result.AsSpan(array.Length * i));
+        }
+        return MRubyValue.From(result);
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod Reverse = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var result = state.NewArray(array.Length);
+        array.CopyTo(result);
+        result.AsSpan().Reverse();
+        return MRubyValue.From(result);
+    });
+
+    [MRubyMethod]
     public static MRubyMethod ReverseBang = new((state, self) =>
     {
         var array = self.As<RArray>();
@@ -234,11 +353,47 @@ static class ArrayMembers
         return self;
     });
 
+    public static MRubyMethod DeleteAt = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var arg = state.GetArg(0);
+        var index = state.ToInteger(arg);
+        return array.DeleteAt((int)index);
+    });
+
     public static MRubyMethod ToS = new((state, self) =>
     {
         var array = self.As<RArray>();
         var result = state.NewString("["u8);
-        if (state.IsRecursiveCalling(array, Names.Inspect))
+        if (state.IsRecursiveCalling(Names.ToS, self))
+        {
+            result.Concat("...]"u8);
+        }
+        else
+        {
+            var first = true;
+            foreach (var x in array.AsSpan())
+            {
+                if (!first)
+                {
+                    result.Concat(", "u8);
+                }
+                first = false;
+
+                var value = state.Stringify(state.Send(x, Names.ToS));
+                result.Concat(value);
+            }
+            result.Concat("]"u8);
+        }
+        return MRubyValue.From(result);
+    });
+
+
+    public static MRubyMethod Inspect = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var result = state.NewString("["u8);
+        if (state.IsRecursiveCalling(Names.Inspect, self))
         {
             result.Concat("...]"u8);
         }
@@ -277,70 +432,82 @@ static class ArrayMembers
         return MRubyValue.Nil;
     });
 
-    // [MRubyMethod(OptionalArguments = 1)]
-    // public static MRubyMethod Join = new((state, self) =>
-    // {
-    //     RString? separator = null;
-    //     if (state.TryGetArg(0, out var arg0))
-    //     {
-    //         state.EnsureValueType(arg0, MRubyVType.String);
-    //         separator = arg0.As<RString>();
-    //     }
-    //
-    //     var array = self.As<RArray>();
-    //     var span = array.AsSpan();
-    //
-    //     // check recursive
-    //     foreach (var x in span)
-    //     {
-    //         if (x == self)
-    //         {
-    //             state.Raise(Names.ArgumentError, "recursive array join"u8);
-    //         }
-    //     }
-    //
-    //     var result = state.NewString(array.Length * 2);
-    //     var first = true;
-    //     foreach (var x in span)
-    //     {
-    //         if (!first && separator != null)
-    //         {
-    //             result.Concat(separator);
-    //         }
-    //         first = false;
-    //
-    //         if (x.Object is RString str)
-    //         {
-    //             result.Concat(str);
-    //         }
-    //         else if (x.Object is RArray arr)
-    //         {
-    //             state.Send(x, state.Intern("join"u8));
-    //             result.Concat(Join(state, x).As<RString>());
-    //         }
-    //         switch (x.VType)
-    //         {
-    //             case MRubyVType.String:
-    //                 result.Concat(x.As<RString>());
-    //                 break;
-    //             case MRubyVType.Array:
-    //                 re
-    //                 break;
-    //         }
-    //     }
-    // });
-
-    // internal method to convert multi-value to single value
-    public static MRubyMethod SValue = new((state, self) =>
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod RIndex = new((state, self) =>
     {
         var array = self.As<RArray>();
-        return array.Length switch
+        var arg = state.GetArg(0);
+        var span = array.AsSpan();
+        for (var i = span.Length - 1; i >= 0; i--)
         {
-            0 => MRubyValue.Nil,
-            1 => array[0],
-            _ => self
-        };
+            if (state.ValueEquals(span[i], arg))
+            {
+                return MRubyValue.From(i);
+            }
+        }
+        return MRubyValue.Nil;
     });
+
+    [MRubyMethod(OptionalArguments = 1)]
+    public static MRubyMethod Join = new((state, self) =>
+    {
+        RString? separator = null;
+        if (state.TryGetArg(0, out var arg0))
+        {
+            state.EnsureValueType(arg0, MRubyVType.String);
+            separator = arg0.As<RString>();
+        }
+
+        var array = self.As<RArray>();
+        var result = JoinArray(state, array, separator, new Stack<RArray>());
+        return MRubyValue.From(result);
+    });
+
+    public static MRubyMethod Clear = new((state, self) =>
+    {
+        self.As<RArray>().Clear();
+        return self;
+    });
+
+    [MRubyMethod(RestArguments = true)]
+    public static MRubyMethod Concat = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        var args = state.GetRestArg(0);
+        foreach (var arg in args)
+        {
+            state.EnsureValueType(arg, MRubyVType.Array);
+        }
+        foreach (var arg in args)
+        {
+            array.Concat(arg.As<RArray>());
+        }
+        return self;
+    });
+
+    [MRubyMethod(OptionalArguments = 1)]
+    public static MRubyMethod Shift = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        state.EnsureNotFrozen(array);
+        if (state.TryGetArg(0, out var arg0))
+        {
+            var result = array.Shift((int)state.ToInteger(arg0));
+            return MRubyValue.From(result);
+        }
+        return array.Shift();
+    });
+
+    [MRubyMethod(RestArguments = true)]
+    public static MRubyMethod Unshift = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        state.EnsureNotFrozen(array);
+        var newItems = state.GetRestArg(0);
+        array.Unshift(newItems);
+        return self;
+    });
+
 
     static int AsIndex(MRubyState state, MRubyValue index)
     {
@@ -350,4 +517,94 @@ static class ArrayMembers
         }
         return (int)state.GetArgAsInteger(0);
     }
+
+    static RString JoinArray(MRubyState state, RArray array, RString separator, Stack<RArray> stack)
+    {
+        var span = array.AsSpan();
+
+        // check recursive
+        foreach (var x in stack)
+        {
+            if (x == array)
+            {
+                state.Raise(Names.ArgumentError, "recursive array join"u8);
+            }
+        }
+
+        stack.Push(array);
+
+        var result = state.NewString(array.Length * 2);
+        var first = true;
+        foreach (var x in span)
+        {
+            if (!first && separator != null)
+            {
+                result.Concat(separator);
+            }
+            first = false;
+
+            if (x.Object is RString str)
+            {
+                result.Concat(str);
+            }
+            else if (x.Object is RArray nested)
+            {
+                var joinedValue = JoinArray(state, nested, separator, stack);
+                result.Concat(joinedValue);
+            }
+            else
+            {
+                result.Concat(state.Stringify(x));
+            }
+        }
+
+        stack.Pop();
+        return result;
+    }
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod InternalEq = new((state, self) =>
+    {
+        var arg = state.GetArg(0);
+        if (self == arg)
+        {
+            return MRubyValue.True;
+        }
+
+        var array = self.As<RArray>();
+        if (arg.VType != MRubyVType.Array)
+        {
+            return MRubyValue.False;
+        }
+
+        if (arg.Object is RArray other && other.Length != array.Length)
+        {
+            return MRubyValue.False;
+        }
+        return arg;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod InternalCmp = new((state, self) =>
+    {
+        var arg = state.GetArg(0);
+        if (self == arg) return MRubyValue.From(0);
+        if (arg.VType != MRubyVType.Array)
+        {
+            return MRubyValue.Nil;
+        }
+        return arg;
+    });
+
+    // internal method to convert multi-value to single value
+    public static MRubyMethod InternalSValue = new((state, self) =>
+    {
+        var array = self.As<RArray>();
+        return array.Length switch
+        {
+            0 => MRubyValue.Nil,
+            1 => array[0],
+            _ => self
+        };
+    });
 }

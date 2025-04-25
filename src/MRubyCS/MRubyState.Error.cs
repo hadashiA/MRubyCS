@@ -69,25 +69,6 @@ partial class MRubyState
         }
     }
 
-    public void RaiseArgumentError(int argc, int min, int max)
-    {
-        RString message;
-        if (min == max)
-        {
-            message = NewString($"wrong number of arguments (given {argc}, expected {min})");
-        }
-        else if (max < 0)
-        {
-            message = NewString($"wrong number of arguments (given {argc}, expected {min}+)");
-        }
-        else
-        {
-            message = NewString($"wrong number of arguments (given {argc}, expected {min}..{max})");
-        }
-
-        Raise(Names.ArgumentError, message);
-    }
-
     public void RaiseMethodMissing(Symbol methodId, MRubyValue self, MRubyValue args)
     {
         var exceptionClass = GetExceptionClass(Names.NoMethodError);
@@ -106,6 +87,25 @@ partial class MRubyState
         var ex = new RException(message, GetExceptionClass(Names.NameError));
         ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(name));
         Raise(ex);
+    }
+
+
+    public void EnsureArgumentCount(int expected)
+    {
+        var argc = GetArgumentCount();
+        if (expected != argc)
+        {
+            RaiseArgumentNumberError(argc, expected);
+        }
+    }
+
+    public void EnsureArgumentCount(int min, int max)
+    {
+        var argc = GetArgumentCount();
+        if (argc < min || argc > max)
+        {
+            RaiseArgumentNumberError(argc, min, max);
+        }
     }
 
     public void EnsureBlockGiven(MRubyValue block)
@@ -178,26 +178,28 @@ partial class MRubyState
         }
     }
 
-    internal void RaiseArgumentNumberError(int num)
+    public void RaiseArgumentNumberError(int argc, int expected)
     {
-        var argc = (int)context.CurrentCallInfo.ArgumentCount;
-        if (argc == MRubyCallInfo.CallMaxArgs)
+        var message = NewString($"wrong number of arguments (given {argc}, expected {expected})");
+        Raise(Names.ArgumentError, message);
+    }
+
+    public void RaiseArgumentNumberError(int argc, int min, int max)
+    {
+        RString message;
+        if (min == max)
         {
-            var args = context.CurrentStack[1];
-            if (args.VType == MRubyVType.Array)
-            {
-                argc = args.As<RArray>().Length;
-            }
+            message = NewString($"wrong number of arguments (given {argc}, expected {min})");
+        }
+        else if (max < 0)
+        {
+            message = NewString($"wrong number of arguments (given {argc}, expected {min}+)");
+        }
+        else
+        {
+            message = NewString($"wrong number of arguments (given {argc}, expected {min}..{max})");
         }
 
-        if (argc == 0 &&
-            context.CurrentCallInfo.KeywordArgumentCount != 0 &&
-            context.CurrentStack[1].As<RHash>().Length > 0)
-        {
-            argc++;
-        }
-
-        var message = NewString($"wrong number of arguments (given {argc}, expected {num})");
         Raise(Names.ArgumentError, message);
     }
 

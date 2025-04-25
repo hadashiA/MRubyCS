@@ -1,7 +1,7 @@
 using System;
 using System.Buffers;
-using System.Buffers.Text;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
 using Utf8StringInterpolation;
@@ -346,6 +346,16 @@ partial class MRubyState
         return obj;
     }
 
+    public RString Inspect(MRubyValue value)
+    {
+        var converted = Send(value, Names.Inspect);
+        if (converted.Object is RString str)
+        {
+            return str;
+        }
+        return Stringify(converted);
+    }
+
     public RString InspectObject(MRubyValue value)
     {
         if (value.Object is { } obj)
@@ -353,7 +363,7 @@ partial class MRubyState
             if (obj.InstanceVariables.Length > 0)
             {
                 var s = NewString($"-<{NameOf(obj.Class)}:{obj.GetHashCode()} ");
-                if (context.IsRecursiveCalling(obj, Names.Inspect))
+                if (context.IsRecursiveCalling(Names.Inspect, value))
                 {
                     s.Concat(" ...>"u8);
                     return s;
@@ -376,7 +386,7 @@ partial class MRubyState
         return StringifyAny(value);
     }
 
-    public MRubyValue SplatArray(MRubyValue value)
+    internal MRubyValue SplatArray(MRubyValue value)
     {
         if (value.Object is RArray array)
         {
@@ -395,6 +405,70 @@ partial class MRubyState
         }
         EnsureValueType(convertedValue, MRubyVType.Array);
         return MRubyValue.From(convertedValue.As<RArray>().Dup());
+    }
+
+    internal void SpliceArray(RArray array, int start, int length, MRubyValue args)
+    {
+        if (length < 0)
+        {
+            Raise(Names.IndexError, "negative length "u8);
+        }
+
+        if (start < 0)
+        {
+            start += array.Length;
+            if (start < 0)
+            {
+                Raise(Names.IndexError, NewString($"index {start} is out of array"));
+            }
+        }
+
+        var end = start + length;
+        if (array.Length < length || array.Length < end)
+        {
+            length = array.Length - start;
+            end = start + length;
+        }
+
+        ReadOnlySpan<MRubyValue> newValues;
+        if (args.Object is RArray argsArray)
+        {
+            newValues = argsArray.AsSpan();
+        }
+        else if (args.IsUndef)
+        {
+            newValues = ReadOnlySpan<MRubyValue>.Empty;
+        }
+        else
+        {
+            ref readonly var first = ref args;
+            newValues = MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in first), 1);
+        }
+
+        var originalLength = array.Length;
+        if (start >= originalLength)
+        {
+            length = start + newValues.Length;
+            array.EnsureModifiable(length, true);
+            if (start > originalLength)
+            {
+                array.AsSpan(originalLength, start - originalLength).Clear();
+            }
+        }
+        else
+        {
+            var newLength = array.Length + newValues.Length - length;
+            array.EnsureModifiable(newLength, true);
+            if (length != newValues.Length)
+            {
+                array.AsSpan(end, originalLength - end)
+                    .CopyTo(array.AsSpan(start + newValues.Length));
+            }
+        }
+        if (newValues.Length > 0)
+        {
+            newValues.CopyTo(array.AsSpan(start));
+        }
     }
 
     RProc NewProc(Irep irep, RClass? targetClass = null)
@@ -458,17 +532,6 @@ partial class MRubyState
 
         targetClass = ObjectClass;
         return MRubyValue.From(TopSelf);
-    }
-
-    internal ReadOnlySpan<MRubyValue> GetProcEnvStack()
-    {
-        ref var callInfo = ref context.CurrentCallInfo;
-        if (callInfo.Proc?.Scope is REnv env)
-        {
-            return env.Stack;
-        }
-        Raise(Names.TypeError, "Can't get closure env from proc"u8);
-        return default; // not reached
     }
 
     internal unsafe RString StringifyInteger(MRubyValue value, int bases)

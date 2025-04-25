@@ -15,6 +15,27 @@ public sealed class RArray : RObject
         private set;
     }
 
+    public MRubyValue this[int index]
+    {
+        get
+        {
+            if (index < 0)
+            {
+                index += Length;
+            }
+            if ((uint)index < (uint)Length)
+            {
+                return data[offset + index];
+            }
+            return MRubyValue.Nil;
+        }
+        set
+        {
+            EnsureModifiable(index + 1, index >= Length);
+            data[offset + index] = value;
+        }
+    }
+
     MRubyValue[] data;
     int offset;
     bool dataOwned;
@@ -66,37 +87,6 @@ public sealed class RArray : RObject
         dataOwned = false;
     }
 
-    internal override RObject Clone()
-    {
-        var clone = new RArray(data.Length, Class);
-        InstanceVariables.CopyTo(clone.InstanceVariables);
-        return clone;
-    }
-
-    internal void PushRange(ReadOnlySpan<MRubyValue>newItems)
-    {
-        var start = Length;
-        EnsureModifiable(Length + newItems.Length, true);
-        newItems.CopyTo(data.AsSpan(start));
-    }
-
-    public MRubyValue this[int index]
-    {
-        get
-        {
-            if ((uint)index < (uint)Length)
-            {
-                return data[index];
-            }
-            return MRubyValue.Nil;
-        }
-        set
-        {
-            EnsureModifiable(index + 1, true);
-            data[index] = value;
-        }
-    }
-
     public override string ToString()
     {
         var list = AsSpan().ToArray().Select(x => x.ToString());
@@ -108,6 +98,19 @@ public sealed class RArray : RObject
     public RArray SubSequence(int start, int length)
     {
         return new RArray(this, start, length);
+    }
+
+    public void Clear()
+    {
+        if (dataOwned)
+        {
+            AsSpan().Clear();
+            Length = 0;
+        }
+        else
+        {
+            EnsureModifiable(0, true);
+        }
     }
 
     public void Push(MRubyValue newItem)
@@ -130,19 +133,38 @@ public sealed class RArray : RObject
         return true;
     }
 
-    public void Unshift(MRubyValue newItem)
+    public MRubyValue Shift()
     {
-        var src = AsSpan();
-        if (data.Length <= Length)
-        {
-            data = new MRubyValue[Length * 2];
-        }
+        if (Length <= 0) return MRubyValue.Nil;
+        var result = this[0];
+        offset++;
+        Length--;
+        return result;
+    }
 
-        dataOwned = true;
-        var dst = data.AsSpan(1, Length);
-        src.CopyTo(dst);
-        dst[0] = newItem;
-        Length++;
+    public RArray Shift(int n)
+    {
+        if (Length <= 0 || n <= 0) return new RArray(0, Class);
+        if (n > Length) n = Length;
+
+        var result = new RArray(this)
+        {
+            Length = n
+        };
+        offset += n;
+        Length -= n;
+        return result;
+    }
+
+    public void Unshift(ReadOnlySpan<MRubyValue> newItems)
+    {
+        if (newItems.Length <= 0) return;
+
+        var currentLength = Length;
+        EnsureModifiable(Length + newItems.Length, true);
+        var span = AsSpan();
+        AsSpan(0,currentLength).CopyTo(AsSpan(newItems.Length));
+        newItems.CopyTo(span);
     }
 
     public void Concat(RArray other)
@@ -155,10 +177,24 @@ public sealed class RArray : RObject
             return;
         }
 
-        var start = Length;
-        var newLength = start + other.Length;
+        var currentLength = Length;
+        var newLength = currentLength + other.Length;
+        var source = other.AsSpan();
         EnsureModifiable(newLength, true);
-        other.AsSpan().CopyTo(data.AsSpan(start));
+        source.CopyTo(AsSpan(currentLength));
+    }
+
+    public MRubyValue DeleteAt(int index)
+    {
+        if (index < 0) index += Length;
+        if (index < 0 || index >= Length) return MRubyValue.Nil;
+
+        var value = data[offset + index];
+        var src = AsSpan(index + 1);
+        var dst = AsSpan(index);
+        src.CopyTo(dst);
+        Length--;
+        return value;
     }
 
     public void CopyTo(RArray other)
@@ -167,17 +203,37 @@ public sealed class RArray : RObject
         {
             other.EnsureModifiable(Length);
         }
-        AsSpan().CopyTo(other.AsSpan());
         other.Length = Length;
+        AsSpan().CopyTo(other.AsSpan());
+    }
+
+    public void ReplaceTo(RArray other)
+    {
+        other.Length = 0;
+        CopyTo(other);
+    }
+
+    internal override RObject Clone()
+    {
+        var clone = new RArray(data.Length, Class);
+        InstanceVariables.CopyTo(clone.InstanceVariables);
+        return clone;
+    }
+
+    internal void PushRange(ReadOnlySpan<MRubyValue>newItems)
+    {
+        var start = Length;
+        EnsureModifiable(Length + newItems.Length, true);
+        newItems.CopyTo(data.AsSpan(start));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnsureModifiable(int capacity, bool expandLength = false)
     {
-        if (data.Length < capacity)
+        if (data.Length - offset < capacity)
         {
             var newLength = data.Length * 2;
-            if (newLength < capacity)
+            if (newLength - offset < capacity)
             {
                 newLength = capacity;
             }
@@ -189,14 +245,15 @@ public sealed class RArray : RObject
             else
             {
                 var newData = new MRubyValue[newLength];
-                data.CopyTo(newData, 0);
+                data.AsSpan(offset).CopyTo(newData);
                 data = newData;
+                offset = 0;
                 dataOwned = true;
             }
         }
         else if (!dataOwned)
         {
-            data = data.ToArray();
+            data = AsSpan().ToArray();
             dataOwned = true;
         }
 

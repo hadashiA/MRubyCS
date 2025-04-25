@@ -22,8 +22,7 @@ public partial class MRubyState
         mrb.InitArray();
         mrb.InitHash();
         mrb.InitRange();
-        // mrb.InitEnumerable();
-        // mrb.InitComparable();
+        mrb.InitEnumerable();
         mrb.InitMrbLib();
         return mrb;
     }
@@ -111,7 +110,7 @@ public partial class MRubyState
         PrepareSingletonClass(ClassClass);
 
         // name basic classes
-        DefineConst(BasicObjectClass, Names.BasicObjectClass, MRubyValue.From(BasicObjectClass));
+        DefineConst(ObjectClass, Names.BasicObjectClass, MRubyValue.From(BasicObjectClass));
         DefineConst(ObjectClass, Names.ObjectClass, MRubyValue.From(ObjectClass));
         DefineConst(ObjectClass, Names.ModuleClass, MRubyValue.From(ModuleClass));
         DefineConst(ObjectClass, Names.ClassClass, MRubyValue.From(ClassClass));
@@ -242,7 +241,9 @@ public partial class MRubyState
         DefineMethod(KernelModule, Names.QRespondToMissing, MRubyMethod.False);
         DefineMethod(KernelModule, Names.ToS, KernelMembers.ToS);
         DefineMethod(KernelModule, Intern("lambda"u8), KernelMembers.Lambda);
-        DefineMethod(KernelModule, Intern("__case_eqq"u8), KernelMembers.CaseEqq);
+        // internally used
+        DefineMethod(KernelModule, Intern("__case_eqq"u8), KernelMembers.InternalCaseEqq);
+        DefineMethod(KernelModule, Intern("__to_int"u8), KernelMembers.InternalToInt);
 
         IncludeModule(ObjectClass, KernelModule);
     }
@@ -376,6 +377,7 @@ public partial class MRubyState
         StringClass = DefineClass(Intern("String"u8), ObjectClass, MRubyVType.String);
         DefineMethod(StringClass, Names.OpEq, StringMembers.OpEq);
         DefineMethod(StringClass, Names.QEql, StringMembers.OpEq);
+        DefineMethod(StringClass, Names.OpCmp, StringMembers.OpCmp);
         DefineMethod(StringClass, Names.Inspect, StringMembers.Inspect);
         DefineMethod(StringClass, Names.ToSym, StringMembers.ToSym);
         DefineMethod(StringClass, Names.ToI, StringMembers.ToI);
@@ -385,33 +387,54 @@ public partial class MRubyState
     {
         ArrayClass = DefineClass(Intern("Array"u8), ObjectClass, MRubyVType.Array);
 
+        DefineClassMethod(ArrayClass, Names.OpAref, ArrayMembers.Create);
+
         DefineMethod(ArrayClass, Names.OpEq, ArrayMembers.OpEq);
         DefineMethod(ArrayClass, Names.QEql, ArrayMembers.Eql);
         DefineMethod(ArrayClass, Names.OpLShift, ArrayMembers.Push);
         DefineMethod(ArrayClass, Names.OpAdd, ArrayMembers.OpAdd);
         DefineMethod(ArrayClass, Names.OpAref, ArrayMembers.OpAref);
-        DefineMethod(ArrayClass, Names.Initialize, ArrayMembers.Initialize);
+        DefineMethod(ArrayClass, Names.OpAset, ArrayMembers.OpAset);
+        DefineMethod(ArrayClass, Names.OpAdd, ArrayMembers.Plus);
+        DefineMethod(ArrayClass, Names.OpMul, ArrayMembers.Times);
         DefineMethod(ArrayClass, Intern("push"u8), ArrayMembers.Push);
+        DefineMethod(ArrayClass, Intern("concat"u8), ArrayMembers.Concat);
         DefineMethod(ArrayClass, Intern("size"u8), ArrayMembers.Size);
         DefineMethod(ArrayClass, Intern("length"u8), ArrayMembers.Size);
         DefineMethod(ArrayClass, Intern("empty?"u8), ArrayMembers.Empty);
         DefineMethod(ArrayClass, Intern("first"u8), ArrayMembers.First);
         DefineMethod(ArrayClass, Intern("last"u8), ArrayMembers.Last);
+        DefineMethod(ArrayClass, Intern("reverse"u8), ArrayMembers.Reverse);
         DefineMethod(ArrayClass, Intern("reverse!"u8), ArrayMembers.ReverseBang);
         DefineMethod(ArrayClass, Intern("pop"u8), ArrayMembers.Pop);
+        DefineMethod(ArrayClass, Intern("delete_at"u8), ArrayMembers.DeleteAt);
+        DefineMethod(ArrayClass, Intern("clear"u8), ArrayMembers.Clear);
         DefineMethod(ArrayClass, Intern("index"u8), ArrayMembers.Index);
+        DefineMethod(ArrayClass, Intern("rindex"u8), ArrayMembers.RIndex);
+        DefineMethod(ArrayClass, Intern("join"u8), ArrayMembers.Join);
+        DefineMethod(ArrayClass, Intern("replace"u8), ArrayMembers.Replace);
+        DefineMethod(ArrayClass, Intern("shift"u8), ArrayMembers.Shift);
+        DefineMethod(ArrayClass, Intern("unshift"u8), ArrayMembers.Unshift);
+        DefineMethod(ArrayClass, Intern("slice"u8), ArrayMembers.OpAref);
         DefineMethod(ArrayClass, Names.ToS, ArrayMembers.ToS);
-        DefineMethod(ArrayClass, Names.Inspect, ArrayMembers.ToS);
-        DefineMethod(ArrayClass, Intern("__svalue"u8), ArrayMembers.SValue);
+        DefineMethod(ArrayClass, Names.Inspect, ArrayMembers.Inspect);
+        DefineMethod(ArrayClass, Names.InitializeCopy, ArrayMembers.Replace);
+
+        DefineMethod(ArrayClass, Intern("__ary_eq"u8), ArrayMembers.InternalEq);
+        DefineMethod(ArrayClass, Intern("__ary_cmp"u8), ArrayMembers.InternalCmp);
+        DefineMethod(ArrayClass, Intern("__svalue"u8), ArrayMembers.InternalSValue);
     }
 
     void InitHash()
     {
         HashClass = DefineClass(Intern("Hash"u8), ObjectClass, MRubyVType.Hash);
+        DefineMethod(HashClass, Names.Initialize, HashMembers.Initialize);
         DefineMethod(HashClass, Names.ToS, HashMembers.ToS);
         DefineMethod(HashClass, Names.Inspect, HashMembers.ToS);
         DefineMethod(HashClass, Names.OpEq, HashMembers.OpEq);
         DefineMethod(HashClass, Names.QEql, HashMembers.Eql);
+        DefineMethod(HashClass, Names.OpAref, HashMembers.OpAref);
+        DefineMethod(HashClass, Names.OpAset, HashMembers.OpAset);
     }
 
     void InitRange()
@@ -420,19 +443,20 @@ public partial class MRubyState
         DefineMethod(RangeClass, Intern("begin"u8), RangeMembers.Begin);
         DefineMethod(RangeClass, Intern("end"u8), RangeMembers.End);
         DefineMethod(RangeClass, Intern("exclude_end?"u8), RangeMembers.ExcludeEnd);
+        DefineMethod(RangeClass, Intern("member?"u8), RangeMembers.IsInclude);
         DefineMethod(RangeClass, Names.OpEq, RangeMembers.OpEq);
         DefineMethod(RangeClass, Names.OpEqq, RangeMembers.IsInclude);
         DefineMethod(RangeClass, Names.QInclude, RangeMembers.IsInclude);
-        DefineMethod(RangeClass, Intern("member?"u8), RangeMembers.IsInclude);
         DefineMethod(RangeClass, Names.ToS, RangeMembers.ToS);
         DefineMethod(RangeClass, Names.Inspect, RangeMembers.Inspect);
+        DefineMethod(RangeClass, Intern("__num_to_a"u8), RangeMembers.InternalNumToA);
     }
 
-    // void InitComparable()
-    // {
-    //     var comparableModule = DefineModule(Intern("Comparable"u8), ObjectClass);
-    //     // DefineMethod(comparableModule, Names.OpEq);
-    // }
+    void InitEnumerable()
+    {
+        var enumerableModule = DefineModule(Intern("Enumerable"u8), ObjectClass);
+        DefineMethod(enumerableModule, Intern("__update_hash"u8), EnumerableMembers.InternalUpdateHash);
+    }
 
     void InitMrbLib()
     {
