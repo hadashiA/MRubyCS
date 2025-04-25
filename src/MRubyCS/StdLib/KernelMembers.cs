@@ -11,7 +11,7 @@ static class KernelMembers
             return MRubyValue.False;
         }
 
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         RArray? array = null;
         if (self.Object is RArray x)
         {
@@ -63,7 +63,7 @@ static class KernelMembers
                 state.Raise(Names.RuntimeError, []);
                 break;
             case 1:
-                var arg = state.GetArg(0);
+                var arg = state.GetArgumentAt(0);
                 switch (arg.VType)
                 {
                     case MRubyVType.String:
@@ -86,8 +86,8 @@ static class KernelMembers
                 }
                 break;
             case 2:
-                var exceptionClass = state.GetArgAsClass(0);
-                var message = state.GetArgAsString(1);
+                var exceptionClass = state.GetArgumentAsClassAt(0);
+                var message = state.GetArgumentAsStringAt(1);
                 state.Raise(exceptionClass, message);
                 break;
         }
@@ -97,14 +97,14 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpEqq = new((state, self) =>
     {
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         return MRubyValue.From(state.ValueEquals(self, arg));
     });
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Cmp = new((state, self) =>
     {
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (state.IsRecursiveCalling(Names.OpCmp, self, other))
         {
             return MRubyValue.Nil;
@@ -134,7 +134,7 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Eql = new((state, self) =>
     {
-        return MRubyValue.From(self == state.GetArg(0));
+        return MRubyValue.From(self == state.GetArgumentAt(0));
     });
 
     public static MRubyMethod Freeze = new((state, self) =>
@@ -170,7 +170,7 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod InitializeCopy = new((state, self) =>
     {
-        var original = state.GetArg(0);
+        var original = state.GetArgumentAt(0);
         if (original == self) return self;
         if (self.VType != original.VType ||
             state.ClassOf(self) != state.ClassOf(original))
@@ -188,14 +188,14 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod InstanceOf = new((state, self) =>
     {
-        var c= state.GetArgAsClass(0);
+        var c= state.GetArgumentAsClassAt(0);
         return MRubyValue.From(state.InstanceOf(self, c));
     });
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod KindOf = new((state, self) =>
     {
-        var c= state.GetArgAsClass(0);
+        var c= state.GetArgumentAsClassAt(0);
         return MRubyValue.From(state.KindOf(self, c));
     });
 
@@ -207,7 +207,7 @@ static class KernelMembers
     [MRubyMethod(RestArguments = true)]
     public static MRubyMethod Print = new((state, self) =>
     {
-        var args = state.GetRestArg(0);
+        var args = state.GetRestArgumentsAfter(0);
         foreach (var arg in args)
         {
             var s = state.Stringify(arg);
@@ -219,7 +219,7 @@ static class KernelMembers
     [MRubyMethod(RestArguments = true)]
     public static MRubyMethod P = new((state, self) =>
     {
-        var args = state.GetRestArg(0);
+        var args = state.GetRestArgumentsAfter(0);
         foreach (var arg in args)
         {
             var s = state.InspectObject(arg);
@@ -236,7 +236,7 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod RemoveInstanceVariable = new((state, self) =>
     {
-        var name = state.GetArgAsSymbol(0);
+        var name = state.GetArgumentAsSymbolAt(0);
         if (self.Object is RObject obj)
         {
             if (obj.InstanceVariables.Remove(name, out var v))
@@ -250,8 +250,8 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
     public static MRubyMethod RespondTo = new((state, self) =>
     {
-        var methodId = state.GetArgAsSymbol(0);
-        var includesPrivate = state.GetArg(1).Truthy;
+        var methodId = state.GetArgumentAsSymbolAt(0);
+        var includesPrivate = state.GetArgumentAt(1).Truthy;
         var result = state.RespondTo(self, methodId);
         if (!result)
         {
@@ -270,7 +270,7 @@ static class KernelMembers
 
     public static MRubyMethod Lambda = new((state, self) =>
     {
-        var block = state.GetBlockArg();
+        var block = state.GetBlockArgument();
         if (block.IsNil)
         {
             state.Raise(Names.ArgumentError, "tried to create Proc object without a block"u8);

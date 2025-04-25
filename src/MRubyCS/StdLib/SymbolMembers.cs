@@ -43,7 +43,7 @@ static class SymbolMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Cmp = new((state, self) =>
     {
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (!other.IsSymbol) return MRubyValue.Nil;
 
         var sym1 = self.SymbolValue;

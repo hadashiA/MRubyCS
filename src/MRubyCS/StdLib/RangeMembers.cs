@@ -22,7 +22,7 @@ static class RangeMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpEq = new((state, self) =>
     {
-        var arg0 = state.GetArg(0);
+        var arg0 = state.GetArgumentAt(0);
         if (self == arg0) return MRubyValue.True;
 
         var range = self.As<RRange>();
@@ -39,7 +39,7 @@ static class RangeMembers
     public static MRubyMethod IsInclude = new((state, self) =>
     {
         var range = self.As<RRange>();
-        var value = state.GetArg(0);
+        var value = state.GetArgumentAt(0);
 
         if (range.Begin.IsNil)
         {

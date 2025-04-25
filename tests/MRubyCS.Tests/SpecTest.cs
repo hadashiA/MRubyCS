@@ -26,9 +26,9 @@ public class SpecTest
 
         mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("__report_result"u8), (state, _) =>
         {
-            var title = state.GetArgAsString(0).ToString();
-            var iso = state.GetArgAsString(1).ToString();
-            var results = state.GetArg(2).As<RArray>().AsSpan();
+            var title = state.GetArgumentAsStringAt(0).ToString();
+            var iso = state.GetArgumentAsStringAt(1).ToString();
+            var results = state.GetArgumentAt(2).As<RArray>().AsSpan();
 
             var index = 0;
             foreach (var result in results)
@@ -53,7 +53,7 @@ public class SpecTest
 
         mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("__log"u8), (state, _) =>
         {
-            var arg = state.GetArg(0);
+            var arg = state.GetArgumentAt(0);
             TestContext.Out.WriteLine(state.Stringify(arg).ToString());
             return MRubyValue.Nil;
         });
@@ -61,8 +61,8 @@ public class SpecTest
         // same as `File.fnmatch?`
         mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("_str_match?"u8), (state, _) =>
         {
-            var pattern = state.GetArgAsString(0).ToString();
-            var str = state.GetArgAsString(1).ToString();
+            var pattern = state.GetArgumentAsStringAt(0).ToString();
+            var str = state.GetArgumentAsStringAt(1).ToString();
 
             var regexStr = $"^{Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".")}$";
             var regex = new Regex(regexStr, RegexOptions.IgnoreCase | RegexOptions.Singleline);

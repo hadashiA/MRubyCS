@@ -31,7 +31,7 @@ static class IntegerMembers
     {
         var a = state.ToInteger(x);
         if (a == 0) return x;
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.IsFloat)
         {
             return MRubyValue.From(Math.Pow(a, other.FloatValue));
@@ -64,13 +64,13 @@ static class IntegerMembers
     }
 
     [MRubyMethod(RequiredArguments = 1)]
-    public static MRubyMethod OpPow = new((state, self) => IntPow(state, self, state.GetArg(0)));
+    public static MRubyMethod OpPow = new((state, self) => IntPow(state, self, state.GetArgumentAt(0)));
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpAdd = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.IsInteger)
         {
             try
@@ -95,7 +95,7 @@ static class IntegerMembers
     public static MRubyMethod OpSub = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.IsInteger)
         {
             try
@@ -120,7 +120,7 @@ static class IntegerMembers
     public static MRubyMethod OpMul = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.IsInteger)
         {
             try
@@ -145,7 +145,7 @@ static class IntegerMembers
     public static MRubyMethod OpDiv = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.IsInteger)
         {
             if (other.IntegerValue == 0)
@@ -171,7 +171,7 @@ static class IntegerMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Quo = new((state, self) =>
     {
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var f = state.ToFloat(other);
         if (f == 0)
         {
@@ -185,7 +185,7 @@ static class IntegerMembers
     public static MRubyMethod IntDiv = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var b = state.ToInteger(other);
         if (b == 0)
         {
@@ -199,7 +199,7 @@ static class IntegerMembers
     public static MRubyMethod FDiv = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var b = state.ToFloat(other);
         if (b == 0)
         {
@@ -213,7 +213,7 @@ static class IntegerMembers
     public static MRubyMethod OpAnd = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var b = state.ToInteger(other);
         return MRubyValue.From(a & b);
     });
@@ -222,7 +222,7 @@ static class IntegerMembers
     public static MRubyMethod OpOr = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var b = state.ToInteger(other);
         return MRubyValue.From(a | b);
     });
@@ -231,7 +231,7 @@ static class IntegerMembers
     public static MRubyMethod OpXor = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var b = state.ToInteger(other);
         return MRubyValue.From(a ^ b);
     });
@@ -240,7 +240,7 @@ static class IntegerMembers
     public static MRubyMethod OpLShift = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var width = state.ToInteger(other);
         if (a == 0 || width == 0) return self;
         if (NumShift(state, a, width, out var num))
@@ -255,7 +255,7 @@ static class IntegerMembers
     public static MRubyMethod OpRShift = new((state, self) =>
     {
         var a = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         var width = state.ToInteger(other);
         if (a == 0 || width == 0) return self;
         if (NumShift(state, a, -width, out var num))
@@ -272,7 +272,7 @@ static class IntegerMembers
         var basis = 10;
         if (state.GetArgumentCount() > 0)
         {
-            basis = (int)state.GetArgAsInteger(0);
+            basis = (int)state.GetArgumentAsIntegerAt(0);
         }
 
         return MRubyValue.From(state.StringifyInteger(self, basis));
@@ -290,7 +290,7 @@ static class IntegerMembers
         var a = state.ToInteger(self);
         if (a == 0) return self;
 
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.IsInteger)
         {
             var b = other.IntegerValue;
@@ -455,7 +455,7 @@ static class IntegerMembers
     public static MRubyMethod DivMod = new((state, self) =>
     {
         var n = state.ToInteger(self);
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.IsInteger)
         {
             IntDivMod(state, n, other.IntegerValue, out var div, out var mod);
@@ -526,7 +526,7 @@ static class IntegerMembers
             return MRubyValue.Nil;
         }
 
-        var other = state.GetArgAsFloat(0);
+        var other = state.GetArgumentAsFloatAt(0);
         if (-0.415241 * other - 0.125 > sizeof(long))
         {
             return MRubyValue.Undef;

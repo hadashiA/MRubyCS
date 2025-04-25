@@ -5,8 +5,8 @@ static class ExceptionMembers
     [MRubyMethod(RestArguments = true, BlockArgument = true)]
     public static MRubyMethod New = new((state, self) =>
     {
-        var args = state.GetRestArg(0);
-        var block = state.GetBlockArg();
+        var args = state.GetRestArgumentsAfter(0);
+        var block = state.GetBlockArgument();
 
         var c = self.As<RClass>();
         var o = new RException(null, c);
@@ -22,7 +22,7 @@ static class ExceptionMembers
     [MRubyMethod(OptionalArguments =  1)]
     public static MRubyMethod Exception = new((state, self) =>
     {
-        if (!state.TryGetArg(0, out var arg) || arg == self)
+        if (!state.TryGetArgumentAt(0, out var arg) || arg == self)
         {
             return self;
         }
@@ -35,7 +35,7 @@ static class ExceptionMembers
     [MRubyMethod(OptionalArguments =  1)]
     public static MRubyMethod Initialize = new((state, self) =>
     {
-        if (state.TryGetArg(0, out var arg))
+        if (state.TryGetArgumentAt(0, out var arg))
         {
             self.As<RException>().Message = state.Stringify(arg);
         }
