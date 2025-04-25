@@ -27,7 +27,7 @@ static class StringMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpEq = new((state, self) =>
     {
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.Object is RString otherString)
         {
             return MRubyValue.From(self.As<RString>().Equals(otherString));
@@ -38,7 +38,7 @@ static class StringMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpCmp = new((state, self) =>
     {
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (other.Object is RString otherStr)
         {
             var str = self.As<RString>();
@@ -61,7 +61,7 @@ static class StringMembers
         var str = self.As<RString>();
 
         var format = 'g';
-        if (state.TryGetArg(0, out var arg0))
+        if (state.TryGetArgumentAt(0, out var arg0))
         {
             var basis = state.ToInteger(arg0);
             switch (basis)

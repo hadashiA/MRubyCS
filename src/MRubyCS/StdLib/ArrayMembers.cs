@@ -7,7 +7,7 @@ static class ArrayMembers
 {
     public static MRubyMethod Create = new((state, self) =>
     {
-        var args = state.GetRestArg(0);
+        var args = state.GetRestArgumentsAfter(0);
         var array = state.NewArray(args);
         array.Class = self.As<RClass>();
         return MRubyValue.From(array);
@@ -20,7 +20,7 @@ static class ArrayMembers
         var argc = state.GetArgumentCount();
         // if (argc )
 
-        var index = state.GetArg(0);
+        var index = state.GetArgumentAt(0);
         switch (argc)
         {
             case 1:
@@ -43,7 +43,7 @@ static class ArrayMembers
                 }
             case 2:
                 var i = (int)state.ToInteger(index);
-                var length = state.GetArgAsInteger(1);
+                var length = state.GetArgumentAsIntegerAt(1);
                 if (i < 0) i += array.Length;
                 if (i < 0 || array.Length < i) return MRubyValue.Nil;
                 if (length < 0) return MRubyValue.Nil;
@@ -65,8 +65,8 @@ static class ArrayMembers
         switch (argc)
         {
             case 2:
-                var key = state.GetArg(0);
-                var val = state.GetArg(1);
+                var key = state.GetArgumentAt(0);
+                var val = state.GetArgumentAt(1);
                 if (key.Object is RRange range)
                 {
                     switch (range.Calculate(array.Length, false, out var calculatedIndex, out var calculatedLength))
@@ -91,9 +91,9 @@ static class ArrayMembers
                 return val;
             case 3:
                 // a[n,m] = v
-                var n = state.GetArgAsInteger(0);
-                var m = state.GetArgAsInteger(1);
-                var v = state.GetArg(2);
+                var n = state.GetArgumentAsIntegerAt(0);
+                var m = state.GetArgumentAsIntegerAt(1);
+                var v = state.GetArgumentAt(2);
                 state.SpliceArray(array, (int)n, (int)m, v);
                 return v;
             default:
@@ -106,7 +106,7 @@ static class ArrayMembers
     public static MRubyMethod Replace = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var other = state.GetArgAsArray(0);
+        var other = state.GetArgumentAsArrayAt(0);
 
         other.ReplaceTo(array);
         return self;
@@ -118,7 +118,7 @@ static class ArrayMembers
         var array = self.As<RArray>();
         state.EnsureNotFrozen(array);
 
-        var args = state.GetRestArg(0);
+        var args = state.GetRestArgumentsAfter(0);
 
         var start = array.Length;
         array.EnsureModifiable(start + args.Length, true);
@@ -142,7 +142,7 @@ static class ArrayMembers
     public static MRubyMethod Plus = new((state, self) =>
     {
         var a1 = self.As<RArray>();
-        var a2 = state.GetArgAsArray(0);
+        var a2 = state.GetArgumentAsArrayAt(0);
 
         var result = state.NewArray(a1.Length + a2.Length);
         result.EnsureModifiable(a1.Length + a2.Length, true);
@@ -180,7 +180,7 @@ static class ArrayMembers
                 break;
         }
 
-        var size = state.GetArgAsInteger(0);
+        var size = state.GetArgumentAsIntegerAt(0);
         if (size < 0)
         {
             state.Raise(Names.ArgumentError, "nagative array size"u8);
@@ -204,7 +204,7 @@ static class ArrayMembers
                 break;
         }
 
-        var size = state.GetArgAsInteger(0);
+        var size = state.GetArgumentAsIntegerAt(0);
         if (size < 0)
         {
             state.Raise(Names.ArgumentError, "nagative array size"u8);
@@ -217,7 +217,7 @@ static class ArrayMembers
     public static MRubyMethod OpEq = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         if (arg.Object is not RArray other ||
             array.Length != other.Length)
         {
@@ -246,7 +246,7 @@ static class ArrayMembers
     public static MRubyMethod Eql = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         if (arg.Object is not RArray other ||
             array.Length != other.Length)
         {
@@ -275,7 +275,7 @@ static class ArrayMembers
     public static MRubyMethod OpAdd = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         state.EnsureValueType(other, MRubyVType.Array);
 
         var otherArray = other.As<RArray>();
@@ -294,7 +294,7 @@ static class ArrayMembers
     public static MRubyMethod Times = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
 
         if (arg.Object is RString separator)
         {
@@ -356,7 +356,7 @@ static class ArrayMembers
     public static MRubyMethod DeleteAt = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         var index = state.ToInteger(arg);
         return array.DeleteAt((int)index);
     });
@@ -420,7 +420,7 @@ static class ArrayMembers
     public static MRubyMethod Index = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         var span = array.AsSpan();
         for (var i = 0; i < span.Length; i++)
         {
@@ -436,7 +436,7 @@ static class ArrayMembers
     public static MRubyMethod RIndex = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         var span = array.AsSpan();
         for (var i = span.Length - 1; i >= 0; i--)
         {
@@ -452,7 +452,7 @@ static class ArrayMembers
     public static MRubyMethod Join = new((state, self) =>
     {
         RString? separator = null;
-        if (state.TryGetArg(0, out var arg0))
+        if (state.TryGetArgumentAt(0, out var arg0))
         {
             state.EnsureValueType(arg0, MRubyVType.String);
             separator = arg0.As<RString>();
@@ -473,7 +473,7 @@ static class ArrayMembers
     public static MRubyMethod Concat = new((state, self) =>
     {
         var array = self.As<RArray>();
-        var args = state.GetRestArg(0);
+        var args = state.GetRestArgumentsAfter(0);
         foreach (var arg in args)
         {
             state.EnsureValueType(arg, MRubyVType.Array);
@@ -490,7 +490,7 @@ static class ArrayMembers
     {
         var array = self.As<RArray>();
         state.EnsureNotFrozen(array);
-        if (state.TryGetArg(0, out var arg0))
+        if (state.TryGetArgumentAt(0, out var arg0))
         {
             var result = array.Shift((int)state.ToInteger(arg0));
             return MRubyValue.From(result);
@@ -503,7 +503,7 @@ static class ArrayMembers
     {
         var array = self.As<RArray>();
         state.EnsureNotFrozen(array);
-        var newItems = state.GetRestArg(0);
+        var newItems = state.GetRestArgumentsAfter(0);
         array.Unshift(newItems);
         return self;
     });
@@ -515,7 +515,7 @@ static class ArrayMembers
         {
             return (int)index.IntegerValue;
         }
-        return (int)state.GetArgAsInteger(0);
+        return (int)state.GetArgumentAsIntegerAt(0);
     }
 
     static RString JoinArray(MRubyState state, RArray array, RString separator, Stack<RArray> stack)
@@ -565,7 +565,7 @@ static class ArrayMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod InternalEq = new((state, self) =>
     {
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         if (self == arg)
         {
             return MRubyValue.True;
@@ -587,7 +587,7 @@ static class ArrayMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod InternalCmp = new((state, self) =>
     {
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         if (self == arg) return MRubyValue.From(0);
         if (arg.VType != MRubyVType.Array)
         {

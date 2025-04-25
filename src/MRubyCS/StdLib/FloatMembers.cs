@@ -29,7 +29,7 @@ static class FloatMembers
     public static MRubyMethod Mod = new((state, self) =>
     {
         var x = state.ToFloat(self);
-        var y = state.GetArgAsFloat(0);
+        var y = state.GetArgumentAsFloatAt(0);
         if (double.IsNaN(y))
         {
             return MRubyValue.From(double.NaN);
@@ -52,7 +52,7 @@ static class FloatMembers
     {
         // Console.WriteLine("Float OpEq called");
         var x = self.FloatValue;
-        var y = state.GetArg(0);
+        var y = state.GetArgumentAt(0);
         if (y.IsInteger)
         {
             // ReSharper disable once CompareOfFloatsByEqualityOperator
@@ -71,7 +71,7 @@ static class FloatMembers
     public static MRubyMethod DivMod = new((state, self) =>
     {
         var x = state.ToFloat(self);
-        var y = state.GetArg(0);
+        var y = state.GetArgumentAt(0);
         MRubyValue a, b;
         FloatDivMod(state, x, state.ToFloat(y), out var div, out var mod);
         if (!IsFixableFloatValue(div))

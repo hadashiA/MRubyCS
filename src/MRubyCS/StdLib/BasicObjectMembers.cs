@@ -8,7 +8,7 @@ static class BasicObjectMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpEq = new((state, self) =>
     {
-        return MRubyValue.From(self == state.GetArg(0));
+        return MRubyValue.From(self == state.GetArgumentAt(0));
     });
 
     public static MRubyMethod Id = new((state, self) =>
@@ -23,14 +23,14 @@ static class BasicObjectMembers
 
     public static MRubyMethod InstanceEval = new((state, self) =>
     {
-        var block = state.GetBlockArg(false);
+        var block = state.GetBlockArgument(false);
         return state.EvalUnder(self, block.As<RProc>(), state.SingletonClassOf(self)!);
     });
 
     public static MRubyMethod MethodMissing = new((state, self) =>
     {
-        var methodId = state.GetArgAsSymbol(0);
-        var args = state.GetRestArg(1);
+        var methodId = state.GetArgumentAsSymbolAt(0);
+        var args = state.GetRestArgumentsAfter(1);
         var array = MRubyValue.From(state.NewArray(args));
         state.RaiseMethodMissing(methodId, self, array);
         return MRubyValue.Nil;

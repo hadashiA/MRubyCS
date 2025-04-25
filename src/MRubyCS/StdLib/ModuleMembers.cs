@@ -8,7 +8,7 @@ static class ModuleMembers
     public static MRubyMethod Initialize = new((state, self) =>
     {
         var mod = self.As<RClass>();
-        var block = state.GetBlockArg();
+        var block = state.GetBlockArgument();
         if (block.Object is RProc proc)
         {
             state.YieldWithClass(mod, self, [self], proc);
@@ -20,7 +20,7 @@ static class ModuleMembers
     public static MRubyMethod ExtendObject = new((state, self) =>
     {
         // state.EnsureValueType(self, MRubyVType.Module);
-        var obj = state.GetArg(0);
+        var obj = state.GetArgumentAt(0);
         var target = state.SingletonClassOf(obj);
         state.IncludeModule(target, self.As<RClass>());
         return self;
@@ -30,7 +30,7 @@ static class ModuleMembers
     public static MRubyMethod PrependFeatures = new((state, self) =>
     {
         state.EnsureValueType(self, MRubyVType.Module);
-        var c = state.GetArg(0);
+        var c = state.GetArgumentAt(0);
         state.PrependModule(c.As<RClass>(), self.As<RClass>());
         return self;
     });
@@ -39,7 +39,7 @@ static class ModuleMembers
     public static MRubyMethod AppendFeatures = new((state, self) =>
     {
         state.EnsureValueType(self, MRubyVType.Module);
-        var c = state.GetArg(0);
+        var c = state.GetArgumentAt(0);
         state.IncludeModule(c.As<RClass>(), self.As<RClass>());
         return self;
     });
@@ -48,7 +48,7 @@ static class ModuleMembers
     public static MRubyMethod QInclude = new((state, self) =>
     {
         var c = self.As<RClass>();
-        var mod2 = state.GetArg(0);
+        var mod2 = state.GetArgumentAt(0);
         state.EnsureValueType(mod2, MRubyVType.Module);
 
         while (c != null!)
@@ -67,7 +67,7 @@ static class ModuleMembers
     [MRubyMethod(RestArguments = true)]
     public static MRubyMethod ClassEval = new((state, self) =>
     {
-        var block = state.GetBlockArg(false);
+        var block = state.GetBlockArgument(false);
         return state.EvalUnder(self, block.As<RProc>(), self.As<RClass>());
     });
 
@@ -75,7 +75,7 @@ static class ModuleMembers
     public static MRubyMethod ModuleFunction = new((state, self) =>
     {
         state.EnsureValueType(self, MRubyVType.Module);
-        var argv = state.GetRestArg(0);
+        var argv = state.GetRestArgumentsAfter(0);
         if (argv.Length <= 0)
         {
             return self;
@@ -102,7 +102,7 @@ static class ModuleMembers
     public static MRubyMethod AttrReader = new((state, self) =>
     {
         var mod = self.As<RClass>();
-        var argv = state.GetRestArg(0);
+        var argv = state.GetRestArgumentsAfter(0);
         foreach (var arg in argv)
         {
             var methodId = state.ToSymbol(arg);
@@ -123,7 +123,7 @@ static class ModuleMembers
     public static MRubyMethod AttrWriter = new((state, self) =>
     {
         var mod = self.As<RClass>();
-        var argv = state.GetRestArg(0);
+        var argv = state.GetRestArgumentsAfter(0);
         foreach (var arg in argv)
         {
             var attrId = state.ToSymbol(arg);
@@ -133,7 +133,7 @@ static class ModuleMembers
             state.DefineMethod(mod, setterName, new MRubyMethod((s, _) =>
             {
                 var runtimeSelf = s.GetSelf();
-                var value = s.GetArg(0);
+                var value = s.GetArgumentAt(0);
                 state.SetInstanceVariable(runtimeSelf, variableName, value);
                 return MRubyValue.Nil;
             }));
@@ -167,8 +167,8 @@ static class ModuleMembers
     public static MRubyMethod AliasMethod = new((state, self) =>
     {
         var mod = self.As<RClass>();
-        var newName = state.GetArg(0).SymbolValue;
-        var oldName = state.GetArg(1).SymbolValue;
+        var newName = state.GetArgumentAt(0).SymbolValue;
+        var oldName = state.GetArgumentAt(1).SymbolValue;
         state.AliasMethod(mod, newName, oldName);
         state.MethodAddedHook(mod, newName);
         return self;
@@ -178,7 +178,7 @@ static class ModuleMembers
     public static MRubyMethod UndefMethod = new((state, self) =>
     {
         var c = self.As<RClass>();
-        var argv = state.GetRestArg(0);
+        var argv = state.GetRestArgumentsAfter(0);
         foreach (var arg in argv)
         {
             state.UndefMethod(c, arg.SymbolValue);
@@ -214,8 +214,8 @@ static class ModuleMembers
     public static MRubyMethod ConstDefined = new((state, self) =>
     {
         var mod = self.As<RClass>();
-        var id = state.GetArgAsSymbol(0);
-        var inherit = state.GetArg(1);
+        var id = state.GetArgumentAsSymbolAt(0);
+        var inherit = state.GetArgumentAt(1);
         state.EnsureConstName(id);
         var result = inherit.Truthy
             ? state.ConstDefinedAt(id, mod)
@@ -232,7 +232,7 @@ static class ModuleMembers
         }
 
         var mod = self.As<RClass>();
-        var path = state.GetArg(0);
+        var path = state.GetArgumentAt(0);
         if (path.IsSymbol)
         {
             return state.GetConst(path.SymbolValue, mod);
@@ -265,8 +265,8 @@ static class ModuleMembers
     public static MRubyMethod ConstSet = new((state, self) =>
     {
         var mod = self.As<RClass>();
-        var id = state.GetArg(0).SymbolValue;
-        var value = state.GetArg(1);
+        var id = state.GetArgumentAt(0).SymbolValue;
+        var value = state.GetArgumentAt(1);
         state.DefineConst(mod, id, value);
         return value;
     });
@@ -274,7 +274,7 @@ static class ModuleMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod RemoveConst = new((state, self) =>
     {
-        var n = state.GetArg(0).SymbolValue;
+        var n = state.GetArgumentAt(0).SymbolValue;
         state.EnsureConstName(n);
         var removed = state.RemoveInstanceVariable(self, n);
         if (removed.IsUndef)
@@ -288,7 +288,7 @@ static class ModuleMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod ConstMissing = new((state, self) =>
     {
-        var name = state.GetArgAsSymbol(0);
+        var name = state.GetArgumentAsSymbolAt(0);
         state.RaiseConstMissing(self.As<RClass>(), name);
         return MRubyValue.Nil;
     });
@@ -296,16 +296,16 @@ static class ModuleMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod MethodDefined = new((state, self) =>
     {
-        var methodId = state.GetArgAsSymbol(0);
+        var methodId = state.GetArgumentAsSymbolAt(0);
         return MRubyValue.From(state.RespondTo(self.As<RClass>(), methodId));
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1, BlockArgument = true)]
     public static MRubyMethod DefineMethod = new((state, self) =>
     {
-        var methodId = state.GetArgAsSymbol(0);
-        var proc = state.GetArg(1);
-        var block = state.GetBlockArg();
+        var methodId = state.GetArgumentAsSymbolAt(0);
+        var proc = state.GetArgumentAt(1);
+        var block = state.GetBlockArgument();
 
         RProc? p;
         if (block.Object is RProc blockObj)
@@ -338,7 +338,7 @@ static class ModuleMembers
     public static MRubyMethod Eqq = new((state, self) =>
     {
         var mod = self.As<RClass>();
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         return MRubyValue.From(state.KindOf(other, mod));
     });
 

@@ -5,7 +5,7 @@ static class NumericMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Eql = new(((state, self) =>
     {
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (self.IsFloat)
         {
             if (!other.IsFloat) return MRubyValue.False;
@@ -25,7 +25,7 @@ static class NumericMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpCmp = new(((state, self) =>
     {
-        var other = state.GetArg(0);
+        var other = state.GetArgumentAt(0);
         if (self.IsInteger)
         {
             if (other.IsInteger)

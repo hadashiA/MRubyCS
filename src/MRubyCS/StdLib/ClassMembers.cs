@@ -7,7 +7,7 @@ static class ClassMembers
     [MRubyMethod(OptionalArguments = 1, BlockArgument = true)]
     public static MRubyMethod NewClass = new((state, self) =>
     {
-        var superClass = state.TryGetArg(0, out var superValue)
+        var superClass = state.TryGetArgumentAt(0, out var superValue)
             ? superValue.As<RClass>()
             : state.ObjectClass;
 
@@ -27,7 +27,7 @@ static class ClassMembers
         }
         else
         {
-            var block = state.GetBlockArg();
+            var block = state.GetBlockArgument();
             state.Send(newClassValue, Names.Initialize,
                 [MRubyValue.From(superClass)],
                 default,
@@ -39,9 +39,9 @@ static class ClassMembers
 
     public static MRubyMethod New = new((state, self) =>
     {
-        var args = state.GetRestArg(0);
-        var kargs = state.GetKeywordArgs();
-        var block = state.GetBlockArg();
+        var args = state.GetRestArgumentsAfter(0);
+        var kargs = state.GetKeywordArguments();
+        var block = state.GetBlockArgument();
 
         var c = self.As<RClass>();
         if (c.VType == MRubyVType.SClass)
@@ -91,7 +91,7 @@ static class ClassMembers
     public static MRubyMethod Initialize = new((state, self) =>
     {
         var c = self.As<RClass>();
-        var block = state.GetBlockArg();
+        var block = state.GetBlockArgument();
         if (block.Object is RProc proc)
         {
             state.YieldWithClass(c, self, [self], proc);

@@ -16,7 +16,7 @@ public class VmTest
 
         mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("__log"u8), (state, _) =>
         {
-            var arg = state.GetArg(0);
+            var arg = state.GetArgumentAt(0);
             TestContext.Out.WriteLine(state.Stringify(arg).ToString());
             return MRubyValue.Nil;
         });

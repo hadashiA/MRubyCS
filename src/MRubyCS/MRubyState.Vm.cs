@@ -188,12 +188,12 @@ partial class MRubyState
             RaiseArgumentNumberError(argc, 1, 255);
         }
 
-        var methodId = GetArgAsSymbol(0);
+        var methodId = GetArgumentAsSymbolAt(0);
         if (callInfo.CallerType != CallerType.InVmLoop)
         {
-            var block = GetBlockArg();
-            var args = GetRestArg(1);
-            var kargs = GetKeywordArgs();
+            var block = GetBlockArgument();
+            var args = GetRestArgumentsAfter(1);
+            var kargs = GetKeywordArguments();
             return Send(self, methodId, args, kargs, block.IsNil ? null : block.As<RProc>());
         }
 
@@ -2180,7 +2180,7 @@ partial class MRubyState
         Action<MRubyState, MRubyValue, Symbol>? raise = null)
     {
         var receiverClass = ClassOf(receiver);
-        var args = context.GetRestArg(ref callInfo, 0);
+        var args = context.GetRestArgumentsAfter(ref callInfo, 0);
         if (!TryFindMethod(receiverClass, Names.MethodMissing, out var method, out _) ||
             method == BasicObjectMembers.MethodMissing)
         {

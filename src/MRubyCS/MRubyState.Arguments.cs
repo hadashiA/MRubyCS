@@ -21,69 +21,73 @@ partial class MRubyState
     public int GetKeywordArgumentCount() => context.GetKeywordArgumentCount();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MRubyValue GetArg(int index) => context.GetArg(index);
+    public MRubyValue GetArgumentAt(int index) => context.GetArgumentAt(index);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MRubyValue GetKeywordArg(Symbol key) => context.GetKeywordArg(key);
+    public MRubyValue GetKeywordArgument(Symbol key) => context.GetKeywordArgument(key);
 
-    public bool TryGetArg(int index, out MRubyValue value) => context.TryGetArg(index, out value);
-    public bool TryGetKeywordArg(Symbol key, out MRubyValue value) => context.TryGetKeywordArg(key, out value);
+    public bool TryGetArgumentAt(int index, out MRubyValue value) =>
+        context.TryGetArgumentAt(index, out value);
+    public bool TryGetKeywordArgument(Symbol key, out MRubyValue value) =>
+        context.TryGetKeywordArgument(key, out value);
     public MRubyValue GetSelf() => context.GetSelf();
 
-    public ReadOnlySpan<KeyValuePair<Symbol, MRubyValue>> GetKeywordArgs() =>
+    public ReadOnlySpan<KeyValuePair<Symbol, MRubyValue>> GetKeywordArguments() =>
         context.GetKeywordArgs(ref context.CurrentCallInfo);
 
-    public RClass GetArgAsClass(int index)
+    public RClass GetArgumentAsClassAt(int index)
     {
-        var arg = GetArg(index);
+        var arg = GetArgumentAt(index);
         EnsureClassOrModule(arg);
         return arg.As<RClass>();
     }
 
-    public Symbol GetArgAsSymbol(int index)
+    public Symbol GetArgumentAsSymbolAt(int index)
     {
-        var arg = GetArg(index);
+        var arg = GetArgumentAt(index);
         return ToSymbol(arg);
     }
 
-    public long GetArgAsInteger(int index)
+    public long GetArgumentAsIntegerAt(int index)
     {
-        var arg = GetArg(index);
+        var arg = GetArgumentAt(index);
         return ToInteger(arg);
     }
 
-    public double GetArgAsFloat(int index)
+    public double GetArgumentAsFloatAt(int index)
     {
-        var arg = GetArg(index);
+        var arg = GetArgumentAt(index);
         return ToFloat(arg);
     }
 
-    public RString GetArgAsString(int index)
+    public RString GetArgumentAsStringAt(int index)
     {
-        var arg = GetArg(index);
-        if (arg.VType != MRubyVType.String)
+        var arg = GetArgumentAt(index);
+        if (arg.Object is RString str)
         {
-            Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to String"));
+            return str;
         }
-        return arg.As<RString>();
+        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to String"));
+        return default!;
     }
 
-    public RArray GetArgAsArray(int index)
+    public RArray GetArgumentAsArrayAt(int index)
     {
-        var arg = GetArg(index);
-        if (arg.VType != MRubyVType.Array)
+        var arg = GetArgumentAt(index);
+        if (arg.Object is RArray array)
         {
-            Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Array"));
+            return array;
         }
-        return arg.As<RArray>();
+        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Array"));
+        return default!;
     }
 
-    public ReadOnlySpan<MRubyValue> GetRestArg(int startIndex) =>
-        context.GetRestArg(startIndex);
+    public ReadOnlySpan<MRubyValue> GetRestArgumentsAfter(int startIndex) =>
+        context.GetRestArgumentsAfter(startIndex);
 
-    public MRubyValue GetBlockArg(bool optional = true)
+    public MRubyValue GetBlockArgument(bool optional = true)
     {
-        var blockArg = context.GetBlockArg();
+        var blockArg = context.GetBlockArgument();
         if (!optional && blockArg.IsNil)
         {
             Raise(Names.ArgumentError, "no block given"u8);

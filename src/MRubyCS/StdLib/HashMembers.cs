@@ -6,8 +6,8 @@ static class HashMembers
     public static MRubyMethod Initialize = new((state, self) =>
     {
         var hash = self.As<RHash>();
-        var block = state.GetBlockArg();
-        if (state.TryGetArg(0, out var ifnone))
+        var block = state.GetBlockArgument();
+        if (state.TryGetArgumentAt(0, out var ifnone))
         {
             hash.DefaultValue = ifnone;
         }
@@ -52,7 +52,7 @@ static class HashMembers
     public static MRubyMethod OpAref = new((state, self) =>
     {
         var hash = self.As<RHash>();
-        var key = state.GetArg(0);
+        var key = state.GetArgumentAt(0);
         if (hash.TryGetValue(key, out var value))
         {
             return value;
@@ -66,8 +66,8 @@ static class HashMembers
     {
         state.EnsureArgumentCount(2);
         var hash = self.As<RHash>();
-        var key = state.GetArg(0);
-        var value = state.GetArg(1);
+        var key = state.GetArgumentAt(0);
+        var value = state.GetArgumentAt(1);
         hash[key] = value;
         return value;
     });
@@ -76,7 +76,7 @@ static class HashMembers
     public static MRubyMethod OpEq = new((state, self) =>
     {
         var hash = self.As<RHash>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         if (arg.Object is not RHash other || hash.Length != other.Length)
         {
             return MRubyValue.False;
@@ -106,7 +106,7 @@ static class HashMembers
     public static MRubyMethod Eql = new((state, self) =>
     {
         var hash = self.As<RHash>();
-        var arg = state.GetArg(0);
+        var arg = state.GetArgumentAt(0);
         if (arg.Object is not RHash other || hash.Length != other.Length)
         {
             return MRubyValue.False;

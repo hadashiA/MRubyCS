@@ -346,7 +346,7 @@ class MRubyContext
     }
 
 
-    public bool TryGetArg(int index, out MRubyValue value)
+    public bool TryGetArgumentAt(int index, out MRubyValue value)
     {
         ref var callInfo = ref CurrentCallInfo;
         if (callInfo.ArgumentPacked)
@@ -370,7 +370,7 @@ class MRubyContext
         return false;
     }
 
-    public bool TryGetKeywordArg(Symbol key, out MRubyValue value)
+    public bool TryGetKeywordArgument(Symbol key, out MRubyValue value)
     {
         ref var callInfo = ref CurrentCallInfo;
         var offset = callInfo.KeywordArgumentOffset;
@@ -409,14 +409,14 @@ class MRubyContext
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MRubyValue GetArg(int index)
+    public MRubyValue GetArgumentAt(int index)
     {
-        TryGetArg(index, out var result);
+        TryGetArgumentAt(index, out var result);
         return result;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MRubyValue GetKeywordArg(Symbol key)
+    public MRubyValue GetKeywordArgument(Symbol key)
     {
         ref var callInfo = ref CallStack[CallDepth];
         var offset = callInfo.KeywordArgumentOffset;
@@ -443,18 +443,18 @@ class MRubyContext
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ReadOnlySpan<MRubyValue> GetRestArg(int startIndex) =>
-        GetRestArg(ref CurrentCallInfo, startIndex);
+    public ReadOnlySpan<MRubyValue> GetRestArgumentsAfter(int startIndex) =>
+        GetRestArgumentsAfter(ref CurrentCallInfo, startIndex);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MRubyValue GetBlockArg()
+    public MRubyValue GetBlockArgument()
     {
         ref var callInfo = ref CurrentCallInfo;
         return Stack[callInfo.StackPointer + callInfo.BlockArgumentOffset];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Span<MRubyValue> GetRestArg(ref MRubyCallInfo callInfo, int startIndex)
+    internal Span<MRubyValue> GetRestArgumentsAfter(ref MRubyCallInfo callInfo, int startIndex)
     {
         if (callInfo.ArgumentPacked)
         {
