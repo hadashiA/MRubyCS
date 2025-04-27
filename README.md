@@ -274,18 +274,18 @@ https://github.com/hadashiA/VYaml.git?path=src/MRubyCS.Compiler.Unity/Assets/MRu
 
 If you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
 
-For example, importing the text file hoge.rb into a project will result in the following.
+For example, importing the text file `hoge.rb` into a project will result in the following.
+
 ![docs/screenshot_subasset](./docs/screenshot_subasset.png)
 
-This subasset is a TextAsset. To specify it in the inspector or extract it from the source code, do the following.
+This subasset is a TextAsset. To specify it in the inspector.
 
-
+Or, to extract in C#, do the following:
 ``` cs
 var state = MRubyState.Create();
 
 var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
-       .First(x => x.name == "hoge.mrb");
-       
+       .First(x => x.name.EndsWith(".mrb"));
 state.Exec(bytecodeAsset.GetData<byte>().AsSpan());
 ```
 
