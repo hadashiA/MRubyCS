@@ -12,8 +12,10 @@ namespace MRubyCS.Compiler.Editor
         public override void OnImportAsset(AssetImportContext ctx)
         {
             var source = File.ReadAllBytes(ctx.assetPath);
-            var rbAsset = new TextAsset(source);
-            rbAsset.name = Path.GetFileName(ctx.assetPath);
+            var rbAsset = new TextAsset(source)
+            {
+                name = Path.GetFileName(ctx.assetPath)
+            };
             ctx.AddObjectToAsset("Main", rbAsset);
             ctx.SetMainObject(rbAsset);
 
@@ -23,7 +25,7 @@ namespace MRubyCS.Compiler.Editor
                 compiler = MRubyCompiler.Create(state);
             }
 
-            var bin = compiler.CompileToBinaryFormat(source);
+            using var bin = compiler.CompileToBinaryFormat(source);
             var mrbAsset = new TextAsset(bin.GetNativeData())
             {
                 name = Path.GetFileNameWithoutExtension(ctx.assetPath) + ".mrb"
