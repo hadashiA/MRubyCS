@@ -482,3 +482,17 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Unity
+
+src/MRubyCS.Compiler.Unity/Library/*
+src/MRubyCS.Compiler.Unity/Temp/*
+src/MRubyCS.Compiler.Unity/Logs/*
+src/MRubyCS.Compiler.Unity/*.csproj
+src/MRubyCS.Compiler.Unity/*.sln
+src/MRubyCS.Compiler.Unity/VYaml.*.unitypackage
+src/MRubyCS.Compiler.Unity/UserSettings
+src/MRubyCS.Compiler.Unity/**⏎
+
+/Assets/Packages/*
+

@@ -1,0 +1,12 @@
+{
+  "name": "jp.hadashikick.mrubycs",
+  "displayName": "MRubyCS",
+  "version": "0.6.0-preview",
+  "unity": "2021.3",
+  "description": "A new mruby virtual machine implemented in C#.",
+  "keywords": ["mruby", "ruby"],
+  "license": "MIT",
+  "documentationUrl": "https://github.com/hadashiA/MRubyCS",
+  "changelogUrl": "https://github.com/hadashiA/MRubyCS/releases",
+  "licensesUrl": "https://github.com/hadashiA/MRubyCS/blob/master/LICENSE"
+}

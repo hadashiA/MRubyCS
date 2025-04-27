@@ -44,9 +44,20 @@ This release is a preview version and comes with the following constraints:
 
 ## Installation
 
+### NuGet
+
 ``` bash
 dotnet add package MRubyCS
 ```
+
+### Unity
+
+> [!NOTE]
+> Requirements: Unity 2021.3 or later.
+
+1. Install [NugetForUnity](https://github.com/GlitchEnzo/NuGetForUnity).
+2. Open the NuGet window by going to NuGet > Manage NuGet Packages, “Show Prelease” toggled on, after search for the "MRubyCS" package, and install it.
+3. (Optional) To install utilities for generating mrb bytecode, refer to the [How to compile .mrb](#how-to-compile-mrb) section.
 
 ## Basic Usage
 
@@ -82,8 +93,7 @@ result.IntegerValue //=> 55
 ```
 
 This is a sample of executing bytecode.
-See the [How to compile .mrb ](#compilation) section for information on how to convert Ruby source code to mruby bytecode.
-
+See the [How to compile .mrb ](#how-to-compile-mrb) section for information on how to convert Ruby source code to mruby bytecode.
 
 ### Handlding `MRubyValue`
 
@@ -231,8 +241,7 @@ var sym1 = state.Intern("sym"u8)
 var sym2 = state.ToSymbol(state.NewString("sym2"u8));
 ```
 
-### How to compile .mrb
-
+## How to compile .mrb ?
 
 MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
 Basically, you need the native compiler provided by the [mruby](https://github.com/mruby/mruby) project.
@@ -244,7 +253,7 @@ $ rake
 $ ./build/host/bin/mrubc
 ```
 
-#### MRubyCS.Compiler
+### MRubyCS.Compiler
 
 To simplify compilation from C#, we also provide the MRubyCS.Compiler package, which is a thin wrapper for the native compiler.
 
@@ -254,6 +263,35 @@ To simplify compilation from C#, we also provide the MRubyCS.Compiler package, w
 ```cs
 dotnet add package MRubyCS.Compiler
 ```
+
+#### Unity
+
+Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
+
+```
+https://github.com/hadashiA/VYaml.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.6.0-preview
+```
+
+If you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
+
+For example, importing the text file `hoge.rb` into a project will result in the following.
+
+![docs/screenshot_subasset](./docs/screenshot_subasset.png)
+
+This subasset is a TextAsset. To specify it in the inspector.
+
+Or, to extract in C#, do the following:
+``` cs
+var state = MRubyState.Create();
+
+var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
+       .First(x => x.name.EndsWith(".mrb"));
+state.Exec(bytecodeAsset.GetData<byte>().AsSpan());
+```
+
+For manual compilation, refer to the following.
+
+#### Usage
 
 ```cs
 using MRubyCS.Compiler;
