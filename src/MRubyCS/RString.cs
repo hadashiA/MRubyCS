@@ -32,9 +32,10 @@ public class RString : RObject, IEquatable<RString>
     , ISpanFormattable, IUtf8SpanFormattable
 #endif
 {
-    public int Length { get; internal set; }
+    public int Length { get; private set; }
 
     byte[] buffer;
+    int offset;
     bool bufferOwned;
 
     public static RString Owned(byte[] value, RClass stringClass)
@@ -106,11 +107,11 @@ public class RString : RObject, IEquatable<RString>
 
     public override string ToString()
     {
-        return Encoding.UTF8.GetString(buffer, 0, Length);
+        return Encoding.UTF8.GetString(buffer, offset, Length);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Span<byte> AsSpan() => buffer.AsSpan(0, Length);
+    public Span<byte> AsSpan() => buffer.AsSpan(offset, Length);
 
     public RString Dup() => new(this);
 
@@ -119,13 +120,17 @@ public class RString : RObject, IEquatable<RString>
         return new RString(AsSpan().Slice(start, length), Class);
     }
 
-    public RString SubString(int start, int length)
+    public RString? SubString(int start, int length)
     {
-        // TODO:
-        var str = ToString();
-        var substr = str.Substring(start, length);
-        var utf8Substr = Encoding.UTF8.GetBytes(substr);
-        return new RString(utf8Substr, Class);
+        var charCount = Encoding.UTF8.GetCharCount(buffer, offset, Length);
+        if (TryConvertRange(charCount, ref start, ref length))
+        {
+            var str = ToString();
+            var substr = str.Substring(start, length);
+            var utf8Substr = Encoding.UTF8.GetBytes(substr);
+            return new RString(utf8Substr, Class);
+        }
+        return null;
     }
 
     public RString? GetAref(MRubyValue indexValue, int rangeLength = -1)
@@ -187,7 +192,12 @@ public class RString : RObject, IEquatable<RString>
     {
         var a = Encoding.UTF8.GetString(AsSpan());
         var b = Encoding.UTF8.GetString(other.AsSpan());
-        return string.CompareOrdinal(a, b);
+        return string.CompareOrdinal(a, b) switch
+        {
+            > 0 => 1,
+            < 0 => -1,
+            _ => 0
+        };
     }
 
     public string ToString(string? format, IFormatProvider? formatProvider)
@@ -311,5 +321,27 @@ public class RString : RObject, IEquatable<RString>
         if (ReferenceEquals(this, obj)) return true;
         if (obj.GetType() != GetType()) return false;
         return Equals((RString)obj);
+    }
+
+    bool TryConvertRange(int maxLength, ref int start, ref int length)
+    {
+        if (maxLength < start || length < 0) return false;
+        if (start < 0)
+        {
+            start += maxLength;
+            if (start < 0) return false;
+        }
+
+        if (length > maxLength - start)
+        {
+            length = maxLength - start;
+        }
+
+        if (length <= 0)
+        {
+            length = 0;
+        }
+
+        return true;
     }
 }

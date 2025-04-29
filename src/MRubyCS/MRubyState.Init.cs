@@ -374,6 +374,9 @@ public partial class MRubyState
 
     void InitString()
     {
+        DefineMethod(KernelModule, Intern("__ENCODING__"u8), (state, _) =>
+            MRubyValue.From(state.NewString("UTF-8"u8)));
+
         StringClass = DefineClass(Intern("String"u8), ObjectClass, MRubyVType.String);
         DefineMethod(StringClass, Names.OpEq, StringMembers.OpEq);
         DefineMethod(StringClass, Names.QEql, StringMembers.OpEq);

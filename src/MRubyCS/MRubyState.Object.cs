@@ -30,11 +30,6 @@ partial class MRubyState
 
     public RHash NewHash(int capacity) => new(capacity, valueEqualityComparer, HashClass);
 
-    public MRubyValue NewInteger(long x)
-    {
-        return MRubyValue.From(x);
-    }
-
     public Symbol ToSymbol(MRubyValue value)
     {
         if (value.IsSymbol) return value.SymbolValue;
