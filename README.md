@@ -39,7 +39,6 @@ This release is a preview version and comes with the following constraints:
 - [ ] Implement builtin ruby libs
 - [ ] Support Fiber
 - [ ] All ruby code port to C# (for performance reason)
-- [ ] Unity Integration
 - [ ] [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) for the new version.
 
 ## Installation
