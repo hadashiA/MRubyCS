@@ -201,10 +201,7 @@ public sealed class RArray : RObject
 
     public void CopyTo(RArray other)
     {
-        if (other.Length < Length)
-        {
-            other.EnsureModifiable(Length);
-        }
+        other.EnsureModifiable(Length);
         other.Length = Length;
         AsSpan().CopyTo(other.AsSpan());
     }

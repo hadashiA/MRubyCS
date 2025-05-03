@@ -370,6 +370,9 @@ public partial class MRubyState
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
         DefineMethod(FloatClass, Names.OpCmp, NumericMembers.OpCmp);
         DefineMethod(FloatClass, Intern("divmod"u8), FloatMembers.DivMod);
+
+        DefineConst(FloatClass, Intern("INFINITY"u8), MRubyValue.From(double.PositiveInfinity));
+        DefineConst(FloatClass, Intern("NAN"u8), MRubyValue.From(double.NaN));
     }
 
     void InitString()
@@ -378,12 +381,33 @@ public partial class MRubyState
             MRubyValue.From(state.NewString("UTF-8"u8)));
 
         StringClass = DefineClass(Intern("String"u8), ObjectClass, MRubyVType.String);
+        DefineMethod(StringClass, Names.Initialize, StringMembers.Initialize);
+        DefineMethod(StringClass, Names.InitializeCopy, StringMembers.InitializeCopy);
         DefineMethod(StringClass, Names.OpEq, StringMembers.OpEq);
         DefineMethod(StringClass, Names.QEql, StringMembers.OpEq);
         DefineMethod(StringClass, Names.OpCmp, StringMembers.OpCmp);
+        DefineMethod(StringClass, Names.OpAref, StringMembers.OpAref);
+        DefineMethod(StringClass, Names.OpMul, StringMembers.Times);
         DefineMethod(StringClass, Names.Inspect, StringMembers.Inspect);
         DefineMethod(StringClass, Names.ToSym, StringMembers.ToSym);
+        DefineMethod(StringClass, Names.ToS, StringMembers.ToS);
         DefineMethod(StringClass, Names.ToI, StringMembers.ToI);
+        DefineMethod(StringClass, Intern("size"u8), StringMembers.Size);
+        DefineMethod(StringClass, Intern("length"u8), StringMembers.Size);
+        DefineMethod(StringClass, Intern("bytesize"u8), StringMembers.ByteCount);
+        DefineMethod(StringClass, Intern("empty?"u8), StringMembers.Empty);
+        DefineMethod(StringClass, Intern("intern"u8), StringMembers.Intern);
+        DefineMethod(StringClass, Intern("replace"u8), StringMembers.Replace);
+        DefineMethod(StringClass, Intern("chomp"u8), StringMembers.Chomp);
+        DefineMethod(StringClass, Intern("chomp!"u8), StringMembers.ChompBang);
+        DefineMethod(StringClass, Intern("chop"u8), StringMembers.Chop);
+        DefineMethod(StringClass, Intern("chop!"u8), StringMembers.ChopBang);
+        DefineMethod(StringClass, Intern("upcase"u8), StringMembers.Upcase);
+        DefineMethod(StringClass, Intern("upcase!"u8), StringMembers.UpcaseBang);
+        DefineMethod(StringClass, Intern("downcase"u8), StringMembers.Downcase);
+        DefineMethod(StringClass, Intern("downcase!"u8), StringMembers.DowncaseBang);
+        DefineMethod(StringClass, Intern("capitalize"u8), StringMembers.Capitalize);
+        DefineMethod(StringClass, Intern("capitalize!"u8), StringMembers.CapitalizeBang);
     }
 
     void InitArray()

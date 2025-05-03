@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Text;
+using MRubyCS.Internals;
 
 namespace MRubyCS;
 
@@ -40,12 +41,12 @@ public class RString : RObject, IEquatable<RString>
 
     public static RString Owned(byte[] value, RClass stringClass)
     {
-        return new RString(value, value.Length, stringClass);
+        return new RString(value, 0, value.Length, stringClass);
     }
 
-    public static RString Owned(byte[] value, int length, RClass stringClass)
+    public static RString Owned(byte[] value, int offset, int length, RClass stringClass)
     {
-        return new RString(value, length, stringClass);
+        return new RString(value, offset, length, stringClass);
     }
 
     public static RString operator+(RString a, RString b)
@@ -77,12 +78,14 @@ public class RString : RObject, IEquatable<RString>
     {
         buffer = shared.buffer;
         Length = shared.Length;
+        offset = shared.offset;
         bufferOwned = false;
     }
 
-    RString(byte[] buffer, int length, RClass stringClass) : base(MRubyVType.String, stringClass)
+    RString(byte[] buffer, int offset, int length, RClass stringClass) : base(MRubyVType.String, stringClass)
     {
         this.buffer = buffer;
+        this.offset = offset;
         Length = length;
         bufferOwned = true;
         MarkAsFrozen();
@@ -114,6 +117,13 @@ public class RString : RObject, IEquatable<RString>
     public Span<byte> AsSpan() => buffer.AsSpan(offset, Length);
 
     public RString Dup() => new(this);
+
+    internal override RObject Clone()
+    {
+        var clone = new RString(buffer.Length, Class);
+        InstanceVariables.CopyTo(clone.InstanceVariables);
+        return clone;
+    }
 
     public RString SubSequence(int start, int length)
     {
@@ -185,6 +195,118 @@ public class RString : RObject, IEquatable<RString>
         }
         utf8.CopyTo(buffer.AsSpan(Length));
         Length = newLength;
+    }
+
+    public void Upcase()
+    {
+        if (Length <= 0) return;
+        EnsureModifiable(Length);
+        var span = AsSpan();
+        AsciiCode.ToUpper(span);
+    }
+
+    public void Downcase()
+    {
+        if (Length <= 0) return;
+        EnsureModifiable(Length);
+        var span = AsSpan();
+        AsciiCode.ToLower(span);
+    }
+
+    public void Capitalize()
+    {
+        if (Length <= 0) return;
+        EnsureModifiable(Length);
+
+        var firstChar = buffer[offset];
+        if (AsciiCode.IsLower(firstChar))
+        {
+            buffer[offset] = AsciiCode.ToUpper(firstChar);
+            AsciiCode.ToLower(buffer.AsSpan(offset + 1));
+        }
+        else
+        {
+            AsciiCode.ToLower(buffer.AsSpan());
+        }
+    }
+
+    public void Chomp()
+    {
+        var span = AsSpan();
+        if (span.Length > 0)
+        {
+            switch (span[^1])
+            {
+                case (byte)'\n':
+                    if (span.Length > 1 && span[^2] == '\r')
+                    {
+                        Length -= 2;
+                    }
+                    else
+                    {
+                        Length--;
+                    }
+                    break;
+                case (byte)'\r':
+                    Length--;
+                    break;
+            }
+        }
+    }
+
+    public void Chomp(ReadOnlySpan<byte> paragraph)
+    {
+        var span = AsSpan();
+        var index = span.LastIndexOf(paragraph);
+        if (index >= 0 && span.Length - index == paragraph.Length)
+        {
+            Length -= paragraph.Length;
+        }
+    }
+
+    public void Chop()
+    {
+        var span = AsSpan();
+        if (span.Length > 0)
+        {
+            var lastChar = span[^1];
+            switch (lastChar)
+            {
+                case (byte)'\n':
+                    if (span.Length > 1 && span[^2] == '\r')
+                    {
+                        Length -= 2;
+                    }
+                    else
+                    {
+                        Length--;
+                    }
+                    break;
+                case var _ when AsciiCode.IsAscii(lastChar):
+                    Length--;
+                    break;
+                default: // parse as utf8
+                    var index = span.Length - 1;
+                    while (index > 0 && (span[index] & 0b1100_0000) == 0b1000_0000)
+                    {
+                        index--;
+                    }
+                    var lastCharFirstByte = span[index];
+                    if      ((lastCharFirstByte & 0b1000_0000) == 0b0000_0000) Length -= 1;
+                    else if ((lastCharFirstByte & 0b1110_0000) == 0b1100_0000) Length -= 2;
+                    else if ((lastCharFirstByte & 0b1111_0000) == 0b1110_0000) Length -= 3;
+                    else if ((lastCharFirstByte & 0b1111_1000) == 0b1111_0000) Length -= 4;
+                    break;
+            }
+        }
+
+    }
+
+    public void CopyTo(RString other)
+    {
+        other.EnsureModifiable(Length);
+        other.Length = Length;
+        AsSpan().CopyTo(other.AsSpan());
     }
 
     // TODO:
@@ -343,5 +465,40 @@ public class RString : RObject, IEquatable<RString>
         }
 
         return true;
+    }
+
+    void EnsureModifiable(int capacity, bool expandLength = false)
+    {
+        if (buffer.Length - offset < capacity)
+        {
+            var newLength = buffer.Length * 2;
+            if (newLength - offset < capacity)
+            {
+                newLength = capacity;
+            }
+
+            if (bufferOwned)
+            {
+                Array.Resize(ref buffer, newLength);
+            }
+            else
+            {
+                var newBuffer = new byte[newLength];
+                buffer.AsSpan(offset).CopyTo(newBuffer);
+                buffer = newBuffer;
+                offset = 0;
+                bufferOwned = true;
+            }
+        }
+        else if (!bufferOwned)
+        {
+            buffer = AsSpan().ToArray();
+            bufferOwned = true;
+        }
+
+        if (expandLength)
+        {
+            Length = capacity;
+        }
     }
 }

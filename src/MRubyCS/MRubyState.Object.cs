@@ -22,7 +22,7 @@ partial class MRubyState
 
     public RString NewStringOwned(byte[] buffer) => RString.Owned(buffer, StringClass);
 
-    public RString NewStringOwned(byte[] buffer, int length) => RString.Owned(buffer, length, StringClass);
+    public RString NewStringOwned(byte[] buffer, int offset, int length) => RString.Owned(buffer, offset, length, StringClass);
 
     public RArray NewArray(int capacity) => new(capacity, ArrayClass);
 
