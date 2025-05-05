@@ -95,14 +95,52 @@ static class StringMembers
     public static MRubyMethod OpAref = new((state, self) =>
     {
         var str = self.As<RString>();
-        var index = state.GetArgumentAt(0);
-        var rangeLength = -1;
+
+        var indexValue = state.GetArgumentAt(0);
+        var rangeLength = default(int?);
         if (state.TryGetArgumentAt(1, out var arg1))
         {
             rangeLength = (int)state.ToInteger(arg1);
         }
-        var result = str.GetAref(index, rangeLength);
+
+        var result = str.GetPartial(state, indexValue, rangeLength);
         return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
+    });
+
+    [MRubyMethod(RequiredArguments = 2, OptionalArguments = 1)]
+    public static MRubyMethod OpAset = new((state, self) =>
+    {
+        MRubyValue index;
+        MRubyValue value;
+        int? rangeLength = null;
+        var argc = state.GetArgumentCount();
+        switch (argc)
+        {
+            case 2:
+                index = state.GetArgumentAt(0);
+                value = state.GetArgumentAt(1);
+                break;
+            case 3:
+                index = state.GetArgumentAt(0);
+                rangeLength = (int)state.GetArgumentAsIntegerAt(1);
+                value = state.GetArgumentAt(2);
+                break;
+            default:
+                state.RaiseArgumentNumberError(argc, 2, 3);
+                return MRubyValue.Nil;
+        }
+
+        var str = self.As<RString>();
+
+        RString? valueString = null;
+        if (!value.IsNil)
+        {
+            state.EnsureValueType(value, MRubyVType.String);
+            valueString = value.As<RString>();
+        }
+
+        str.SetPartial(state, index, rangeLength, valueString);
+        return self;
     });
 
     [MRubyMethod]
@@ -176,6 +214,92 @@ static class StringMembers
     public static MRubyMethod Empty = new((state, self) =>
     {
         return MRubyValue.From(self.As<RString>().Length <= 0);
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Include = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        var v = state.GetArgumentAsStringAt(0);
+        var i = str.AsSpan().IndexOf(v.AsSpan());
+        return MRubyValue.From(i >= 0);
+    });
+
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
+    public static MRubyMethod ByteIndex = new((state, self) =>
+    {
+        var str = self.As<RString>();
+
+        var target = state.GetArgumentAsStringAt(0);
+        var pos = 0;
+        if (state.TryGetArgumentAt(1, out var arg1))
+        {
+            pos = (int)state.ToInteger(arg1);
+        }
+
+        var index = str.ByteIndexOf(target, pos);
+        return index < 0 ? MRubyValue.Nil : MRubyValue.From(index);
+    });
+
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
+    public static MRubyMethod BytesSlice = new((state, self) =>
+    {
+        int start;
+        int length;
+        var empty = true;
+
+        var str = self.As<RString>();
+
+        var argc = state.GetArgumentCount();
+        switch (argc)
+        {
+            case 1:
+                var arg0 = state.GetArgumentAt(0);
+                if (arg0.Object is RRange range)
+                {
+                    var rangeResult = range.Calculate(str.Length, true, out start, out length);
+                    if (rangeResult != RangeCalculateResult.Ok)
+                    {
+                        return MRubyValue.Nil;
+                    }
+                }
+                else
+                {
+                    start = (int)state.ToInteger(arg0);
+                    length = 1;
+                    empty = false;
+                }
+                break;
+            case 2:
+                start = (int)state.GetArgumentAsIntegerAt(0);
+                length = (int)state.GetArgumentAsIntegerAt(1);
+                break;
+            default:
+                state.RaiseArgumentNumberError(argc, 1, 2);
+                return MRubyValue.Nil;
+        }
+
+        if (empty || length != 0)
+        {
+            var result = str.SubByteSequence(start, length);
+            return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
+        }
+
+        return MRubyValue.Nil;
+    });
+
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
+    public static MRubyMethod Index = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        var target = state.GetArgumentAsStringAt(0);
+        var pos = 0;
+        if (state.TryGetArgumentAt(1, out var arg1))
+        {
+            pos = (int)state.ToInteger(arg1);
+        }
+        var result = str.IndexOf(target, pos);
+        return result < 0 ? MRubyValue.Nil : MRubyValue.From(result);
     });
 
     public static MRubyMethod Times = new((state, self) =>
@@ -300,5 +424,66 @@ static class StringMembers
         var str = self.As<RString>();
         str.Upcase();
         return MRubyValue.Nil;
+    });
+
+    [MRubyMethod(RequiredArguments = 3)]
+    public static MRubyMethod InternalSubReplace = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        var pattern = state.GetArgumentAsStringAt(0);
+        var match = state.GetArgumentAsStringAt(1);
+        var found = state.GetArgumentAsIntegerAt(2);
+
+        var p = pattern.AsSpan();
+        var m = pattern.AsSpan();
+
+        var result = state.NewString(0);
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            if (p[i] != '\\' || i + 1 >= pattern.Length)
+            {
+                result.Concat(p[i]);
+                continue;
+            }
+
+            // escaped
+            i++;
+
+            switch (p[i])
+            {
+                case (byte)'\\':
+                    result.Concat((byte)'\\');
+                    break;
+                case (byte)'`':
+                    result.Concat(str.AsSpan(0, (int)found));
+                    break;
+                case (byte)'&':
+                case (byte)'0':
+                    result.Concat(match);
+                    break;
+                case (byte)'\'':
+                    var pos = (int)found + match.Length;
+                    if (str.Length > pos)
+                    {
+                        result.Concat(str.AsSpan(pos));
+                    }
+                    break;
+                case (byte)'1':
+                case (byte)'2':
+                case (byte)'3':
+                case (byte)'4':
+                case (byte)'5':
+                case (byte)'6':
+                case (byte)'7':
+                case (byte)'8':
+                case (byte)'9':
+                    // ignore sub-group match (no Regexp supported)
+                    break;
+                default:
+                    result.Concat(p.Slice(i - 1, 2));
+                    break;
+            }
+        }
+        return MRubyValue.From(result);
     });
 }

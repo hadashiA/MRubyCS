@@ -529,7 +529,7 @@ partial class MRubyState
                                     case MRubyVType.Integer:
                                     case MRubyVType.String:
                                     case MRubyVType.Range:
-                                        var substr = str.GetAref(valueB);
+                                        var substr = str.GetPartial(this, valueB);
                                         registerA = substr != null
                                             ? MRubyValue.From(substr)
                                             : MRubyValue.Nil;
