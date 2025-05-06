@@ -395,12 +395,9 @@ public partial class MRubyState
         DefineMethod(StringClass, Names.ToI, StringMembers.ToI);
         DefineMethod(StringClass, Intern("size"u8), StringMembers.Size);
         DefineMethod(StringClass, Intern("length"u8), StringMembers.Size);
-        DefineMethod(StringClass, Intern("bytesize"u8), StringMembers.ByteCount);
         DefineMethod(StringClass, Intern("empty?"u8), StringMembers.Empty);
         DefineMethod(StringClass, Intern("include?"u8), StringMembers.Include);
         DefineMethod(StringClass, Intern("index"u8), StringMembers.Index);
-        DefineMethod(StringClass, Intern("byteindex"u8), StringMembers.ByteIndex);
-        DefineMethod(StringClass, Intern("byteslice"u8), StringMembers.BytesSlice);
         DefineMethod(StringClass, Intern("intern"u8), StringMembers.Intern);
         DefineMethod(StringClass, Intern("replace"u8), StringMembers.Replace);
         DefineMethod(StringClass, Intern("chomp"u8), StringMembers.Chomp);
@@ -413,6 +410,14 @@ public partial class MRubyState
         DefineMethod(StringClass, Intern("downcase!"u8), StringMembers.DowncaseBang);
         DefineMethod(StringClass, Intern("capitalize"u8), StringMembers.Capitalize);
         DefineMethod(StringClass, Intern("capitalize!"u8), StringMembers.CapitalizeBang);
+
+        DefineMethod(StringClass, Intern("bytesize"u8), StringMembers.ByteCount);
+        DefineMethod(StringClass, Intern("bytes"u8), StringMembers.Bytes);
+        DefineMethod(StringClass, Intern("getbyte"u8), StringMembers.GetByte);
+        DefineMethod(StringClass, Intern("setbyte"u8), StringMembers.SetByte);
+        DefineMethod(StringClass, Intern("byteindex"u8), StringMembers.ByteIndex);
+        DefineMethod(StringClass, Intern("byteslice"u8), StringMembers.BytesSlice);
+
         DefineMethod(StringClass, Intern("__sub_replace"u8), StringMembers.InternalSubReplace);
     }
 

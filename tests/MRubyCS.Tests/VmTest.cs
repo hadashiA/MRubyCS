@@ -220,10 +220,7 @@ public class VmTest
     public void Hoge()
     {
         var result = Exec("""
-                          lines = []
-                          s = "first line\nsecond line\nthird line"
-                          s.each_line { |line| lines << line }
-                          lines
+                          'hello'.index 'l', -2
                           """u8);
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
     }

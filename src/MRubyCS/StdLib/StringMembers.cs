@@ -196,13 +196,6 @@ static class StringMembers
     });
 
     [MRubyMethod]
-    public static MRubyMethod ByteCount = new((state, self) =>
-    {
-        var str = self.As<RString>();
-        return MRubyValue.From(str.AsSpan().Length);
-    });
-
-    [MRubyMethod]
     public static MRubyMethod Empty = new((state, self) =>
     {
         return MRubyValue.From(self.As<RString>().Length <= 0);
@@ -216,70 +209,6 @@ static class StringMembers
         var i = str.AsSpan().IndexOf(v.AsSpan());
         return MRubyValue.From(i >= 0);
     });
-
-    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
-    public static MRubyMethod ByteIndex = new((state, self) =>
-    {
-        var str = self.As<RString>();
-
-        var target = state.GetArgumentAsStringAt(0);
-        var pos = 0;
-        if (state.TryGetArgumentAt(1, out var arg1))
-        {
-            pos = (int)state.ToInteger(arg1);
-        }
-
-        var index = str.ByteIndexOf(target, pos);
-        return index < 0 ? MRubyValue.Nil : MRubyValue.From(index);
-    });
-
-    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
-    public static MRubyMethod BytesSlice = new((state, self) =>
-    {
-        int start;
-        int length;
-        var empty = true;
-
-        var str = self.As<RString>();
-
-        var argc = state.GetArgumentCount();
-        switch (argc)
-        {
-            case 1:
-                var arg0 = state.GetArgumentAt(0);
-                if (arg0.Object is RRange range)
-                {
-                    var rangeResult = range.Calculate(str.Length, true, out start, out length);
-                    if (rangeResult != RangeCalculateResult.Ok)
-                    {
-                        return MRubyValue.Nil;
-                    }
-                }
-                else
-                {
-                    start = (int)state.ToInteger(arg0);
-                    length = 1;
-                    empty = false;
-                }
-                break;
-            case 2:
-                start = (int)state.GetArgumentAsIntegerAt(0);
-                length = (int)state.GetArgumentAsIntegerAt(1);
-                break;
-            default:
-                state.RaiseArgumentNumberError(argc, 1, 2);
-                return MRubyValue.Nil;
-        }
-
-        if (empty || length != 0)
-        {
-            var result = str.SubByteSequence(start, length);
-            return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
-        }
-
-        return MRubyValue.Nil;
-    });
-
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
     public static MRubyMethod Index = new((state, self) =>
     {
@@ -427,6 +356,124 @@ static class StringMembers
         var str = self.As<RString>();
         str.Upcase();
         return MRubyValue.Nil;
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod ByteCount = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        return MRubyValue.From(str.AsSpan().Length);
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod Bytes = new((state, self) =>
+    {
+        var span = self.As<RString>().AsSpan();
+        var array = state.NewArray(span.Length);
+        foreach (var x in span)
+        {
+            array.Push(MRubyValue.From(x));
+        }
+        return MRubyValue.From(array);
+    });
+
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
+    public static MRubyMethod ByteIndex = new((state, self) =>
+    {
+        var str = self.As<RString>();
+
+        var target = state.GetArgumentAsStringAt(0);
+        var pos = 0;
+        if (state.TryGetArgumentAt(1, out var arg1))
+        {
+            pos = (int)state.ToInteger(arg1);
+        }
+
+        var index = str.ByteIndexOf(target, pos);
+        return index < 0 ? MRubyValue.Nil : MRubyValue.From(index);
+    });
+
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
+    public static MRubyMethod BytesSlice = new((state, self) =>
+    {
+        int start;
+        int length;
+        var empty = true;
+
+        var str = self.As<RString>();
+
+        var argc = state.GetArgumentCount();
+        switch (argc)
+        {
+            case 1:
+                var arg0 = state.GetArgumentAt(0);
+                if (arg0.Object is RRange range)
+                {
+                    var rangeResult = range.Calculate(str.Length, true, out start, out length);
+                    if (rangeResult != RangeCalculateResult.Ok)
+                    {
+                        return MRubyValue.Nil;
+                    }
+                }
+                else
+                {
+                    start = (int)state.ToInteger(arg0);
+                    length = 1;
+                    empty = false;
+                }
+                break;
+            case 2:
+                start = (int)state.GetArgumentAsIntegerAt(0);
+                length = (int)state.GetArgumentAsIntegerAt(1);
+                break;
+            default:
+                state.RaiseArgumentNumberError(argc, 1, 2);
+                return MRubyValue.Nil;
+        }
+
+        if (empty || length != 0)
+        {
+            var result = str.SubByteSequence(start, length);
+            return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
+        }
+
+        return MRubyValue.Nil;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod GetByte = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        var pos = (int)state.GetArgumentAsIntegerAt(0);
+        if (pos < 0)
+        {
+            pos += str.Length;
+        }
+        if (pos < 0 || str.Length <= pos)
+        {
+            return MRubyValue.Nil;
+        }
+
+        return MRubyValue.From(str.AsSpan()[pos]);
+    });
+
+    [MRubyMethod(RequiredArguments = 2)]
+    public static MRubyMethod SetByte = new((state, self) =>
+    {
+        var str = self.As<RString>();
+
+        var pos = (int)state.GetArgumentAsIntegerAt(0);
+        var value = (int)state.GetArgumentAsIntegerAt(1);
+        if (pos < -str.Length || str.Length <= pos)
+        {
+            state.Raise(Names.IndexError, state.NewString($"index {pos} out of string"));
+        }
+        if (pos < 0)
+        {
+            pos += str.Length;
+        }
+        str.AsSpan()[pos] = (byte)(value & 0xff);
+        return self;
     });
 
     [MRubyMethod(RequiredArguments = 3)]
