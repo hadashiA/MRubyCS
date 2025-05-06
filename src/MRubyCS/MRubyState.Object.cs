@@ -444,7 +444,7 @@ partial class MRubyState
         if (start >= originalLength)
         {
             length = start + newValues.Length;
-            array.EnsureModifiable(length, true);
+            array.MakeModifiable(length, true);
             if (start > originalLength)
             {
                 array.AsSpan(originalLength, start - originalLength).Clear();
@@ -453,7 +453,7 @@ partial class MRubyState
         else
         {
             var newLength = array.Length + newValues.Length - length;
-            array.EnsureModifiable(newLength, true);
+            array.MakeModifiable(newLength, true);
             if (length != newValues.Length)
             {
                 array.AsSpan(end, originalLength - end)

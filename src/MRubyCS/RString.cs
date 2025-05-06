@@ -187,7 +187,7 @@ public class RString : RObject, IEquatable<RString>
         switch (CalculateStringRange(state, indexValue, rangeLength, out var calculatedOffset, out var calculatedLength))
         {
             case RStringRangeType.CharRange:
-                if (calculatedLength <= 0)
+                if (calculatedLength < 0)
                 {
                     state.Raise(Names.IndexError, "nagative length"u8);
                 }
@@ -196,7 +196,7 @@ public class RString : RObject, IEquatable<RString>
                 {
                     calculatedOffset += charCount;
                 }
-                if (calculatedOffset < 0 || calculatedLength > charCount)
+                if (calculatedOffset < 0 || calculatedOffset > charCount)
                 {
                     state.Raise(Names.IndexError, state.NewString($"index {state.Stringify(indexValue)} out of string"));
                 }
@@ -216,7 +216,7 @@ public class RString : RObject, IEquatable<RString>
 
         var pos = calculatedOffset;
         var end = calculatedOffset + calculatedLength;
-        if (end > span.Length) end = span.Length;
+        if (end > Length) end = Length;
 
         if (pos < 0 || pos > Length)
         {
@@ -225,13 +225,13 @@ public class RString : RObject, IEquatable<RString>
 
         var currentLength = Length;
         var newLength = (value?.Length ?? 0) + (Length - (end - pos));
-        EnsureModifiable(newLength, true);
+        MakeModifiable(newLength, true);
 
         // move latter half
         if (newLength != currentLength)
         {
-            AsSpan(newLength - (currentLength - end), currentLength - end)
-                .CopyTo(AsSpan(end));
+            AsSpan(end, currentLength - end)
+                .CopyTo(AsSpan(newLength - (currentLength - end)));
         }
 
         // insert value
@@ -245,7 +245,7 @@ public class RString : RObject, IEquatable<RString>
     {
         var currentLength = Length;
         var newLength = currentLength + 1;
-        EnsureModifiable(newLength, true);
+        MakeModifiable(newLength, true);
         AsSpan()[currentLength] = ch;
     }
 
@@ -258,14 +258,14 @@ public class RString : RObject, IEquatable<RString>
     {
         var currentLength = Length;
         var newLength = currentLength + utf8.Length;
-        EnsureModifiable(newLength, true);
+        MakeModifiable(newLength, true);
         utf8.CopyTo(AsSpan(currentLength));
     }
 
     public void Upcase()
     {
         if (Length <= 0) return;
-        EnsureModifiable(Length);
+        MakeModifiable(Length);
         var span = AsSpan();
         AsciiCode.ToUpper(span);
     }
@@ -273,7 +273,7 @@ public class RString : RObject, IEquatable<RString>
     public void Downcase()
     {
         if (Length <= 0) return;
-        EnsureModifiable(Length);
+        MakeModifiable(Length);
         var span = AsSpan();
         AsciiCode.ToLower(span);
     }
@@ -281,7 +281,7 @@ public class RString : RObject, IEquatable<RString>
     public void Capitalize()
     {
         if (Length <= 0) return;
-        EnsureModifiable(Length);
+        MakeModifiable(Length);
 
         var firstChar = buffer[offset];
         if (AsciiCode.IsLower(firstChar))
@@ -366,7 +366,7 @@ public class RString : RObject, IEquatable<RString>
 
     public void CopyTo(RString other)
     {
-        other.EnsureModifiable(Length);
+        other.MakeModifiable(Length);
         other.Length = Length;
         AsSpan().CopyTo(other.AsSpan());
     }
@@ -421,34 +421,35 @@ public class RString : RObject, IEquatable<RString>
     }
 #endif
 
-    public int ByteIndexOf(ReadOnlySpan<byte> str, int pos = 0)
+    public int ByteIndexOf(ReadOnlySpan<byte> target, int pos = 0)
     {
         if (pos < 0)
         {
-            pos += str.Length;
+            pos += target.Length;
             if (pos < 0)
             {
                 return -1;
             }
         }
-        if (Length - pos < str.Length)
-        {
-            return -1;
-        }
+
+        if (Length - pos < target.Length) return -1;
+        if (target.Length <= 0) return pos;
 
         if (pos > 0)
         {
-            var result = AsSpan(pos).IndexOf(str);
+            var result = AsSpan(pos).IndexOf(target);
             return result >= 0 ? result + pos : result;
         }
-        return AsSpan().IndexOf(str);
+        return AsSpan().IndexOf(target);
     }
 
     public int IndexOf(ReadOnlySpan<byte> target, int utf8Pos = 0)
     {
+        var span = AsSpan();
+        var charCount = Encoding.UTF8.GetCharCount(span);
+
         if (utf8Pos < 0)
         {
-            var charCount = Encoding.UTF8.GetCharCount(target);
             utf8Pos += charCount;
             if (utf8Pos < 0)
             {
@@ -456,19 +457,18 @@ public class RString : RObject, IEquatable<RString>
             }
         }
 
-        var span = AsSpan();
+        var targetCharCount = Encoding.UTF8.GetCharCount(target);
+        if (charCount - utf8Pos < targetCharCount) return -1;
+        if (targetCharCount <= 0) return utf8Pos;
+
         if (utf8Pos > 0)
         {
             var pos = Utf8Helper.FindByteIndex(span, utf8Pos);
             span = span[pos..];
         }
         var byteIndex = span.IndexOf(target);
-        return byteIndex switch
-        {
-            < 0 => -1,
-            0 => 0,
-            _ => Encoding.UTF8.GetCharCount(span[..byteIndex])
-        };
+        if (byteIndex < 0) return -1;
+        return Encoding.UTF8.GetCharCount(span[..byteIndex]) + utf8Pos;
     }
 
     internal static uint GetHashCode(ReadOnlySpan<byte> span)
@@ -522,7 +522,7 @@ public class RString : RObject, IEquatable<RString>
         return true;
     }
 
-    void EnsureModifiable(int capacity, bool expandLength = false)
+    void MakeModifiable(int capacity, bool expandLength = false)
     {
         if (buffer.Length - offset < capacity)
         {
@@ -566,7 +566,7 @@ public class RString : RObject, IEquatable<RString>
     {
         if (indexLength.HasValue)
         {
-            calculatedOffset = (int)index.IntegerValue;
+            calculatedOffset = (int)state.ToInteger(index);
             calculatedLength = indexLength.Value;
             return RStringRangeType.CharRange;
         }
@@ -584,7 +584,7 @@ public class RString : RObject, IEquatable<RString>
         {
             case RString targetStr:
                 calculatedOffset = utf8.IndexOf(targetStr);
-                calculatedLength = utf8.Length;
+                calculatedLength = targetStr.Length;
                 return calculatedOffset < 0
                     ? RStringRangeType.OutOfRange
                     : RStringRangeType.ByteRangeCorrected;

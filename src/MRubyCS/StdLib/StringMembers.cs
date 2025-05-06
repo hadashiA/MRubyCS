@@ -111,19 +111,19 @@ static class StringMembers
     public static MRubyMethod OpAset = new((state, self) =>
     {
         MRubyValue index;
-        MRubyValue value;
+        RString? value;
         int? rangeLength = null;
         var argc = state.GetArgumentCount();
         switch (argc)
         {
             case 2:
                 index = state.GetArgumentAt(0);
-                value = state.GetArgumentAt(1);
+                value = state.GetArgumentAsStringAt(1);
                 break;
             case 3:
                 index = state.GetArgumentAt(0);
                 rangeLength = (int)state.GetArgumentAsIntegerAt(1);
-                value = state.GetArgumentAt(2);
+                value = state.GetArgumentAsStringAt(2);
                 break;
             default:
                 state.RaiseArgumentNumberError(argc, 2, 3);
@@ -131,15 +131,7 @@ static class StringMembers
         }
 
         var str = self.As<RString>();
-
-        RString? valueString = null;
-        if (!value.IsNil)
-        {
-            state.EnsureValueType(value, MRubyVType.String);
-            valueString = value.As<RString>();
-        }
-
-        str.SetPartial(state, index, rangeLength, valueString);
+        str.SetPartial(state, index, rangeLength, value);
         return self;
     });
 
@@ -292,11 +284,22 @@ static class StringMembers
     public static MRubyMethod Index = new((state, self) =>
     {
         var str = self.As<RString>();
-        var target = state.GetArgumentAsStringAt(0);
+        var argc = state.GetArgumentCount();
+
+        RString target = default!;
         var pos = 0;
-        if (state.TryGetArgumentAt(1, out var arg1))
+        switch (argc)
         {
-            pos = (int)state.ToInteger(arg1);
+            case 1:
+                target = state.GetArgumentAsStringAt(0);
+                break;
+            case 2:
+                target = state.GetArgumentAsStringAt(0);
+                pos = (int)state.GetArgumentAsIntegerAt(1);
+                break;
+            default:
+                state.RaiseArgumentNumberError(argc, 1, 2);
+                break;
         }
         var result = str.IndexOf(target, pos);
         return result < 0 ? MRubyValue.Nil : MRubyValue.From(result);
