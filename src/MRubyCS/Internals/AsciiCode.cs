@@ -5,19 +5,20 @@ namespace MRubyCS.Internals;
 
 static class Utf8Helper
 {
-    // 先頭バイトから UTF-8 シーケンス長を判定
+    static readonly int[] Utf8SequenceLengthTable =
+    [
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 3, 3, 4, 0
+    ];
+
     public static int GetUtf8SequenceLength(byte lead)
     {
-        if ((lead & 0b1000_0000) == 0b0000_0000) return 1; // 0xxxxxxx
-        if ((lead & 0b1110_0000) == 0b1100_0000) return 2; // 110xxxxx
-        if ((lead & 0b1111_0000) == 0b1110_0000) return 3; // 1110xxxx
-        if ((lead & 0b1111_1000) == 0b1111_0000) return 4; // 11110xxx
-        return 1;
+        return Utf8SequenceLengthTable[lead >> 3];
     }
 
     public static bool IsFirstUtf8Sequence(byte lead)
     {
-        return (lead & 0b1100_0000) == 0b1000_0000;
+        return (lead & 0b1100_0000) != 0b1000_0000;
     }
 
     public static int FindByteIndex(ReadOnlySpan<byte> utf8, int bytesIndex)
@@ -31,6 +32,36 @@ static class Utf8Helper
             bytesRead++;
         }
         return index;
+    }
+
+    public static byte[] Reverse(ReadOnlySpan<byte> span)
+    {
+        var readPos = span.Length - 1;
+        var writePos = 0;
+        var output = new byte[span.Length];
+
+        while (readPos >= 0)
+        {
+            var start = readPos;
+            while (start > 0 && !IsFirstUtf8Sequence(span[start]))
+            {
+                start--;
+            }
+
+            var length = readPos - start + 1;
+            if (length == 1)
+            {
+                output[writePos] = span[readPos];
+            }
+            else
+            {
+                span.Slice(start, length).CopyTo(output.AsSpan(writePos));
+            }
+
+            writePos += length;
+            readPos -= length;
+        }
+        return output;
     }
 }
 

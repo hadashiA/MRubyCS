@@ -398,6 +398,7 @@ public partial class MRubyState
         DefineMethod(StringClass, Intern("empty?"u8), StringMembers.Empty);
         DefineMethod(StringClass, Intern("include?"u8), StringMembers.Include);
         DefineMethod(StringClass, Intern("index"u8), StringMembers.Index);
+        DefineMethod(StringClass, Intern("rindex"u8), StringMembers.RIndex);
         DefineMethod(StringClass, Intern("intern"u8), StringMembers.Intern);
         DefineMethod(StringClass, Intern("replace"u8), StringMembers.Replace);
         DefineMethod(StringClass, Intern("chomp"u8), StringMembers.Chomp);
@@ -410,6 +411,9 @@ public partial class MRubyState
         DefineMethod(StringClass, Intern("downcase!"u8), StringMembers.DowncaseBang);
         DefineMethod(StringClass, Intern("capitalize"u8), StringMembers.Capitalize);
         DefineMethod(StringClass, Intern("capitalize!"u8), StringMembers.CapitalizeBang);
+        DefineMethod(StringClass, Intern("reverse"u8), StringMembers.Reverse);
+        DefineMethod(StringClass, Intern("reverse!"u8), StringMembers.ReverseBang);
+        DefineMethod(StringClass, Intern("slice"u8), StringMembers.OpAref);
 
         DefineMethod(StringClass, Intern("bytesize"u8), StringMembers.ByteCount);
         DefineMethod(StringClass, Intern("bytes"u8), StringMembers.Bytes);

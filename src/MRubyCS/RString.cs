@@ -352,7 +352,7 @@ public class RString : RObject, IEquatable<RString>
                     break;
                 default: // parse as utf8
                     var index = span.Length - 1;
-                    while (index > 0 && Utf8Helper.IsFirstUtf8Sequence(span[index]))
+                    while (index > 0 && !Utf8Helper.IsFirstUtf8Sequence(span[index]))
                     {
                         index--;
                     }
@@ -361,7 +361,6 @@ public class RString : RObject, IEquatable<RString>
                     break;
             }
         }
-
     }
 
     public void CopyTo(RString other)
@@ -471,6 +470,25 @@ public class RString : RObject, IEquatable<RString>
         return Encoding.UTF8.GetCharCount(span[..byteIndex]) + utf8Pos;
     }
 
+    public int IndexOfFromRight(ReadOnlySpan<byte> target, int utf8Pos = 0)
+    {
+        var span = AsSpan();
+        var charCount = Encoding.UTF8.GetCharCount(span);
+        var targetCharCount = Encoding.UTF8.GetCharCount(target);
+
+        if (charCount < targetCharCount) return -1;
+        if (charCount - utf8Pos < targetCharCount)
+        {
+            utf8Pos = charCount - targetCharCount;
+        }
+
+        var pos = Utf8Helper.FindByteIndex(span, utf8Pos);
+
+        var byteIndex = span[..pos].LastIndexOf(target);
+        if (byteIndex < 0) return -1;
+        return Encoding.UTF8.GetCharCount(span[..byteIndex]);
+    }
+
     internal static uint GetHashCode(ReadOnlySpan<byte> span)
     {
         const uint OffsetBasis = 2166136261u;
@@ -522,7 +540,7 @@ public class RString : RObject, IEquatable<RString>
         return true;
     }
 
-    void MakeModifiable(int capacity, bool expandLength = false)
+    internal void MakeModifiable(int capacity, bool expandLength = false)
     {
         if (buffer.Length - offset < capacity)
         {

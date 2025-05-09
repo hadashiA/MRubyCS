@@ -209,6 +209,7 @@ static class StringMembers
         var i = str.AsSpan().IndexOf(v.AsSpan());
         return MRubyValue.From(i >= 0);
     });
+
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
     public static MRubyMethod Index = new((state, self) =>
     {
@@ -231,6 +232,31 @@ static class StringMembers
                 break;
         }
         var result = str.IndexOf(target, pos);
+        return result < 0 ? MRubyValue.Nil : MRubyValue.From(result);
+    });
+
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
+    public static MRubyMethod RIndex = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        var argc = state.GetArgumentCount();
+
+        RString target = default!;
+        var pos = str.Length;
+        switch (argc)
+        {
+            case 1:
+                target = state.GetArgumentAsStringAt(0);
+                break;
+            case 2:
+                target = state.GetArgumentAsStringAt(0);
+                pos = (int)state.GetArgumentAsIntegerAt(1);
+                break;
+            default:
+                state.RaiseArgumentNumberError(argc, 1, 2);
+                break;
+        }
+        var result = str.IndexOfFromRight(target, pos);
         return result < 0 ? MRubyValue.Nil : MRubyValue.From(result);
     });
 
@@ -268,6 +294,8 @@ static class StringMembers
     public static MRubyMethod CapitalizeBang = new((state, self) =>
     {
         var str = self.As<RString>();
+        state.EnsureNotFrozen(str);
+
         str.Capitalize();
         return MRubyValue.Nil;
     });
@@ -294,6 +322,8 @@ static class StringMembers
     public static MRubyMethod ChompBang = new((state, self) =>
     {
         var str = self.As<RString>();
+        state.EnsureNotFrozen(str);
+
         if (state.TryGetArgumentAt(0, out var arg0))
         {
             state.EnsureValueType(arg0, MRubyVType.String);
@@ -320,6 +350,7 @@ static class StringMembers
     public static MRubyMethod ChopBang = new((state, self) =>
     {
         var str = self.As<RString>();
+        state.EnsureNotFrozen(str);
         str.Chop();
         return MRubyValue.Nil;
     });
@@ -337,6 +368,7 @@ static class StringMembers
     public static MRubyMethod DowncaseBang = new((state, self) =>
     {
         var str = self.As<RString>();
+        state.EnsureNotFrozen(str);
         str.Downcase();
         return MRubyValue.Nil;
     });
@@ -354,8 +386,29 @@ static class StringMembers
     public static MRubyMethod UpcaseBang = new((state, self) =>
     {
         var str = self.As<RString>();
+        state.EnsureNotFrozen(str);
         str.Upcase();
         return MRubyValue.Nil;
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod Reverse = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        var buf = Utf8Helper.Reverse(str.AsSpan());
+        return MRubyValue.From(state.NewStringOwned(buf));
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod ReverseBang = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        state.EnsureNotFrozen(str);
+
+        var buf = Utf8Helper.Reverse(str.AsSpan());
+        str.MakeModifiable(str.Length);
+        buf.CopyTo(str.AsSpan());
+        return self;
     });
 
     [MRubyMethod]

@@ -169,6 +169,18 @@ static class NamingRule
         for (var i = 0; i < name.Length; i++)
         {
             var c = name[i];
+            // if (inspect)
+            // {
+            //     var sequenceLength = Utf8Helper.GetUtf8SequenceLength(c);
+            //     if (sequenceLength >= name.Length - i)
+            //     {
+            //         sequenceLength = name.Length - i;
+            //     }
+            //     name.Slice(i, sequenceLength).CopyTo(output[offset..]);
+            //     i += sequenceLength;
+            //     offset += sequenceLength;
+            // }
+
             if (c == '"' || c == '\\' || (c == '#' && IsEvStr(i + 1, name)))
             {
                 if (output.Length < offset + 2) return false;
