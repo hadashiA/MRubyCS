@@ -8,14 +8,14 @@ static class FloatMembers
     public static MRubyMethod ToI = new((state, self) =>
     {
         var f = self.FloatValue;
-        state.EnsureFloatValue(f);
-        if (!IsFixableFloatValue(f))
+        //state.EnsureFloatValue(f);
+        if (!IsFixableFloatValue(f) || double.IsNaN(f) || double.IsInfinity(f))
         {
             state.Raise(Names.RangeError, state.NewString($"integer overflow in to_f"));
         }
 
-        if (f > 0.0) return MRubyValue.From(Math.Floor(f));
-        if (f < 0.0) return MRubyValue.From(Math.Ceiling(f));
+        if (f > 0.0) return MRubyValue.From((long)Math.Floor(f));
+        if (f < 0.0) return MRubyValue.From((long)Math.Ceiling(f));
         return MRubyValue.From((long)f);
     });
 

@@ -33,7 +33,7 @@ public sealed class RArray : RObject
         }
         set
         {
-            EnsureModifiable(index + 1, index >= Length);
+            MakeModifiable(index + 1, index >= Length);
             data[offset + index] = value;
         }
     }
@@ -111,14 +111,14 @@ public sealed class RArray : RObject
         }
         else
         {
-            EnsureModifiable(0, true);
+            MakeModifiable(0, true);
         }
     }
 
     public void Push(MRubyValue newItem)
     {
         var currentLength = Length;
-        EnsureModifiable(currentLength + 1, true);
+        MakeModifiable(currentLength + 1, true);
         data[currentLength] = newItem;
     }
 
@@ -131,7 +131,7 @@ public sealed class RArray : RObject
         }
 
         value = data[offset + Length - 1];
-        EnsureModifiable(Length - 1, true);
+        MakeModifiable(Length - 1, true);
         return true;
     }
 
@@ -163,7 +163,7 @@ public sealed class RArray : RObject
         if (newItems.Length <= 0) return;
 
         var currentLength = Length;
-        EnsureModifiable(Length + newItems.Length, true);
+        MakeModifiable(Length + newItems.Length, true);
         var span = AsSpan();
         AsSpan(0,currentLength).CopyTo(AsSpan(newItems.Length));
         newItems.CopyTo(span);
@@ -182,7 +182,7 @@ public sealed class RArray : RObject
         var currentLength = Length;
         var newLength = currentLength + other.Length;
         var source = other.AsSpan();
-        EnsureModifiable(newLength, true);
+        MakeModifiable(newLength, true);
         source.CopyTo(AsSpan(currentLength));
     }
 
@@ -201,10 +201,7 @@ public sealed class RArray : RObject
 
     public void CopyTo(RArray other)
     {
-        if (other.Length < Length)
-        {
-            other.EnsureModifiable(Length);
-        }
+        other.MakeModifiable(Length);
         other.Length = Length;
         AsSpan().CopyTo(other.AsSpan());
     }
@@ -225,12 +222,12 @@ public sealed class RArray : RObject
     internal void PushRange(ReadOnlySpan<MRubyValue>newItems)
     {
         var start = Length;
-        EnsureModifiable(Length + newItems.Length, true);
+        MakeModifiable(Length + newItems.Length, true);
         newItems.CopyTo(data.AsSpan(start));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void EnsureModifiable(int capacity, bool expandLength = false)
+    internal void MakeModifiable(int capacity, bool expandLength = false)
     {
         if (data.Length - offset < capacity)
         {

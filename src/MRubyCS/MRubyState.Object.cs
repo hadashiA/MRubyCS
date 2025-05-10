@@ -22,18 +22,13 @@ partial class MRubyState
 
     public RString NewStringOwned(byte[] buffer) => RString.Owned(buffer, StringClass);
 
-    public RString NewStringOwned(byte[] buffer, int length) => RString.Owned(buffer, length, StringClass);
+    public RString NewStringOwned(byte[] buffer, int offset, int length) => RString.Owned(buffer, offset, length, StringClass);
 
     public RArray NewArray(int capacity) => new(capacity, ArrayClass);
 
     public RArray NewArray(params ReadOnlySpan<MRubyValue> values) => new(values, ArrayClass);
 
     public RHash NewHash(int capacity) => new(capacity, valueEqualityComparer, HashClass);
-
-    public MRubyValue NewInteger(long x)
-    {
-        return MRubyValue.From(x);
-    }
 
     public Symbol ToSymbol(MRubyValue value)
     {
@@ -449,7 +444,7 @@ partial class MRubyState
         if (start >= originalLength)
         {
             length = start + newValues.Length;
-            array.EnsureModifiable(length, true);
+            array.MakeModifiable(length, true);
             if (start > originalLength)
             {
                 array.AsSpan(originalLength, start - originalLength).Clear();
@@ -458,7 +453,7 @@ partial class MRubyState
         else
         {
             var newLength = array.Length + newValues.Length - length;
-            array.EnsureModifiable(newLength, true);
+            array.MakeModifiable(newLength, true);
             if (length != newValues.Length)
             {
                 array.AsSpan(end, originalLength - end)

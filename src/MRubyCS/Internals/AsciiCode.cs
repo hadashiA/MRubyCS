@@ -3,6 +3,82 @@ using System.Runtime.CompilerServices;
 
 namespace MRubyCS.Internals;
 
+static class Utf8Helper
+{
+    static readonly int[] Utf8SequenceLengthTable =
+    [
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 1
+    ];
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetUtf8SequenceLength(byte lead)
+    {
+        return Utf8SequenceLengthTable[lead >> 3];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsFirstUtf8Sequence(byte lead)
+    {
+        return (lead & 0b1100_0000) != 0b1000_0000;
+    }
+
+    public static int FindByteIndexAt(ReadOnlySpan<byte> utf8, int utf8Pos)
+    {
+        if (utf8Pos <= 0) return 0;
+
+        var index = 0;
+        var charCount = 0;
+        while (index < utf8.Length && charCount < utf8Pos)
+        {
+            var seqLen = GetUtf8SequenceLength(utf8[index]);
+            if (seqLen > 1)
+            {
+                if (index + seqLen > utf8.Length ||
+                    IsFirstUtf8Sequence(utf8[index + 1]))
+                {
+                    // invalid
+                    seqLen = 1;
+                }
+            }
+
+            index += seqLen;
+            charCount++;
+        }
+        return index;
+    }
+
+    public static byte[] Reverse(ReadOnlySpan<byte> span)
+    {
+        var readPos = span.Length - 1;
+        var writePos = 0;
+        var output = new byte[span.Length];
+
+        while (readPos >= 0)
+        {
+            var start = readPos;
+            while (start > 0 && !IsFirstUtf8Sequence(span[start]))
+            {
+                start--;
+            }
+
+            var length = readPos - start + 1;
+            if (length == 1)
+            {
+                output[writePos] = span[readPos];
+            }
+            else
+            {
+                span.Slice(start, length).CopyTo(output.AsSpan(writePos));
+            }
+
+            writePos += length;
+            readPos -= length;
+        }
+        return output;
+    }
+}
+
 static class AsciiCode
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -34,8 +110,35 @@ static class AsciiCode
         {
             if (!IsIdentifier(x)) return false;
         }
+
         return true;
     }
 
     public static bool IsPrint(byte c) => (byte)(c - 0x20) < 0x5f;
+
+    public static bool IsLineBreak(byte c) => c is (byte)'\n' or (byte)'\r';
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static byte ToUpper(byte b) => (byte)(b & 0xDF); // 0xDF = ~0x20
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static byte ToLower(byte b) => (byte)(b | 0x20);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ToUpper(Span<byte> span)
+    {
+        for (var i = 0; i < span.Length; i++)
+        {
+            span[i] = ToUpper(span[i]);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ToLower(Span<byte> span)
+    {
+        for (var i = 0; i < span.Length; i++)
+        {
+            span[i] = ToLower(span[i]);
+        }
+    }
 }

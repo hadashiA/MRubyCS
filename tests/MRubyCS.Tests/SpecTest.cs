@@ -101,7 +101,7 @@ public class SpecTest
     // lib
     [TestCase("integer.rb")]
     [TestCase("array.rb")]
-    // [TestCase("string.rb")]
+    [TestCase("string.rb")]
     // error
     [TestCase("exception.rb")]
     [TestCase("indexerror.rb")]
