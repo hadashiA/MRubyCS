@@ -393,6 +393,7 @@ public partial class MRubyState
         DefineMethod(StringClass, Names.ToSym, StringMembers.ToSym);
         DefineMethod(StringClass, Names.ToS, StringMembers.ToS);
         DefineMethod(StringClass, Names.ToI, StringMembers.ToI);
+        DefineMethod(StringClass, Intern("to_f"u8), StringMembers.ToF);
         DefineMethod(StringClass, Intern("size"u8), StringMembers.Size);
         DefineMethod(StringClass, Intern("length"u8), StringMembers.Size);
         DefineMethod(StringClass, Intern("empty?"u8), StringMembers.Empty);

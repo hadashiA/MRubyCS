@@ -8,28 +8,42 @@ static class Utf8Helper
     static readonly int[] Utf8SequenceLengthTable =
     [
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 3, 3, 4, 0
+        1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 1
     ];
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetUtf8SequenceLength(byte lead)
     {
         return Utf8SequenceLengthTable[lead >> 3];
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsFirstUtf8Sequence(byte lead)
     {
         return (lead & 0b1100_0000) != 0b1000_0000;
     }
 
-    public static int FindByteIndex(ReadOnlySpan<byte> utf8, int bytesIndex)
+    public static int FindByteIndexAt(ReadOnlySpan<byte> utf8, int utf8Pos)
     {
+        if (utf8Pos <= 0) return 0;
+
         var index = 0;
-        var bytesRead = 0;
-        while (index < utf8.Length && bytesRead < bytesIndex)
+        var charCount = 0;
+        while (index < utf8.Length && charCount < utf8Pos)
         {
             var seqLen = GetUtf8SequenceLength(utf8[index]);
+            if (seqLen > 1)
+            {
+                if (index + seqLen > utf8.Length ||
+                    IsFirstUtf8Sequence(utf8[index + 1]))
+                {
+                    // invalid
+                    seqLen = 1;
+                }
+            }
+
             index += seqLen;
-            bytesRead++;
+            charCount++;
         }
         return index;
     }

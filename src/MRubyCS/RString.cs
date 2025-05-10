@@ -137,8 +137,8 @@ public class RString : RObject, IEquatable<RString>
         var charCount = Encoding.UTF8.GetCharCount(span);
         if (TryConvertRange(charCount, ref utf8Start, ref utf8Length))
         {
-            var start = Utf8Helper.FindByteIndex(span, utf8Start);
-            var end = Utf8Helper.FindByteIndex(span, utf8Start + utf8Length);
+            var start = Utf8Helper.FindByteIndexAt(span, utf8Start);
+            var end = Utf8Helper.FindByteIndexAt(span[start..], utf8Length) + start;
 
             var slice = span.Slice(start, end - start);
             return new RString(slice, Class);
@@ -163,8 +163,8 @@ public class RString : RObject, IEquatable<RString>
         {
             case RStringRangeType.CharRangeCorrected:
                 var span = AsSpan();
-                var bytesOffset = Utf8Helper.FindByteIndex(span, calculatedOffset);
-                var bytesLength = Utf8Helper.FindByteIndex(span, calculatedLength);
+                var bytesOffset = Utf8Helper.FindByteIndexAt(span, calculatedOffset);
+                var bytesLength = Utf8Helper.FindByteIndexAt(span, calculatedLength);
                 return new RString(span.Slice(bytesOffset, bytesLength), Class);
 
             case RStringRangeType.CharRange:
@@ -200,12 +200,12 @@ public class RString : RObject, IEquatable<RString>
                 {
                     state.Raise(Names.IndexError, state.NewString($"index {state.Stringify(indexValue)} out of string"));
                 }
-                calculatedOffset = Utf8Helper.FindByteIndex(span, calculatedOffset);
-                calculatedLength = Utf8Helper.FindByteIndex(span, calculatedLength);
+                calculatedOffset = Utf8Helper.FindByteIndexAt(span, calculatedOffset);
+                calculatedLength = Utf8Helper.FindByteIndexAt(span, calculatedLength);
                 break;
             case RStringRangeType.CharRangeCorrected:
-                calculatedOffset = Utf8Helper.FindByteIndex(span, calculatedOffset);
-                calculatedLength = Utf8Helper.FindByteIndex(span, calculatedLength);
+                calculatedOffset = Utf8Helper.FindByteIndexAt(span, calculatedOffset);
+                calculatedLength = Utf8Helper.FindByteIndexAt(span, calculatedLength);
                 break;
             case RStringRangeType.ByteRangeCorrected:
                 break;
@@ -460,20 +460,45 @@ public class RString : RObject, IEquatable<RString>
         if (charCount - utf8Pos < targetCharCount) return -1;
         if (targetCharCount <= 0) return utf8Pos;
 
-        if (utf8Pos > 0)
+        var i = 0;
+        var c = 0;
+        while (i < span.Length)
         {
-            var pos = Utf8Helper.FindByteIndex(span, utf8Pos);
-            span = span[pos..];
+            if (c >= utf8Pos && span[i..].StartsWith(target))
+            {
+                return c;
+            }
+            var seqLength = Utf8Helper.GetUtf8SequenceLength(span[i]);
+            if (seqLength > 1)
+            {
+                if (i + seqLength > span.Length ||
+                    Utf8Helper.IsFirstUtf8Sequence(span[i + 1]))
+                {
+                    // invalid
+                    seqLength = 1;
+                }
+            }
+            i += seqLength;
+            c++;
         }
-        var byteIndex = span.IndexOf(target);
-        if (byteIndex < 0) return -1;
-        return Encoding.UTF8.GetCharCount(span[..byteIndex]) + utf8Pos;
+
+        return -1;
     }
 
     public int IndexOfFromRight(ReadOnlySpan<byte> target, int utf8Pos = 0)
     {
         var span = AsSpan();
         var charCount = Encoding.UTF8.GetCharCount(span);
+
+        if (utf8Pos < 0)
+        {
+            utf8Pos += charCount;
+            if (utf8Pos < 0)
+            {
+                return -1;
+            }
+        }
+
         var targetCharCount = Encoding.UTF8.GetCharCount(target);
 
         if (charCount < targetCharCount) return -1;
@@ -482,11 +507,27 @@ public class RString : RObject, IEquatable<RString>
             utf8Pos = charCount - targetCharCount;
         }
 
-        var pos = Utf8Helper.FindByteIndex(span, utf8Pos);
+        if (target.Length <= 0) return utf8Pos;
 
-        var byteIndex = span[..pos].LastIndexOf(target);
-        if (byteIndex < 0) return -1;
-        return Encoding.UTF8.GetCharCount(span[..byteIndex]);
+        var pos = Utf8Helper.FindByteIndexAt(span, utf8Pos);
+        var i = pos;
+        if (i >= span.Length) i = span.Length - 1;
+
+        while (i >= 0)
+        {
+            while (i > 0 && !Utf8Helper.IsFirstUtf8Sequence(span[i]))
+            {
+                i--;
+            }
+            if (i + target.Length <= pos && span[i..].StartsWith(target))
+            {
+                return utf8Pos;
+            }
+
+            i--;
+            utf8Pos--;
+        }
+        return -1;
     }
 
     internal static uint GetHashCode(ReadOnlySpan<byte> span)

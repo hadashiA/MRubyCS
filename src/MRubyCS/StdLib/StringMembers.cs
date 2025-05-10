@@ -188,6 +188,17 @@ static class StringMembers
     });
 
     [MRubyMethod]
+    public static MRubyMethod ToF = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        if (Utf8Parser.TryParse(str.AsSpan(), out double value, out var consumed, 'f'))
+        {
+            return MRubyValue.From(value);
+        }
+        return MRubyValue.From(0f);
+    });
+
+    [MRubyMethod]
     public static MRubyMethod Size = new((state, self) =>
     {
         var str = self.As<RString>();
