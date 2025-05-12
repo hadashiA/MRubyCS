@@ -415,6 +415,7 @@ public partial class MRubyState
         DefineMethod(StringClass, Intern("reverse"u8), StringMembers.Reverse);
         DefineMethod(StringClass, Intern("reverse!"u8), StringMembers.ReverseBang);
         DefineMethod(StringClass, Intern("slice"u8), StringMembers.OpAref);
+        DefineMethod(StringClass, Intern("split"u8), StringMembers.Split);
 
         DefineMethod(StringClass, Intern("bytesize"u8), StringMembers.ByteCount);
         DefineMethod(StringClass, Intern("bytes"u8), StringMembers.Bytes);

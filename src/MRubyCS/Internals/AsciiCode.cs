@@ -118,6 +118,9 @@ static class AsciiCode
 
     public static bool IsLineBreak(byte c) => c is (byte)'\n' or (byte)'\r';
 
+    public static bool IsWhiteSpace(byte c) => c == (byte)' ' ||
+                                               (c - (byte)'\t' < 5);
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte ToUpper(byte b) => (byte)(b & 0xDF); // 0xDF = ~0x20
 

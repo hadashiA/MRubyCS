@@ -422,6 +422,69 @@ static class StringMembers
         return self;
     });
 
+    [MRubyMethod(OptionalArguments = 2)]
+    public static MRubyMethod Split = new((state, self) =>
+    {
+        var str = self.As<RString>();
+        var argc = state.GetArgumentCount();
+
+        var splitType = RStringSplitType.String;
+        var separator = default(RString?);
+        var limit = -1;
+
+        switch (argc)
+        {
+            case 0:
+                splitType = RStringSplitType.Whitespaces;
+                break;
+            case 1:
+            {
+                var arg0 = state.GetArgumentAt(0);
+                if (!arg0.IsNil)
+                {
+                    state.EnsureValueType(arg0, MRubyVType.String);
+                    separator = arg0.As<RString>();
+                }
+                break;
+            }
+            case 2:
+            {
+                var arg0 = state.GetArgumentAt(0);
+                if (!arg0.IsNil)
+                {
+                    state.EnsureValueType(arg0, MRubyVType.String);
+                    separator = arg0.As<RString>();
+                }
+                limit = (int)state.GetArgumentAsIntegerAt(1);
+                break;
+            }
+            default:
+                state.RaiseArgumentNumberError(argc, 0, 2);
+                break;
+        }
+
+        if (separator == null || separator.Length == 1 && separator.AsSpan()[0] == (byte)' ')
+        {
+            splitType = RStringSplitType.Whitespaces;
+        }
+
+        var result = state.NewArray();
+        switch (splitType)
+        {
+            case RStringSplitType.Whitespaces:
+            {
+                str.SplitByWhitespacesTo(result, limit);
+                break;
+            }
+            case RStringSplitType.String:
+            {
+                str.SplitBytSeparatorTo(result, separator!, limit);
+                break;
+            }
+        }
+        return MRubyValue.From(result);
+    });
+
     [MRubyMethod]
     public static MRubyMethod ByteCount = new((state, self) =>
     {

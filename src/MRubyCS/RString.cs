@@ -28,6 +28,12 @@ enum RStringRangeType
     OutOfRange = -1
 }
 
+enum RStringSplitType
+{
+    Whitespaces,
+    String
+}
+
 public class RString : RObject, IEquatable<RString>
 #if NET6_0_OR_GREATER
     , ISpanFormattable, IUtf8SpanFormattable
@@ -528,6 +534,85 @@ public class RString : RObject, IEquatable<RString>
             utf8Pos--;
         }
         return -1;
+    }
+
+    public void SplitByWhitespacesTo(RArray result, int limit = -1)
+    {
+        var span = AsSpan();
+        var i = 0;
+
+        var skip = true;
+        var elementStart = 0;
+        var elementEnd = 0;
+        while (i < span.Length)
+        {
+            var ch = span[i++];
+            if (skip)
+            {
+                if (AsciiCode.IsWhiteSpace(ch))
+                {
+                    elementStart = i;
+                }
+                else
+                {
+                    elementEnd = i;
+                    skip = false;
+                    if (limit >= 0 && limit <= i) break;
+                }
+            }
+            else if (AsciiCode.IsWhiteSpace(ch))
+            {
+                var slice = span.Slice(elementStart, elementEnd - elementStart);
+                var element = new RString(slice, Class);
+
+                result.Push(MRubyValue.From(element));
+                skip = true;
+                elementStart = i;
+            }
+            else
+            {
+                elementEnd = i;
+            }
+        }
+
+        if (span.Length > 0 && elementStart < span.Length && (limit < 0 || limit > result.Length))
+        {
+            var remaining = SubByteSequence(elementStart, span.Length - elementStart)!;
+            result.Push(MRubyValue.From(remaining));
+        }
+    }
+
+    public void SplitBytSeparatorTo(RArray result, RString separator, int limit = -1)
+    {
+        var span = AsSpan();
+        var separatorSpan = separator.AsSpan();
+
+        var i = 0;
+        while (i < span.Length)
+        {
+            if (separatorSpan.Length > 0)
+            {
+                var elementEnd = span[i..].IndexOf(separatorSpan);
+                if (elementEnd < 0) break;
+
+                var slice = span.Slice(i, elementEnd);
+                result.Push(MRubyValue.From(new RString(slice, Class)));
+                i += elementEnd + separatorSpan.Length;
+            }
+            else
+            {
+                var l = Utf8Helper.GetUtf8SequenceLength(span[i]);
+                var slice = span.Slice(i, l);
+                result.Push(MRubyValue.From(new RString(slice, Class)));
+                i += l;
+            }
+        }
+
+        if (span.Length > 0 && i < span.Length && (limit < 0 || limit > result.Length))
+        {
+            var remaining = SubByteSequence(i, span.Length - i)!;
+            result.Push(MRubyValue.From(remaining));
+        }
     }
 
     internal static uint GetHashCode(ReadOnlySpan<byte> span)
