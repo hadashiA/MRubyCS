@@ -675,7 +675,7 @@ static class StringMembers
                         result.Concat(str.AsSpan(pos));
                     }
                     break;
-                case var x when AsciiCode.IsAlphabet(x): // 1-9
+                case >= (byte)'1' and <= (byte)'9':
                     // ignore sub-group match (no Regexp supported)
                     break;
                 default:
