@@ -156,7 +156,7 @@ static class StringMembers
     [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod ToI = new((state, self) =>
     {
-        var str = self.As<RString>();
+        var source = self.As<RString>().AsSpan();
 
         var format = 'g';
         if (state.TryGetArgumentAt(0, out var arg0))
@@ -183,19 +183,49 @@ static class StringMembers
             }
         }
 
-        Utf8Parser.TryParse(str.AsSpan(), out int result, out var consumed, format);
-        return MRubyValue.From(result);
+        bool result;
+        long value;
+        if (source.Length > 64)
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(source.Length);
+            AsciiCode.PrepareNumber(source, buffer);
+            result = format == 'b'
+                ? AsciiCode.TryParseBinary(buffer, out value)
+                : Utf8Parser.TryParse(buffer, out value, out var consumed, format);
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+        else
+        {
+            Span<byte> buffer = stackalloc byte[source.Length];
+            AsciiCode.PrepareNumber(source, buffer);
+            result = format == 'b'
+            ? AsciiCode.TryParseBinary(buffer, out value)
+            : Utf8Parser.TryParse(buffer, out value, out var consumed, format);
+        }
+        return result ? MRubyValue.From(value) : MRubyValue.From(0);
     });
 
     [MRubyMethod]
     public static MRubyMethod ToF = new((state, self) =>
     {
-        var str = self.As<RString>();
-        if (Utf8Parser.TryParse(str.AsSpan(), out double value, out var consumed, 'f'))
+        var source = self.As<RString>().AsSpan();
+
+        bool result;
+        double value;
+        if (source.Length > 64)
         {
-            return MRubyValue.From(value);
+            var buffer = ArrayPool<byte>.Shared.Rent(source.Length);
+            AsciiCode.PrepareNumber(source, buffer);
+            ArrayPool<byte>.Shared.Return(buffer);
+            result = Utf8Parser.TryParse(buffer, out value, out var consumed, 'g');
         }
-        return MRubyValue.From(0f);
+        else
+        {
+            Span<byte> buffer = stackalloc byte[source.Length];
+            AsciiCode.PrepareNumber(source, buffer);
+            result = Utf8Parser.TryParse(buffer, out value, out var consumed, 'g');
+        }
+        return result ? MRubyValue.From(value) : MRubyValue.From(0f);
     });
 
     [MRubyMethod]
@@ -645,15 +675,7 @@ static class StringMembers
                         result.Concat(str.AsSpan(pos));
                     }
                     break;
-                case (byte)'1':
-                case (byte)'2':
-                case (byte)'3':
-                case (byte)'4':
-                case (byte)'5':
-                case (byte)'6':
-                case (byte)'7':
-                case (byte)'8':
-                case (byte)'9':
+                case var x when AsciiCode.IsAlphabet(x): // 1-9
                     // ignore sub-group match (no Regexp supported)
                     break;
                 default:

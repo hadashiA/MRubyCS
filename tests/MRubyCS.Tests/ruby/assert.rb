@@ -1,3 +1,5 @@
+$undefined = Object.new
+
 ##
 # Verify a code block.
 #
@@ -133,6 +135,19 @@ def assert_not_match(*args); _assert_match(false, *args) end
 
 def assert_include(*args); _assert_include(true, *args) end
 def assert_not_include(*args); _assert_include(false, *args) end
+
+def assert_operator(*args); _assert_operator(true, *args) end
+def assert_not_operator(*args); _assert_operator(false, *args) end
+
+def _assert_operator(affirmed, obj1, op, obj2 = $undefined, msg = nil)
+  return _assert_predicate(affirmed, obj1, op, msg) if $undefined.equal?(obj2)
+  unless ret = obj1.__send__(op, obj2) == affirmed
+    diff = "    Expected #{obj1.inspect} to #{'not ' unless affirmed}be #{op} #{obj2.inspect}."
+    $asserts.push [false, msg, diff]
+  else
+    $asserts.push [true, msg]
+  end
+end
 
 def _assert_include(affirmed, collection, obj, msg = nil)
   unless ret = collection.include?(obj) == affirmed

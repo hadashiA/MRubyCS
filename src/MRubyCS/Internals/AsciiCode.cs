@@ -82,10 +82,13 @@ static class Utf8Helper
 static class AsciiCode
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsDigit(byte c) => (c | 0x20) - (byte)'0' < 10;
+    public static bool IsDigit(byte c) => (byte)((c | 0x20) - (byte)'0') < 10;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsAlphabet(byte c) => (byte)((c | 0x20) - (byte)'a') < 26;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsHexAlphabet(byte c) => (byte)((c | 0x20) - (byte)'a') < 6;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsAscii(byte c) => c <= 0x7f;
@@ -95,9 +98,6 @@ static class AsciiCode
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsLower(byte c) => c - (byte)'a' < 26;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsBlank(byte c) => c is (byte)' ' or (byte)'\t';
 
     public static bool IsIdentifier(byte c) => IsAlphabet(c) ||
                                                IsDigit(c) ||
@@ -143,5 +143,70 @@ static class AsciiCode
         {
             span[i] = ToLower(span[i]);
         }
+    }
+
+    public static void PrepareNumber(ReadOnlySpan<byte> source, Span<byte> destination)
+    {
+        var i = 0;
+        var j = 0;
+
+        while (i < source.Length && IsWhiteSpace(source[i]))
+        {
+            i++;
+        }
+
+        if (i >= source.Length ||
+            (!IsDigit(source[i]) &&
+             !IsHexAlphabet(source[i]) &&
+             source[i] != '+' && source[i] != '-' && source[i] != '.'))
+        {
+            return;
+        }
+
+        var allowUnderscore = false;
+        while (i < source.Length)
+        {
+            var ch = source[i++];
+            if (IsDigit(ch))
+            {
+                destination[j++] = ch;
+                allowUnderscore = true;
+            }
+            else if (ch == '+' ||
+                     ch == '-' ||
+                     ch == '.' ||
+                     IsHexAlphabet(ch))
+            {
+                destination[j++] = ch;
+                allowUnderscore = false;
+            }
+            else if (allowUnderscore && ch == '_')
+            {
+                allowUnderscore = false;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    public static bool TryParseBinary(ReadOnlySpan<byte> bytes, out long result)
+    {
+        result = 0;
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            result <<= 1;
+            var b = bytes[i];
+            if (b == (byte)'1')
+            {
+                result |= 1;
+            }
+            else if (b != (byte)'0')
+            {
+                return i > 0;
+            }
+        }
+        return true;
     }
 }
