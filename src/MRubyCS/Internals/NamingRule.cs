@@ -169,17 +169,31 @@ static class NamingRule
         for (var i = 0; i < name.Length; i++)
         {
             var c = name[i];
-            // if (inspect)
-            // {
-            //     var sequenceLength = Utf8Helper.GetUtf8SequenceLength(c);
-            //     if (sequenceLength >= name.Length - i)
-            //     {
-            //         sequenceLength = name.Length - i;
-            //     }
-            //     name.Slice(i, sequenceLength).CopyTo(output[offset..]);
-            //     i += sequenceLength;
-            //     offset += sequenceLength;
-            // }
+            if (inspect)
+            {
+                var sequenceLength = Utf8Helper.GetUtf8SequenceLength(c);
+                if (sequenceLength > 1)
+                {
+                    if (i + sequenceLength > name.Length ||
+                        Utf8Helper.IsFirstUtf8Sequence(name[i + 1]))
+                    {
+                        // invalid
+                        sequenceLength = 1;
+                    }
+                }
+                if (sequenceLength > name.Length - i)
+                {
+                    sequenceLength = name.Length - i;
+                }
+
+                if (sequenceLength > 1)
+                {
+                    name.Slice(i, sequenceLength).CopyTo(output[offset..]);
+                    i += sequenceLength;
+                    offset += sequenceLength;
+                    continue;
+                }
+            }
 
             if (c == '"' || c == '\\' || (c == '#' && IsEvStr(i + 1, name)))
             {
@@ -201,16 +215,10 @@ static class NamingRule
             switch (c)
             {
                 case (byte)'\n':
-                    output[offset++] = (byte)'n';
-                    break;
                 case (byte)'\r':
-                    output[offset++] = (byte)'r';
-                    break;
                 case (byte)'\t':
-                    output[offset++] = (byte)'t';
-                    break;
                 case (byte)'\f':
-                    output[offset++] = (byte)'f';
+                    output[offset++] = c;
                     break;
                 case 11: // '013'
                     output[offset++] = (byte)'v';
