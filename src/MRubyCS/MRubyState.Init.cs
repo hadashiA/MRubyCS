@@ -423,6 +423,7 @@ public partial class MRubyState
         DefineMethod(StringClass, Intern("setbyte"u8), StringMembers.SetByte);
         DefineMethod(StringClass, Intern("byteindex"u8), StringMembers.ByteIndex);
         DefineMethod(StringClass, Intern("byteslice"u8), StringMembers.BytesSlice);
+        DefineMethod(StringClass, Intern("bytesplice"u8), StringMembers.ByteSplice);
 
         DefineMethod(StringClass, Intern("__sub_replace"u8), StringMembers.InternalSubReplace);
     }

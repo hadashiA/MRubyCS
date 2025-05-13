@@ -82,6 +82,17 @@ partial class MRubyState
         return default!;
     }
 
+    public RRange GetArgumentAsRangeAt(int index)
+    {
+        var arg = GetArgumentAt(index);
+        if (arg.Object is RRange range)
+        {
+            return range;
+        }
+        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Range"));
+        return default!;
+    }
+
     public ReadOnlySpan<MRubyValue> GetRestArgumentsAfter(int startIndex) =>
         context.GetRestArgumentsAfter(startIndex);
 

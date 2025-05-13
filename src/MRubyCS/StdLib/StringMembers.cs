@@ -199,8 +199,8 @@ static class StringMembers
             Span<byte> buffer = stackalloc byte[source.Length];
             AsciiCode.PrepareNumber(source, buffer);
             result = format == 'b'
-            ? AsciiCode.TryParseBinary(buffer, out value)
-            : Utf8Parser.TryParse(buffer, out value, out var consumed, format);
+                ? AsciiCode.TryParseBinary(buffer, out value)
+                : Utf8Parser.TryParse(buffer, out value, out var consumed, format);
         }
         return result ? MRubyValue.From(value) : MRubyValue.From(0);
     });
@@ -594,6 +594,106 @@ static class StringMembers
             return MRubyValue.Nil;
         }
         return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
+    });
+
+    [MRubyMethod(RequiredArguments = 2, OptionalArguments = 3)]
+    public static MRubyMethod ByteSplice = new((state, self) =>
+    {
+        var str = self.As<RString>();
+
+        var sourceIndex = 0;
+        var sourceLength = 0;
+        RString value = default!;
+        var valueIndex = 0;
+        var valueLength = 0;
+
+        var argc = state.GetArgumentCount();
+        switch (argc)
+        {
+            case 2:
+                var range = state.GetArgumentAsRangeAt(0);
+                value = state.GetArgumentAsStringAt(1);
+                valueLength = value.Length;
+                if (range.Calculate(str.Length, false, out sourceIndex, out sourceLength) != RangeCalculateResult.Ok)
+                {
+                    goto default;
+                }
+                break;
+            case 3:
+                var range1 = state.GetArgumentAsRangeAt(0);
+                value = state.GetArgumentAsStringAt(1);
+                var range2 = state.GetArgumentAsRangeAt(2);
+                if (range1.Calculate(str.Length, false, out sourceIndex, out sourceLength) != RangeCalculateResult.Ok)
+                {
+                    goto default;
+                }
+                if (range2.Calculate(value.Length, false, out valueIndex, out valueLength) != RangeCalculateResult.Ok)
+                {
+                    goto default;
+                }
+                break;
+            case 5:
+                sourceIndex = (int)state.GetArgumentAsIntegerAt(0);
+                sourceLength = (int)state.GetArgumentAsIntegerAt(1);
+                value = state.GetArgumentAsStringAt(2);
+                valueIndex = (int)state.GetArgumentAsIntegerAt(3);
+                valueLength = (int)state.GetArgumentAsIntegerAt(4);
+                break;
+            default:
+                state.RaiseArgumentNumberError(argc, 2, 5);
+                break;
+        }
+
+        if (sourceIndex < 0)
+        {
+            sourceIndex += str.Length;
+        }
+        if (valueIndex < 0)
+        {
+            valueIndex += value.Length;
+        }
+        if (str.Length < sourceIndex ||
+            sourceIndex < 0 ||
+            value.Length < valueIndex ||
+            valueIndex < 0)
+        {
+            state.Raise(Names.IndexError, "index out of string"u8);
+        }
+        if (sourceLength < 0 || valueLength < 0)
+        {
+            state.Raise(Names.IndexError, "negative length"u8);
+        }
+
+        if (str.Length < sourceIndex + sourceLength)
+        {
+            sourceLength = str.Length - sourceIndex;
+        }
+        if (value.Length < valueIndex + valueLength)
+        {
+            valueLength = value.Length - valueIndex;
+        }
+
+        if (sourceLength >= valueLength)
+        {
+            var currentLength = str.Length;
+            str.MakeModifiable(currentLength - (sourceLength - valueLength), true);
+            value.AsSpan(valueIndex, valueLength).CopyTo(str.AsSpan(sourceIndex));
+            if (sourceLength >= valueLength)
+            {
+                str.AsSpan(sourceIndex + valueLength, str.Length - (sourceIndex + sourceLength)).CopyTo(
+                    str.AsSpan(sourceIndex + sourceLength));
+            }
+        }
+        else
+        {
+            var currentLength = str.Length;
+            str.MakeModifiable(currentLength + valueLength - sourceLength, true);
+            str.AsSpan(sourceIndex + sourceLength, currentLength - (sourceIndex + sourceLength)).CopyTo(
+                str.AsSpan(sourceIndex + valueLength));
+            value.AsSpan(valueIndex, valueLength).CopyTo(
+                str.AsSpan(sourceIndex));
+        }
+        return self;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
