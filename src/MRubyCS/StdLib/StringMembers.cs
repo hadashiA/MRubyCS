@@ -620,16 +620,29 @@ static class StringMembers
                 }
                 break;
             case 3:
-                var range1 = state.GetArgumentAsRangeAt(0);
-                value = state.GetArgumentAsStringAt(1);
-                var range2 = state.GetArgumentAsRangeAt(2);
-                if (range1.Calculate(str.Length, false, out sourceIndex, out sourceLength) != RangeCalculateResult.Ok)
+                var arg0 = state.GetArgumentAt(0);
+                if (arg0.IsInteger)
                 {
-                    goto default;
+                    sourceIndex = (int)state.ToInteger(arg0);
+                    sourceLength = (int)state.GetArgumentAsIntegerAt(1);
+                    value = state.GetArgumentAsStringAt(2);
+                    valueLength = value.Length;
                 }
-                if (range2.Calculate(value.Length, false, out valueIndex, out valueLength) != RangeCalculateResult.Ok)
+                else
                 {
-                    goto default;
+                    state.EnsureValueType(arg0, MRubyVType.Range);
+                    var range1 = arg0.As<RRange>();
+                    value = state.GetArgumentAsStringAt(1);
+                    var range2 = state.GetArgumentAsRangeAt(2);
+
+                    if (range1.Calculate(str.Length, false, out sourceIndex, out sourceLength) != RangeCalculateResult.Ok)
+                    {
+                        goto default;
+                    }
+                    if (range2.Calculate(value.Length, false, out valueIndex, out valueLength) != RangeCalculateResult.Ok)
+                    {
+                        goto default;
+                    }
                 }
                 break;
             case 5:
@@ -676,12 +689,13 @@ static class StringMembers
         if (sourceLength >= valueLength)
         {
             var currentLength = str.Length;
-            str.MakeModifiable(currentLength - (sourceLength - valueLength), true);
+            var newLength = currentLength - (sourceLength - valueLength);
+            str.MakeModifiable(newLength, true);
             value.AsSpan(valueIndex, valueLength).CopyTo(str.AsSpan(sourceIndex));
-            if (sourceLength >= valueLength)
+            if (sourceLength > valueLength)
             {
-                str.AsSpan(sourceIndex + valueLength, str.Length - (sourceIndex + sourceLength)).CopyTo(
-                    str.AsSpan(sourceIndex + sourceLength));
+                str.AsSpan(sourceIndex + sourceLength, currentLength - (sourceIndex + sourceLength)).CopyTo(
+                    str.AsSpan(sourceIndex + valueLength));
             }
         }
         else
