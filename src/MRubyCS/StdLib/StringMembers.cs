@@ -297,7 +297,7 @@ static class StringMembers
                 state.RaiseArgumentNumberError(argc, 1, 2);
                 break;
         }
-        var result = str.IndexOfFromRight(target, pos);
+        var result = str.LstIndexOf(target, pos);
         return result < 0 ? MRubyValue.Nil : MRubyValue.From(result);
     });
 

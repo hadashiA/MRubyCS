@@ -491,7 +491,7 @@ public class RString : RObject, IEquatable<RString>
         return -1;
     }
 
-    public int IndexOfFromRight(ReadOnlySpan<byte> target, int utf8Pos = 0)
+    public int LstIndexOf(ReadOnlySpan<byte> target, int utf8Pos = 0)
     {
         var span = AsSpan();
         var charCount = Encoding.UTF8.GetCharCount(span);
@@ -525,7 +525,7 @@ public class RString : RObject, IEquatable<RString>
             {
                 i--;
             }
-            if (i + target.Length <= pos && span[i..].StartsWith(target))
+            if (i <= pos && span[i..].StartsWith(target))
             {
                 return utf8Pos;
             }
