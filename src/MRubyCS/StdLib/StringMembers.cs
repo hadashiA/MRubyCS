@@ -588,13 +588,12 @@ static class StringMembers
                 return MRubyValue.Nil;
         }
 
-        if (empty || length != 0)
+        var result = str.SubByteSequence(start, length);
+        if (!empty && (result == null || result.Length == 0))
         {
-            var result = str.SubByteSequence(start, length);
-            return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
+            return MRubyValue.Nil;
         }
-
-        return MRubyValue.Nil;
+        return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
