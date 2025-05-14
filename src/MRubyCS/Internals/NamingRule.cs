@@ -215,10 +215,16 @@ static class NamingRule
             switch (c)
             {
                 case (byte)'\n':
+                    output[offset++] = (byte)'n';
+                    break;
                 case (byte)'\r':
+                    output[offset++] = (byte)'r';
+                    break;
                 case (byte)'\t':
+                    output[offset++] = (byte)'t';
+                    break;
                 case (byte)'\f':
-                    output[offset++] = c;
+                    output[offset++] = (byte)'f';
                     break;
                 case 11: // '013'
                     output[offset++] = (byte)'v';
