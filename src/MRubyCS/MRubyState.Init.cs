@@ -370,17 +370,62 @@ public partial class MRubyState
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
         DefineMethod(FloatClass, Names.OpCmp, NumericMembers.OpCmp);
         DefineMethod(FloatClass, Intern("divmod"u8), FloatMembers.DivMod);
+
+        DefineConst(FloatClass, Intern("INFINITY"u8), MRubyValue.From(double.PositiveInfinity));
+        DefineConst(FloatClass, Intern("NAN"u8), MRubyValue.From(double.NaN));
     }
 
     void InitString()
     {
+        DefineMethod(KernelModule, Intern("__ENCODING__"u8), (state, _) =>
+            MRubyValue.From(state.NewString("UTF-8"u8)));
+
         StringClass = DefineClass(Intern("String"u8), ObjectClass, MRubyVType.String);
+        DefineMethod(StringClass, Names.Initialize, StringMembers.Initialize);
+        DefineMethod(StringClass, Names.InitializeCopy, StringMembers.InitializeCopy);
         DefineMethod(StringClass, Names.OpEq, StringMembers.OpEq);
         DefineMethod(StringClass, Names.QEql, StringMembers.OpEq);
         DefineMethod(StringClass, Names.OpCmp, StringMembers.OpCmp);
+        DefineMethod(StringClass, Names.OpAref, StringMembers.OpAref);
+        DefineMethod(StringClass, Names.OpAset, StringMembers.OpAset);
+        DefineMethod(StringClass, Names.OpMul, StringMembers.Times);
         DefineMethod(StringClass, Names.Inspect, StringMembers.Inspect);
         DefineMethod(StringClass, Names.ToSym, StringMembers.ToSym);
+        DefineMethod(StringClass, Names.ToS, StringMembers.ToS);
         DefineMethod(StringClass, Names.ToI, StringMembers.ToI);
+        DefineMethod(StringClass, Intern("to_f"u8), StringMembers.ToF);
+        DefineMethod(StringClass, Intern("size"u8), StringMembers.Size);
+        DefineMethod(StringClass, Intern("length"u8), StringMembers.Size);
+        DefineMethod(StringClass, Intern("empty?"u8), StringMembers.Empty);
+        DefineMethod(StringClass, Intern("include?"u8), StringMembers.Include);
+        DefineMethod(StringClass, Intern("index"u8), StringMembers.Index);
+        DefineMethod(StringClass, Intern("rindex"u8), StringMembers.RIndex);
+        DefineMethod(StringClass, Intern("intern"u8), StringMembers.Intern);
+        DefineMethod(StringClass, Intern("replace"u8), StringMembers.Replace);
+        DefineMethod(StringClass, Intern("chomp"u8), StringMembers.Chomp);
+        DefineMethod(StringClass, Intern("chomp!"u8), StringMembers.ChompBang);
+        DefineMethod(StringClass, Intern("chop"u8), StringMembers.Chop);
+        DefineMethod(StringClass, Intern("chop!"u8), StringMembers.ChopBang);
+        DefineMethod(StringClass, Intern("upcase"u8), StringMembers.Upcase);
+        DefineMethod(StringClass, Intern("upcase!"u8), StringMembers.UpcaseBang);
+        DefineMethod(StringClass, Intern("downcase"u8), StringMembers.Downcase);
+        DefineMethod(StringClass, Intern("downcase!"u8), StringMembers.DowncaseBang);
+        DefineMethod(StringClass, Intern("capitalize"u8), StringMembers.Capitalize);
+        DefineMethod(StringClass, Intern("capitalize!"u8), StringMembers.CapitalizeBang);
+        DefineMethod(StringClass, Intern("reverse"u8), StringMembers.Reverse);
+        DefineMethod(StringClass, Intern("reverse!"u8), StringMembers.ReverseBang);
+        DefineMethod(StringClass, Intern("slice"u8), StringMembers.OpAref);
+        DefineMethod(StringClass, Intern("split"u8), StringMembers.Split);
+
+        DefineMethod(StringClass, Intern("bytesize"u8), StringMembers.ByteCount);
+        DefineMethod(StringClass, Intern("bytes"u8), StringMembers.Bytes);
+        DefineMethod(StringClass, Intern("getbyte"u8), StringMembers.GetByte);
+        DefineMethod(StringClass, Intern("setbyte"u8), StringMembers.SetByte);
+        DefineMethod(StringClass, Intern("byteindex"u8), StringMembers.ByteIndex);
+        DefineMethod(StringClass, Intern("byteslice"u8), StringMembers.BytesSlice);
+        DefineMethod(StringClass, Intern("bytesplice"u8), StringMembers.ByteSplice);
+
+        DefineMethod(StringClass, Intern("__sub_replace"u8), StringMembers.InternalSubReplace);
     }
 
     void InitArray()

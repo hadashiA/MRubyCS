@@ -121,7 +121,7 @@ static class ArrayMembers
         var args = state.GetRestArgumentsAfter(0);
 
         var start = array.Length;
-        array.EnsureModifiable(start + args.Length, true);
+        array.MakeModifiable(start + args.Length, true);
 
         var span = array.AsSpan(start, args.Length);
         args.CopyTo(span);
@@ -145,7 +145,7 @@ static class ArrayMembers
         var a2 = state.GetArgumentAsArrayAt(0);
 
         var result = state.NewArray(a1.Length + a2.Length);
-        result.EnsureModifiable(a1.Length + a2.Length, true);
+        result.MakeModifiable(a1.Length + a2.Length, true);
 
         a1.AsSpan().CopyTo(result.AsSpan());
         a2.AsSpan().CopyTo(result.AsSpan(a1.Length));
@@ -282,7 +282,7 @@ static class ArrayMembers
 
         var newLength = array.Length + otherArray.Length;
         var newArray = state.NewArray(newLength);
-        newArray.EnsureModifiable(newLength, true);
+        newArray.MakeModifiable(newLength, true);
 
         var span = newArray.AsSpan();
         array.AsSpan().CopyTo(span);
@@ -318,7 +318,7 @@ static class ArrayMembers
         var source = array.AsSpan();
         var newLength = array.Length * (int)times;
         var result = state.NewArray(newLength);
-        result.EnsureModifiable(newLength, true);
+        result.MakeModifiable(newLength, true);
         for (var i = 0; i < times; i++)
         {
             source.CopyTo(result.AsSpan(array.Length * i));

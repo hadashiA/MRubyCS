@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Text;
+using MRubyCS.Internals;
 
 namespace MRubyCS;
 
@@ -27,24 +28,31 @@ enum RStringRangeType
     OutOfRange = -1
 }
 
+enum RStringSplitType
+{
+    Whitespaces,
+    String
+}
+
 public class RString : RObject, IEquatable<RString>
 #if NET6_0_OR_GREATER
     , ISpanFormattable, IUtf8SpanFormattable
 #endif
 {
-    public int Length { get; internal set; }
+    public int Length { get; private set; }
 
     byte[] buffer;
+    int offset;
     bool bufferOwned;
 
     public static RString Owned(byte[] value, RClass stringClass)
     {
-        return new RString(value, value.Length, stringClass);
+        return new RString(value, 0, value.Length, stringClass);
     }
 
-    public static RString Owned(byte[] value, int length, RClass stringClass)
+    public static RString Owned(byte[] value, int offset, int length, RClass stringClass)
     {
-        return new RString(value, length, stringClass);
+        return new RString(value, offset, length, stringClass);
     }
 
     public static RString operator+(RString a, RString b)
@@ -76,12 +84,14 @@ public class RString : RObject, IEquatable<RString>
     {
         buffer = shared.buffer;
         Length = shared.Length;
+        offset = shared.offset;
         bufferOwned = false;
     }
 
-    RString(byte[] buffer, int length, RClass stringClass) : base(MRubyVType.String, stringClass)
+    RString(byte[] buffer, int offset, int length, RClass stringClass) : base(MRubyVType.String, stringClass)
     {
         this.buffer = buffer;
+        this.offset = offset;
         Length = length;
         bufferOwned = true;
         MarkAsFrozen();
@@ -106,54 +116,143 @@ public class RString : RObject, IEquatable<RString>
 
     public override string ToString()
     {
-        return Encoding.UTF8.GetString(buffer, 0, Length);
+        return Encoding.UTF8.GetString(buffer, offset, Length);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Span<byte> AsSpan() => buffer.AsSpan(0, Length);
+    public Span<byte> AsSpan() => buffer.AsSpan(offset, Length);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Span<byte> AsSpan(int start) => buffer.AsSpan(offset + start, Length - start);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Span<byte> AsSpan(int start, int length) => buffer.AsSpan(offset + start, length);
 
     public RString Dup() => new(this);
 
-    public RString SubSequence(int start, int length)
+    internal override RObject Clone()
     {
-        return new RString(AsSpan().Slice(start, length), Class);
+        var clone = new RString(buffer.Length, Class);
+        InstanceVariables.CopyTo(clone.InstanceVariables);
+        return clone;
     }
 
-    public RString SubString(int start, int length)
+    public RString? SubString(int utf8Start, int utf8Length)
     {
-        // TODO:
-        var str = ToString();
-        var substr = str.Substring(start, length);
-        var utf8Substr = Encoding.UTF8.GetBytes(substr);
-        return new RString(utf8Substr, Class);
-    }
-
-    public RString? GetAref(MRubyValue indexValue, int rangeLength = -1)
-    {
-        switch (CalculateStringRange(indexValue, rangeLength, out var calculatedOffset, out var calculatedLength))
+        var span = AsSpan();
+        var charCount = Encoding.UTF8.GetCharCount(span);
+        if (TryConvertRange(charCount, ref utf8Start, ref utf8Length))
         {
-            case RStringRangeType.ByteRangeCorrected:
-            {
-                if (indexValue.Object is RString str)
-                {
-                    return str.Dup();
-                }
-                return SubSequence(calculatedOffset, calculatedLength);
-            }
+            var start = Utf8Helper.FindByteIndexAt(span, utf8Start);
+            var end = Utf8Helper.FindByteIndexAt(span[start..], utf8Length) + start;
+
+            var slice = span.Slice(start, end - start);
+            return new RString(slice, Class);
+        }
+        return null;
+    }
+
+    public RString? SubByteSequence(int bytesStart, int bytesLength)
+    {
+        var span = AsSpan();
+        if (TryConvertRange(span.Length, ref bytesStart, ref bytesLength))
+        {
+            var slice = span.Slice(bytesStart, bytesLength);
+            return new RString(slice, Class);
+        }
+        return null;
+    }
+
+    public RString? GetPartial(MRubyState state, MRubyValue indexValue, int? rangeLength = null)
+    {
+        switch (CalculateStringRange(state, indexValue, rangeLength, out var calculatedOffset, out var calculatedLength))
+        {
+            case RStringRangeType.CharRangeCorrected:
+                var span = AsSpan();
+                var bytesOffset = Utf8Helper.FindByteIndexAt(span, calculatedOffset);
+                var bytesLength = Utf8Helper.FindByteIndexAt(span, calculatedLength);
+                return new RString(span.Slice(bytesOffset, bytesLength), Class);
+
             case RStringRangeType.CharRange:
                 return SubString(calculatedOffset, calculatedLength);
 
-            case RStringRangeType.CharRangeCorrected:
-            {
-                if (indexValue.Object is RString str)
+            case RStringRangeType.ByteRangeCorrected:
+                if (indexValue.Object is RString targetStr)
                 {
-                    return str.Dup();
+                    return targetStr.Dup();
                 }
                 return SubString(calculatedOffset, calculatedLength);
-            }
-            default:
-                return null;
         }
+        return null;
+    }
+
+    public void SetPartial(MRubyState state, MRubyValue indexValue, int? rangeLength, RString? value)
+    {
+        var span = AsSpan();
+
+        switch (CalculateStringRange(state, indexValue, rangeLength, out var calculatedOffset, out var calculatedLength))
+        {
+            case RStringRangeType.CharRange:
+                if (calculatedLength < 0)
+                {
+                    state.Raise(Names.IndexError, "nagative length"u8);
+                }
+                var charCount = Encoding.UTF8.GetCharCount(span);
+                if (calculatedOffset < 0)
+                {
+                    calculatedOffset += charCount;
+                }
+                if (calculatedOffset < 0 || calculatedOffset > charCount)
+                {
+                    state.Raise(Names.IndexError, state.NewString($"index {state.Stringify(indexValue)} out of string"));
+                }
+                calculatedOffset = Utf8Helper.FindByteIndexAt(span, calculatedOffset);
+                calculatedLength = Utf8Helper.FindByteIndexAt(span, calculatedLength);
+                break;
+            case RStringRangeType.CharRangeCorrected:
+                calculatedOffset = Utf8Helper.FindByteIndexAt(span, calculatedOffset);
+                calculatedLength = Utf8Helper.FindByteIndexAt(span, calculatedLength);
+                break;
+            case RStringRangeType.ByteRangeCorrected:
+                break;
+            case RStringRangeType.OutOfRange:
+                state.Raise(Names.IndexError, "string not matched"u8);
+                break;
+        }
+
+        var pos = calculatedOffset;
+        var end = calculatedOffset + calculatedLength;
+        if (end > Length) end = Length;
+
+        if (pos < 0 || pos > Length)
+        {
+            state.Raise(Names.IndexError, state.NewString($"index {pos} out of string"));
+        }
+
+        var currentLength = Length;
+        var newLength = (value?.Length ?? 0) + (Length - (end - pos));
+        MakeModifiable(newLength, true);
+
+        // move latter half
+        if (newLength != currentLength)
+        {
+            AsSpan(end, currentLength - end)
+                .CopyTo(AsSpan(newLength - (currentLength - end)));
+        }
+
+        // insert value
+        if (value != null)
+        {
+            value.AsSpan().CopyTo(AsSpan(pos));
+        }
+    }
+
+    public void Concat(byte ch)
+    {
+        var currentLength = Length;
+        var newLength = currentLength + 1;
+        MakeModifiable(newLength, true);
+        AsSpan()[currentLength] = ch;
     }
 
     public void Concat(RString other)
@@ -163,23 +262,118 @@ public class RString : RObject, IEquatable<RString>
 
     public void Concat(ReadOnlySpan<byte> utf8)
     {
-        var newLength = Length + utf8.Length;
-        if (bufferOwned)
+        var currentLength = Length;
+        var newLength = currentLength + utf8.Length;
+        MakeModifiable(newLength, true);
+        utf8.CopyTo(AsSpan(currentLength));
+    }
+
+    public void Upcase()
+    {
+        if (Length <= 0) return;
+        MakeModifiable(Length);
+        var span = AsSpan();
+        AsciiCode.ToUpper(span);
+    }
+
+    public void Downcase()
+    {
+        if (Length <= 0) return;
+        MakeModifiable(Length);
+        var span = AsSpan();
+        AsciiCode.ToLower(span);
+    }
+
+    public void Capitalize()
+    {
+        if (Length <= 0) return;
+        MakeModifiable(Length);
+
+        var firstChar = buffer[offset];
+        if (AsciiCode.IsLower(firstChar))
         {
-            if (buffer.Length < newLength)
-            {
-                Array.Resize(ref buffer, newLength);
-            }
+            buffer[offset] = AsciiCode.ToUpper(firstChar);
+            AsciiCode.ToLower(buffer.AsSpan(offset + 1));
         }
         else
         {
-            var newBuffer = new byte[newLength];
-            AsSpan().CopyTo(newBuffer);
-            buffer = newBuffer;
-            bufferOwned = true;
+            AsciiCode.ToLower(buffer.AsSpan());
         }
-        utf8.CopyTo(buffer.AsSpan(Length));
-        Length = newLength;
+    }
+
+    public void Chomp()
+    {
+        var span = AsSpan();
+        if (span.Length > 0)
+        {
+            switch (span[^1])
+            {
+                case (byte)'\n':
+                    if (span.Length > 1 && span[^2] == '\r')
+                    {
+                        Length -= 2;
+                    }
+                    else
+                    {
+                        Length--;
+                    }
+                    break;
+                case (byte)'\r':
+                    Length--;
+                    break;
+            }
+        }
+    }
+
+    public void Chomp(ReadOnlySpan<byte> paragraph)
+    {
+        var span = AsSpan();
+        var index = span.LastIndexOf(paragraph);
+        if (index >= 0 && span.Length - index == paragraph.Length)
+        {
+            Length -= paragraph.Length;
+        }
+    }
+
+    public void Chop()
+    {
+        var span = AsSpan();
+        if (span.Length > 0)
+        {
+            var lastChar = span[^1];
+            switch (lastChar)
+            {
+                case (byte)'\n':
+                    if (span.Length > 1 && span[^2] == '\r')
+                    {
+                        Length -= 2;
+                    }
+                    else
+                    {
+                        Length--;
+                    }
+                    break;
+                case var _ when AsciiCode.IsAscii(lastChar):
+                    Length--;
+                    break;
+                default: // parse as utf8
+                    var index = span.Length - 1;
+                    while (index > 0 && !Utf8Helper.IsFirstUtf8Sequence(span[index]))
+                    {
+                        index--;
+                    }
+                    var lastUtf8Sequence = span[index];
+                    Length -= Utf8Helper.GetUtf8SequenceLength(lastUtf8Sequence);
+                    break;
+            }
+        }
+    }
+
+    public void CopyTo(RString other)
+    {
+        other.MakeModifiable(Length);
+        other.Length = Length;
+        AsSpan().CopyTo(other.AsSpan());
     }
 
     // TODO:
@@ -187,7 +381,12 @@ public class RString : RObject, IEquatable<RString>
     {
         var a = Encoding.UTF8.GetString(AsSpan());
         var b = Encoding.UTF8.GetString(other.AsSpan());
-        return string.CompareOrdinal(a, b);
+        return string.CompareOrdinal(a, b) switch
+        {
+            > 0 => 1,
+            < 0 => -1,
+            _ => 0
+        };
     }
 
     public string ToString(string? format, IFormatProvider? formatProvider)
@@ -227,58 +426,193 @@ public class RString : RObject, IEquatable<RString>
     }
 #endif
 
-    public int IndexOf(ReadOnlySpan<byte> str, int offset = 0)
+    public int ByteIndexOf(ReadOnlySpan<byte> target, int pos = 0)
     {
-        if (Length - offset < str.Length)
+        if (pos < 0)
         {
-            return -1;
+            pos += target.Length;
+            if (pos < 0)
+            {
+                return -1;
+            }
         }
-        if (offset > 0)
+
+        if (Length - pos < target.Length) return -1;
+        if (target.Length <= 0) return pos;
+
+        if (pos > 0)
         {
-            str = str[..offset];
+            var result = AsSpan(pos).IndexOf(target);
+            return result >= 0 ? result + pos : result;
         }
-        return AsSpan().IndexOf(str);
+        return AsSpan().IndexOf(target);
     }
 
-    RStringRangeType CalculateStringRange(
-        MRubyValue index,
-        int indexLength,
-        out int calculatedOffset,
-        out int calculatedLength)
+    public int IndexOf(ReadOnlySpan<byte> target, int utf8Pos = 0)
     {
-        if (indexLength >= 0)
+        var span = AsSpan();
+        var charCount = Encoding.UTF8.GetCharCount(span);
+
+        if (utf8Pos < 0)
         {
-            calculatedOffset = (int)index.IntegerValue;
-            calculatedLength = indexLength;
-            return RStringRangeType.CharRange;
+            utf8Pos += charCount;
+            if (utf8Pos < 0)
+            {
+                return -1;
+            }
         }
 
-        if (index.IsInteger)
-        {
-            calculatedOffset = (int)index.IntegerValue;
-            calculatedLength = 1;
-            return RStringRangeType.CharRange;
-        }
+        var targetCharCount = Encoding.UTF8.GetCharCount(target);
+        if (charCount - utf8Pos < targetCharCount) return -1;
+        if (targetCharCount <= 0) return utf8Pos;
 
-        switch (index.Object)
+        var i = 0;
+        var c = 0;
+        while (i < span.Length)
         {
-            case RString str:
-                calculatedOffset = IndexOf(str);
-                calculatedLength = str.Length;
-                return calculatedOffset < 0
-                    ? RStringRangeType.OutOfRange
-                    : RStringRangeType.ByteRangeCorrected;
-            case RRange range:
-                if (range.Calculate(Length, true, out calculatedOffset, out calculatedLength) == RangeCalculateResult.Ok)
+            if (c >= utf8Pos && span[i..].StartsWith(target))
+            {
+                return c;
+            }
+            var seqLength = Utf8Helper.GetUtf8SequenceLength(span[i]);
+            if (seqLength > 1)
+            {
+                if (i + seqLength > span.Length ||
+                    Utf8Helper.IsFirstUtf8Sequence(span[i + 1]))
                 {
-                    return RStringRangeType.CharRangeCorrected;
+                    // invalid
+                    seqLength = 1;
                 }
-                break;
+            }
+            i += seqLength;
+            c++;
         }
 
-        calculatedOffset = default;
-        calculatedLength = default;
-        return RStringRangeType.OutOfRange;
+        return -1;
+    }
+
+    public int LstIndexOf(ReadOnlySpan<byte> target, int utf8Pos = 0)
+    {
+        var span = AsSpan();
+        var charCount = Encoding.UTF8.GetCharCount(span);
+
+        if (utf8Pos < 0)
+        {
+            utf8Pos += charCount;
+            if (utf8Pos < 0)
+            {
+                return -1;
+            }
+        }
+
+        var targetCharCount = Encoding.UTF8.GetCharCount(target);
+
+        if (charCount < targetCharCount) return -1;
+        if (charCount - utf8Pos < targetCharCount)
+        {
+            utf8Pos = charCount - targetCharCount;
+        }
+
+        if (target.Length <= 0) return utf8Pos;
+
+        var pos = Utf8Helper.FindByteIndexAt(span, utf8Pos);
+        var i = pos;
+        if (i >= span.Length) i = span.Length - 1;
+
+        while (i >= 0)
+        {
+            while (i > 0 && !Utf8Helper.IsFirstUtf8Sequence(span[i]))
+            {
+                i--;
+            }
+            if (i <= pos && span[i..].StartsWith(target))
+            {
+                return utf8Pos;
+            }
+
+            i--;
+            utf8Pos--;
+        }
+        return -1;
+    }
+
+    public void SplitByWhitespacesTo(RArray result, int limit = -1)
+    {
+        var span = AsSpan();
+        var i = 0;
+
+        var skip = true;
+        var elementStart = 0;
+        var elementEnd = 0;
+        while (i < span.Length)
+        {
+            var ch = span[i++];
+            if (skip)
+            {
+                if (AsciiCode.IsWhiteSpace(ch))
+                {
+                    elementStart = i;
+                }
+                else
+                {
+                    elementEnd = i;
+                    skip = false;
+                    if (limit >= 0 && limit <= i) break;
+                }
+            }
+            else if (AsciiCode.IsWhiteSpace(ch))
+            {
+                var slice = span.Slice(elementStart, elementEnd - elementStart);
+                var element = new RString(slice, Class);
+
+                result.Push(MRubyValue.From(element));
+                skip = true;
+                elementStart = i;
+            }
+            else
+            {
+                elementEnd = i;
+            }
+        }
+
+        if (span.Length > 0 && elementStart < span.Length && (limit < 0 || limit > result.Length))
+        {
+            var remaining = SubByteSequence(elementStart, span.Length - elementStart)!;
+            result.Push(MRubyValue.From(remaining));
+        }
+    }
+
+    public void SplitBytSeparatorTo(RArray result, RString separator, int limit = -1)
+    {
+        var span = AsSpan();
+        var separatorSpan = separator.AsSpan();
+
+        var i = 0;
+        while (i < span.Length)
+        {
+            if (separatorSpan.Length > 0)
+            {
+                var elementEnd = span[i..].IndexOf(separatorSpan);
+                if (elementEnd < 0) break;
+
+                var slice = span.Slice(i, elementEnd);
+                result.Push(MRubyValue.From(new RString(slice, Class)));
+                i += elementEnd + separatorSpan.Length;
+            }
+            else
+            {
+                var l = Utf8Helper.GetUtf8SequenceLength(span[i]);
+                var slice = span.Slice(i, l);
+                result.Push(MRubyValue.From(new RString(slice, Class)));
+                i += l;
+            }
+        }
+
+        if (span.Length > 0 && i < span.Length && (limit < 0 || limit > result.Length))
+        {
+            var remaining = SubByteSequence(i, span.Length - i)!;
+            result.Push(MRubyValue.From(remaining));
+        }
     }
 
     internal static uint GetHashCode(ReadOnlySpan<byte> span)
@@ -311,5 +645,108 @@ public class RString : RObject, IEquatable<RString>
         if (ReferenceEquals(this, obj)) return true;
         if (obj.GetType() != GetType()) return false;
         return Equals((RString)obj);
+    }
+
+    static bool TryConvertRange(int maxLength, ref int start, ref int length)
+    {
+        if (maxLength < start || length < 0) return false;
+        if (start < 0)
+        {
+            start += maxLength;
+            if (start < 0) return false;
+        }
+        if (length > maxLength - start)
+        {
+            length = maxLength - start;
+        }
+        if (length <= 0)
+        {
+            length = 0;
+        }
+        return true;
+    }
+
+    internal void MakeModifiable(int capacity, bool expandLength = false)
+    {
+        if (buffer.Length - offset < capacity)
+        {
+            var newLength = buffer.Length * 2;
+            if (newLength - offset < capacity)
+            {
+                newLength = capacity;
+            }
+
+            if (bufferOwned)
+            {
+                Array.Resize(ref buffer, newLength);
+            }
+            else
+            {
+                var newBuffer = new byte[newLength];
+                buffer.AsSpan(offset).CopyTo(newBuffer);
+                buffer = newBuffer;
+                offset = 0;
+                bufferOwned = true;
+            }
+        }
+        else if (!bufferOwned)
+        {
+            buffer = AsSpan().ToArray();
+            bufferOwned = true;
+        }
+
+        if (expandLength)
+        {
+            Length = capacity;
+        }
+    }
+
+    RStringRangeType CalculateStringRange(
+        MRubyState state,
+        MRubyValue index,
+        int? indexLength,
+        out int calculatedOffset,
+        out int calculatedLength)
+    {
+        if (indexLength.HasValue)
+        {
+            calculatedOffset = (int)state.ToInteger(index);
+            calculatedLength = indexLength.Value;
+            return RStringRangeType.CharRange;
+        }
+
+        if (index.IsInteger)
+        {
+            calculatedOffset = (int)index.IntegerValue;
+            calculatedLength = 1;
+            return RStringRangeType.CharRange;
+        }
+
+        var utf8 = AsSpan();
+
+        switch (index.Object)
+        {
+            case RString targetStr:
+                calculatedOffset = utf8.IndexOf(targetStr);
+                calculatedLength = targetStr.Length;
+                return calculatedOffset < 0
+                    ? RStringRangeType.OutOfRange
+                    : RStringRangeType.ByteRangeCorrected;
+            case RRange range:
+                var utf8Length = Encoding.UTF8.GetCharCount(utf8);
+                if (range.Calculate(utf8Length, true, out calculatedOffset, out calculatedLength) == RangeCalculateResult.Ok)
+                {
+                    return RStringRangeType.CharRangeCorrected;
+                }
+                break;
+            default:
+                calculatedOffset = (int)state.ToInteger(index);
+                calculatedLength = 1;
+                return RStringRangeType.CharRange;
+        }
+
+        calculatedOffset = default;
+        calculatedLength = default;
+        return RStringRangeType.OutOfRange;
     }
 }

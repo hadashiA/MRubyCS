@@ -529,7 +529,7 @@ partial class MRubyState
                                     case MRubyVType.Integer:
                                     case MRubyVType.String:
                                     case MRubyVType.Range:
-                                        var substr = str.GetAref(valueB);
+                                        var substr = str.GetPartial(this, valueB);
                                         registerA = substr != null
                                             ? MRubyValue.From(substr)
                                             : MRubyValue.Nil;
@@ -1259,7 +1259,7 @@ partial class MRubyState
                         {
                             case (MRubyVType.Integer, MRubyVType.Integer):
                                 // TODO: overflow handling
-                                registerA = NewInteger(registerA.IntegerValue + rhs.IntegerValue);
+                                registerA = MRubyValue.From(registerA.IntegerValue + rhs.IntegerValue);
                                 goto Next;
                             case (MRubyVType.Integer, MRubyVType.Float):
                                 registerA = MRubyValue.From(registerA.IntegerValue + rhs.FloatValue);
@@ -1294,7 +1294,7 @@ partial class MRubyState
                         switch (registerA.VType)
                         {
                             case MRubyVType.Integer:
-                                registerA = NewInteger(registerA.IntegerValue + rV);
+                                registerA = MRubyValue.From(registerA.IntegerValue + rV);
                                 goto Next;
                             case MRubyVType.Float:
                                 registerA = MRubyValue.From(registerA.FloatValue + rV);
@@ -1322,7 +1322,7 @@ partial class MRubyState
                         {
                             case (MRubyVType.Integer, MRubyVType.Integer):
                                 // TODO: overflow handling
-                                registerA = NewInteger(registerA.IntegerValue - rhs.IntegerValue);
+                                registerA = MRubyValue.From(registerA.IntegerValue - rhs.IntegerValue);
                                 goto Next;
                             case (MRubyVType.Integer, MRubyVType.Float):
                                 registerA = MRubyValue.From(registerA.IntegerValue - rhs.FloatValue);
@@ -1355,7 +1355,7 @@ partial class MRubyState
                         {
                             case (MRubyVType.Integer, MRubyVType.Integer):
                                 // TODO: overflow handling
-                                registerA = NewInteger(registerA.IntegerValue * rhs.IntegerValue);
+                                registerA = MRubyValue.From(registerA.IntegerValue * rhs.IntegerValue);
                                 goto Next;
                             case (MRubyVType.Integer, MRubyVType.Float):
                                 registerA = MRubyValue.From(registerA.IntegerValue * rhs.FloatValue);
@@ -1387,7 +1387,7 @@ partial class MRubyState
                         {
                             case (MRubyVType.Integer, MRubyVType.Integer):
                                 // TODO: overflow handling
-                                registerA = NewInteger(registerA.IntegerValue / rhs.IntegerValue);
+                                registerA = MRubyValue.From(registerA.IntegerValue / rhs.IntegerValue);
                                 goto Next;
                             case (MRubyVType.Integer, MRubyVType.Float):
                                 registerA = MRubyValue.From(registerA.IntegerValue / rhs.FloatValue);

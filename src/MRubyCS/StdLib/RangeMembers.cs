@@ -117,7 +117,7 @@ static class RangeMembers
                 if (!range.Exclusive) len++;
 
                 var array = state.NewArray((int)len);
-                array.EnsureModifiable((int)len, true);
+                array.MakeModifiable((int)len, true);
                 for (var i = 0; i < len; i++)
                 {
                     array[i] = MRubyValue.From(a + i);
