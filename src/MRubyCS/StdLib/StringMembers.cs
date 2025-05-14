@@ -624,7 +624,16 @@ static class StringMembers
                 if (arg0.IsInteger)
                 {
                     sourceIndex = (int)state.ToInteger(arg0);
-                    sourceLength = (int)state.GetArgumentAsIntegerAt(1);
+                    var arg1 = state.GetArgumentAsIntegerAt(1);
+                    // check overflow
+                    if (sourceIndex > str.Length - arg1)
+                    {
+                        sourceLength = str.Length - sourceIndex;
+                    }
+                    else
+                    {
+                        sourceLength = (int)arg1;
+                    }
                     value = state.GetArgumentAsStringAt(2);
                     valueLength = value.Length;
                 }

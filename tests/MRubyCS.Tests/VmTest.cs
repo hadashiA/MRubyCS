@@ -215,17 +215,6 @@ public class VmTest
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
     }
 
-
-    [Test]
-    public void Hoge()
-    {
-        var result = Exec("""
-                          'hello'.index 'l', -2
-                          """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
-    }
-
-
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
         var irep = compiler.Compile(code);
