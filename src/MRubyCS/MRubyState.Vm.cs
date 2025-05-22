@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MRubyCS.Internals;
@@ -521,7 +520,7 @@ partial class MRubyState
                                 registerA = array[(int)valueB.IntegerValue];
                                 goto Next;
                             case RHash hash:
-                                registerA = hash[valueB];
+                                registerA = hash.GetOrDefault(valueB, this);
                                 goto Next;
                             case RString str:
                                 switch (valueB.VType)
@@ -1115,7 +1114,7 @@ partial class MRubyState
                         }
 
                         registers[bb.A] = value;
-                        kdict.As<RHash>().Delete(key);
+                        kdict.As<RHash>().TryDelete(key, out _);
                         goto Next;
                     }
                     case OpCode.KeyP:
@@ -1135,7 +1134,7 @@ partial class MRubyState
                         if (kargOffset >= 0 &&
                             registers[kargOffset].Object is RHash { Length: > 0 } hash)
                         {
-                            var key1 = hash.Keys.First();
+                            var key1 = hash.Keys[0];
                             Raise(Names.ArgumentError, NewString($"unknown keyword: {Stringify(key1)}"));
                         }
                         goto Next;

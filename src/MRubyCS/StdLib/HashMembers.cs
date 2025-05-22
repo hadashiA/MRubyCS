@@ -18,6 +18,19 @@ static class HashMembers
         return self;
     });
 
+    [MRubyMethod]
+    public static MRubyMethod InitializeCopy = new((state, self) =>
+    {
+        var hash = self.As<RHash>();
+        var other = state.GetArgumentAsHashAt(0);
+
+        if (hash != other)
+        {
+            other.ReplaceTo(hash);
+        }
+        return self;
+    });
+
     public static MRubyMethod ToS = new((state, self) =>
     {
         var hash = self.As<RHash>();
@@ -57,82 +70,212 @@ static class HashMembers
         {
             return value;
         }
-        return Default(state, hash, key);
+        return state.Send(self, Names.Default);
     });
-
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpAset = new((state, self) =>
     {
-        state.EnsureArgumentCount(2);
         var hash = self.As<RHash>();
+        state.EnsureNotFrozen(hash);
+
         var key = state.GetArgumentAt(0);
+        if (key.Object is RString { IsFrozen: false })
+        {
+            key = state.DupObject(key);
+            key.Object?.MarkAsFrozen();
+        }
+
         var value = state.GetArgumentAt(1);
         hash[key] = value;
         return value;
     });
+    //
+    // [MRubyMethod(RequiredArguments = 1)]
+    // public static MRubyMethod OpEq = new((state, self) =>
+    // {
+    //     var hash = self.As<RHash>();
+    //     var arg = state.GetArgumentAt(0);
+    //     if (arg.Object is not RHash other || hash.Length != other.Length)
+    //     {[8
+    //         return MRubyValue.False;
+    //     }
+    //
+    //     if (hash == other)
+    //     {
+    //         return MRubyValue.True;
+    //     }
+    //
+    //     foreach (var (key, value) in hash)
+    //     {
+    //         if (other.TryGetValue(key, out var otherValue))
+    //         {
+    //             var valueEquals = state.Send(value, Names.OpEq, otherValue);
+    //             if (valueEquals.Falsy) return MRubyValue.False;
+    //         }
+    //         else
+    //         {
+    //             return MRubyValue.False;
+    //         }
+    //     }
+    //     return MRubyValue.True;
+    // });
+    //
+    // [MRubyMethod(RequiredArguments = 1)]
+    // public static MRubyMethod Eql = new((state, self) =>
+    // {
+    //     var hash = self.As<RHash>();
+    //     var arg = state.GetArgumentAt(0);
+    //     if (arg.Object is not RHash other || hash.Length != other.Length)
+    //     {
+    //         return MRubyValue.False;
+    //     }
+    //
+    //     if (hash == other)
+    //     {
+    //         return MRubyValue.True;
+    //     }
+    //
+    //     foreach (var (key, value) in hash)
+    //     {
+    //         if (other.TryGetValue(key, out var otherValue))
+    //         {
+    //             var valueEquals = state.Send(value, Names.QEql, otherValue);
+    //             if (valueEquals.Falsy) return MRubyValue.False;
+    //         }
+    //         else
+    //         {
+    //             return MRubyValue.False;
+    //         }
+    //     }
+    //     return MRubyValue.True;
+    // });
 
-    [MRubyMethod(RequiredArguments = 1)]
-    public static MRubyMethod OpEq = new((state, self) =>
+    [MRubyMethod]
+    public static MRubyMethod Size = new((state, self) =>
     {
-        var hash = self.As<RHash>();
-        var arg = state.GetArgumentAt(0);
-        if (arg.Object is not RHash other || hash.Length != other.Length)
-        {
-            return MRubyValue.False;
-        }
+        var h = self.As<RHash>();
+        return MRubyValue.From(h.Length);
+    });
 
-        if (hash == other)
+    [MRubyMethod]
+    public static MRubyMethod Keys = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var result = state.NewArray(h.Length);
+        foreach (var key in h.Keys)
         {
-            return MRubyValue.True;
+            result.Push(key);
         }
+        return MRubyValue.From(result);
+    });
 
-        foreach (var (key, value) in hash)
+    [MRubyMethod]
+    public static MRubyMethod Values = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var result = state.NewArray(h.Length);
+        foreach (var value in h.Values)
         {
-            if (other.TryGetValue(key, out var otherValue))
-            {
-                var valueEquals = state.Send(value, Names.OpEq, otherValue);
-                if (valueEquals.Falsy) return MRubyValue.False;
-            }
-            else
-            {
-                return MRubyValue.False;
-            }
+            result.Push(value);
         }
-        return MRubyValue.True;
+        return MRubyValue.From(result);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
-    public static MRubyMethod Eql = new((state, self) =>
+    public static MRubyMethod HasKey = new((state, self) =>
     {
-        var hash = self.As<RHash>();
-        var arg = state.GetArgumentAt(0);
-        if (arg.Object is not RHash other || hash.Length != other.Length)
-        {
-            return MRubyValue.False;
-        }
-
-        if (hash == other)
-        {
-            return MRubyValue.True;
-        }
-
-        foreach (var (key, value) in hash)
-        {
-            if (other.TryGetValue(key, out var otherValue))
-            {
-                var valueEquals = state.Send(value, Names.QEql, otherValue);
-                if (valueEquals.Falsy) return MRubyValue.False;
-            }
-            else
-            {
-                return MRubyValue.False;
-            }
-        }
-        return MRubyValue.True;
+        var h = self.As<RHash>();
+        var key = state.GetArgumentAt(0);
+        return MRubyValue.From(h.ContainsKey(key));
     });
 
-    static MRubyValue Default(MRubyState state, RHash hash, MRubyValue key)
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod HasValue = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var value = state.GetArgumentAt(0);
+        return MRubyValue.From(h.ContainsValue(value));
+    });
+
+    // [MRubyMethod(RequiredArguments = 1)]
+    // public static MRubyMethod ToA = new((state, self) =>
+    // {
+    //     var h = self.As<RHash>();
+    //     var result = state.NewArray(h.Length);
+    //     for (var i = 0; i < h.Length; i++)
+    //     {
+    //         var entry = state.NewArray(2);
+    //         entry.Push(h.Keys[i]);
+    //         entry.Push(h.Values[i]);
+    //         result.Push(MRubyValue.From(entry));
+    //     }
+    //     return MRubyValue.From(result);
+    // });
+
+    [MRubyMethod(OptionalArguments = 1)]
+    public static MRubyMethod Default = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        // var argc = state.GetArgumentCount();
+
+        if (h.DefaultProc is { } proc)
+        {
+            state.TryGetArgumentAt(0, out var key);
+            return state.Send(MRubyValue.From(proc), Names.Call, key);
+        }
+        if (h.DefaultValue.HasValue)
+        {
+            return h.DefaultValue.Value;
+        }
+        return MRubyValue.Nil;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod SetDefault = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var value = state.GetArgumentAt(0);
+        h.DefaultValue = value;
+        return value;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Delete = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        state.EnsureNotFrozen(h);
+
+        var key = state.GetArgumentAt(0);
+        h.TryDelete(key, out var value);
+        return value;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Clear = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        state.EnsureNotFrozen(h);
+
+        h.Clear();
+        return self;
+    });
+
+    [MRubyMethod]
+    public static MRubyMethod Shift = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        if (h.TryShift(out var headKey, out var headValue))
+        {
+            var result = state.NewArray(2);
+            result.Push(headKey);
+            result.Push(headValue);
+            return MRubyValue.From(result);
+        }
+        return MRubyValue.Nil;
+    });
+
+    static MRubyValue GetDefaultValue(MRubyState state, RHash hash, MRubyValue key)
     {
         if (hash.DefaultValue.HasValue)
         {

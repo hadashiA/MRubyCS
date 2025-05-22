@@ -28,8 +28,10 @@ partial class MRubyState
 
     public bool TryGetArgumentAt(int index, out MRubyValue value) =>
         context.TryGetArgumentAt(index, out value);
+
     public bool TryGetKeywordArgument(Symbol key, out MRubyValue value) =>
         context.TryGetKeywordArgument(key, out value);
+
     public MRubyValue GetSelf() => context.GetSelf();
 
     public ReadOnlySpan<KeyValuePair<Symbol, MRubyValue>> GetKeywordArguments() =>
@@ -79,6 +81,17 @@ partial class MRubyState
             return array;
         }
         Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Array"));
+        return default!;
+    }
+
+    public RHash GetArgumentAsHashAt(int index)
+    {
+        var arg = GetArgumentAt(index);
+        if (arg.Object is RHash hash)
+        {
+            return hash;
+        }
+        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Hash"));
         return default!;
     }
 

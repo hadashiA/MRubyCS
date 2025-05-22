@@ -456,9 +456,14 @@ class MRubyContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Span<MRubyValue> GetRestArgumentsAfter(ref MRubyCallInfo callInfo, int startIndex)
     {
+        if (startIndex >= callInfo.ArgumentCount)
+        {
+            return default;
+        }
         if (callInfo.ArgumentPacked)
         {
-            return Stack[callInfo.StackPointer + 1].As<RArray>().AsSpan(startIndex, callInfo.ArgumentCount - startIndex);
+            var args = Stack[callInfo.StackPointer + 1].As<RArray>();
+            return startIndex >= args.Length ? default : args.AsSpan(startIndex);
         }
         return Stack.AsSpan(callInfo.StackPointer + 1 + startIndex, callInfo.ArgumentCount - startIndex);
     }

@@ -40,7 +40,7 @@ partial class MRubyState
         var typeName = NameOf(ex.Class);
 
         var message = ex.Message?.Length >  0
-            ? $"{ex.Message.ToString()} ({typeName.ToString()})"
+            ? $"{ex.Message} ({typeName})"
             : typeName.ToString();
 
         Exception = new MRubyRaiseException(message, this, ex, context.CallDepth);
@@ -78,10 +78,6 @@ partial class MRubyState
         Raise(ex);
     }
 
-    public void RaiseNoMethodError(Symbol methodId, RString message)
-    {
-    }
-
     public void RaiseNameError(Symbol name, RString message)
     {
         var ex = new RException(message, GetExceptionClass(Names.NameError));
@@ -89,22 +85,12 @@ partial class MRubyState
         Raise(ex);
     }
 
-
     public void EnsureArgumentCount(int expected)
     {
         var argc = GetArgumentCount();
         if (expected != argc)
         {
             RaiseArgumentNumberError(argc, expected);
-        }
-    }
-
-    public void EnsureArgumentCount(int min, int max)
-    {
-        var argc = GetArgumentCount();
-        if (argc < min || argc > max)
-        {
-            RaiseArgumentNumberError(argc, min, max);
         }
     }
 
