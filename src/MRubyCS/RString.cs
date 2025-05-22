@@ -403,9 +403,7 @@ public class RString : RObject, IEquatable<RString>
         ReadOnlySpan<char> format,
         IFormatProvider? provider)
     {
-        return destination.TryWrite(provider,
-            $"{nameof(buffer)}: {buffer}, {nameof(Length)}: {Length}, {nameof(bufferOwned)}: {bufferOwned}",
-            out charsWritten);
+        return Encoding.UTF8.TryGetChars(AsSpan(), destination, out charsWritten);
     }
 
     public bool TryFormat(
