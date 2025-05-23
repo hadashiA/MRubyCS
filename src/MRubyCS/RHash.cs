@@ -61,7 +61,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         }
     }
 
-    public MRubyValue GetOrDefault(MRubyValue key, MRubyState state)
+    public MRubyValue GetValueOrDefault(MRubyValue key, MRubyState state)
     {
         for (var i = 0; i < keys.Count; i++)
         {
@@ -81,15 +81,15 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
             throw new InvalidOperationException("Duplicate key");
         }
         keys.Add(key);
-        values.Add(key);
+        values.Add(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ContainsKey(MRubyValue key)
     {
-        foreach (var k in keys)
+        foreach (var t in Keys)
         {
-            if (KeyEquals(key, k)) return true;
+            if (KeyEquals(key, t)) return true;
         }
         return false;
     }
@@ -97,9 +97,10 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ContainsValue(MRubyValue value)
     {
-        foreach (var v in values)
+        var v = Values;
+        for (var i = 0; i < v.Length;  i++)
         {
-            if (KeyEquals(value, v)) return true;
+            if (comparer.Equals(value, v[i])) return true;
         }
         return false;
     }

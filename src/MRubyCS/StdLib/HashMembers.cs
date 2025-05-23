@@ -7,9 +7,9 @@ static class HashMembers
     {
         var hash = self.As<RHash>();
         var block = state.GetBlockArgument();
-        if (state.TryGetArgumentAt(0, out var ifnone))
+        if (state.TryGetArgumentAt(0, out var defaultValue))
         {
-            hash.DefaultValue = ifnone;
+            hash.DefaultValue = defaultValue;
         }
         else if (block.Object is RProc proc)
         {
@@ -198,6 +198,13 @@ static class HashMembers
         return MRubyValue.From(h.ContainsValue(value));
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Empty = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        return MRubyValue.From(h.Length <= 0);
+    });
+
     // [MRubyMethod(RequiredArguments = 1)]
     // public static MRubyMethod ToA = new((state, self) =>
     // {
@@ -217,12 +224,11 @@ static class HashMembers
     public static MRubyMethod Default = new((state, self) =>
     {
         var h = self.As<RHash>();
-        // var argc = state.GetArgumentCount();
+        state.EnsureArgumentCount(0, 1);
 
-        if (h.DefaultProc is { } proc)
+        if (h.DefaultProc is { } proc && state.TryGetArgumentAt(0, out var key))
         {
-            state.TryGetArgumentAt(0, out var key);
-            return state.Send(MRubyValue.From(proc), Names.Call, key);
+            return state.Send(MRubyValue.From(proc), Names.Call, self, key);
         }
         if (h.DefaultValue.HasValue)
         {
@@ -231,10 +237,22 @@ static class HashMembers
         return MRubyValue.Nil;
     });
 
+    [MRubyMethod(OptionalArguments = 1)]
+    public static MRubyMethod DefaultProc = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        if (h.DefaultProc is { } proc)
+        {
+            return MRubyValue.From(proc);
+        }
+        return MRubyValue.Nil;
+    });
+
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod SetDefault = new((state, self) =>
     {
         var h = self.As<RHash>();
+        state.EnsureNotFrozen(h);
         var value = state.GetArgumentAt(0);
         h.DefaultValue = value;
         return value;
@@ -244,7 +262,9 @@ static class HashMembers
     public static MRubyMethod Delete = new((state, self) =>
     {
         var h = self.As<RHash>();
+
         state.EnsureNotFrozen(h);
+        state.EnsureArgumentCount(1);
 
         var key = state.GetArgumentAt(0);
         h.TryDelete(key, out var value);
@@ -265,6 +285,8 @@ static class HashMembers
     public static MRubyMethod Shift = new((state, self) =>
     {
         var h = self.As<RHash>();
+        state.EnsureNotFrozen(h);
+
         if (h.TryShift(out var headKey, out var headValue))
         {
             var result = state.NewArray(2);

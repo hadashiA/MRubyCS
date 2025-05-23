@@ -520,7 +520,7 @@ partial class MRubyState
                                 registerA = array[(int)valueB.IntegerValue];
                                 goto Next;
                             case RHash hash:
-                                registerA = hash.GetOrDefault(valueB, this);
+                                registerA = hash.GetValueOrDefault(valueB, this);
                                 goto Next;
                             case RString str:
                                 switch (valueB.VType)

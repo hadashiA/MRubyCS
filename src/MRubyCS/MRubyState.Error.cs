@@ -94,6 +94,15 @@ partial class MRubyState
         }
     }
 
+    public void EnsureArgumentCount(int min, int max)
+    {
+        var argc = GetArgumentCount();
+        if (argc < min || argc > max)
+        {
+            RaiseArgumentNumberError(argc, min, max);
+        }
+    }
+
     public void EnsureBlockGiven(MRubyValue block)
     {
         if (block.IsNil)
