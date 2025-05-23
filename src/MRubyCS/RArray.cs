@@ -48,7 +48,7 @@ public sealed class RArray : RObject
         data.AsSpan(offset + start, count);
 
     public Span<MRubyValue> AsSpan(int start) =>
-        data.AsSpan(offset + start, Length - start);
+        data.AsSpan(offset + start);
 
     internal RArray(ReadOnlySpan<MRubyValue> values, RClass arrayClass)
         : base(MRubyVType.Array, arrayClass)
@@ -222,8 +222,8 @@ public sealed class RArray : RObject
     internal void PushRange(ReadOnlySpan<MRubyValue>newItems)
     {
         var start = Length;
-        MakeModifiable(Length + newItems.Length, true);
-        newItems.CopyTo(data.AsSpan(start));
+        MakeModifiable(start + newItems.Length, true);
+        newItems.CopyTo(AsSpan(start));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -252,7 +252,10 @@ public sealed class RArray : RObject
         }
         else if (!dataOwned)
         {
-            data = AsSpan().ToArray();
+            var newData = new MRubyValue[data.Length];
+            data.AsSpan(offset).CopyTo(newData);
+            data = newData;
+            offset = 0;
             dataOwned = true;
         }
 

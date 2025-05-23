@@ -60,7 +60,7 @@ public class MRubyDSourceGenerator : IIncrementalGenerator
         new("Raise", "raise"),
         new("Name", "name"),
         new("Class", "class"),
-        new("Allocate", "allocate"),
+        new("Default", "default"),
         new("Initialize", "initialize"),
         new("InitializeCopy", "initialize_copy"),
         new("InstanceEval", "instance_eval"),
@@ -168,7 +168,7 @@ namespace MRubyCS;
 static class Names
 {
     public static int Count => {{definitions.Length}};
-    
+
     public static readonly byte[][] Utf8Names =
     [
 """);
@@ -238,7 +238,7 @@ static class Names
             stringBuilder.AppendLine($$"""
         }
         symbol = default;
-        return false; 
+        return false;
     }
 
     public static bool TryGetName(Symbol symbol, out ReadOnlySpan<byte> name)
@@ -249,7 +249,7 @@ static class Names
             return true;
         }
         name = default!;
-        return false; 
+        return false;
     }
 }
 """);

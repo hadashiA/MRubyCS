@@ -130,13 +130,13 @@ static class ModuleMembers
             var variableName = state.PrepareInstanceVariableName(attrId);
             var setterName = state.PrepareName(attrId, default, "="u8);
 
-            state.DefineMethod(mod, setterName, new MRubyMethod((s, _) =>
+            state.DefineMethod(mod, setterName, (s, _) =>
             {
                 var runtimeSelf = s.GetSelf();
                 var value = s.GetArgumentAt(0);
                 state.SetInstanceVariable(runtimeSelf, variableName, value);
                 return MRubyValue.Nil;
-            }));
+            });
         }
         return MRubyValue.Nil;
     });

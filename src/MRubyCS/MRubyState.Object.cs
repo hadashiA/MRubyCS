@@ -28,7 +28,7 @@ partial class MRubyState
 
     public RArray NewArray(params ReadOnlySpan<MRubyValue> values) => new(values, ArrayClass);
 
-    public RHash NewHash(int capacity) => new(capacity, valueEqualityComparer, HashClass);
+    public RHash NewHash(int capacity) => new(capacity, ValueEqualityComparer, HashClass);
 
     public Symbol ToSymbol(MRubyValue value)
     {
@@ -107,7 +107,6 @@ partial class MRubyState
             }
         }
         return Utf8String.Format($"{value.VType}");
-        ;
     }
 
     public RString NameOf(RClass c)
@@ -290,7 +289,7 @@ partial class MRubyState
 
     public MRubyValue CloneObject(MRubyValue obj)
     {
-        if (obj.Object is RObject src)
+        if (obj.Object is { } src)
         {
             if (src.VType == MRubyVType.SClass)
             {
