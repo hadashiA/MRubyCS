@@ -496,7 +496,7 @@ public partial class MRubyState
         DefineMethod(HashClass, Intern("default_proc"u8), HashMembers.DefaultProc);
         DefineMethod(HashClass, Intern("default="u8), HashMembers.SetDefault);
         DefineMethod(HashClass, Intern("size"u8), HashMembers.Size);
-        DefineMethod(HashClass, Intern("delete"u8), HashMembers.Delete);
+        // DefineMethod(HashClass, Intern("delete"u8), HashMembers.Delete);
         // DefineMethod(HashClass, Intern("to_a"u8), HashMembers.ToA);
         DefineMethod(HashClass, Intern("clear"u8), HashMembers.Clear);
         DefineMethod(HashClass, Intern("replace"u8), HashMembers.InitializeCopy);

@@ -2,13 +2,18 @@ namespace MRubyCS.StdLib;
 
 static class HashMembers
 {
-    [MRubyMethod]
+    [MRubyMethod(OptionalArguments = 1, BlockArgument = true)]
     public static MRubyMethod Initialize = new((state, self) =>
     {
         var hash = self.As<RHash>();
+        state.EnsureArgumentCount(0, 1);
         var block = state.GetBlockArgument();
         if (state.TryGetArgumentAt(0, out var defaultValue))
         {
+            if (!block.IsNil)
+            {
+                state.Raise(Names.ArgumentError, "invalid block"u8);
+            }
             hash.DefaultValue = defaultValue;
         }
         else if (block.Object is RProc proc)
@@ -22,6 +27,8 @@ static class HashMembers
     public static MRubyMethod InitializeCopy = new((state, self) =>
     {
         var hash = self.As<RHash>();
+        state.EnsureNotFrozen(hash);
+
         var other = state.GetArgumentAsHashAt(0);
 
         if (hash != other)

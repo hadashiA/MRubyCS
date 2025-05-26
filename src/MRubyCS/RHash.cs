@@ -70,7 +70,11 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
                 return values[i];
             }
         }
-        return state.Send(MRubyValue.From(this), Names.Default);
+        if (DefaultProc is { } proc)
+        {
+            return state.Send(MRubyValue.From(proc), Names.Call, MRubyValue.From(this), key);
+        }
+        return DefaultValue ?? MRubyValue.Nil;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
