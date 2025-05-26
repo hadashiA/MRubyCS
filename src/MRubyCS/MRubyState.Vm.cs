@@ -927,6 +927,11 @@ partial class MRubyState
                             !callInfo.ArgumentPacked &&
                             callInfo.Proc?.HasFlag(MRubyObjectFlags.ProcStrict) == true)
                         {
+                            if (argc + (callInfo.KeywordArgumentPacked ? 1 : 0) != m1)
+                            {
+                                RaiseArgumentNumberError(argc + (callInfo.KeywordArgumentPacked ? 1 : 0), m1);
+                            }
+
                             // clear local (but non-argument) variables
                             var count = m1 + 2; // self + m1 + block
                             if (irep.LocalVariables.Length - count > 0)
