@@ -821,7 +821,7 @@ class Hash
     return false if self.size != hash.size
     self.each do |k,v|
       return false unless hash.key?(k)
-      return false unless self[k] == hash[k]
+      return false unless v == hash[k]
     end
     return true
   end

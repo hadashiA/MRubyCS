@@ -202,13 +202,12 @@ partial class MRubyState
         if (TryFindMethod(receiverClass, methodId, out var method, out receiverClass))
         {
             callInfo.MethodId = methodId;
+            callInfo.Scope = receiverClass;
         }
         else
         {
             method = PrepareMethodMissing(ref callInfo, self, methodId);
         }
-        callInfo.MethodId = methodId;
-        callInfo.Scope = receiverClass;
 
         if (callInfo.ArgumentPacked)
         {
@@ -223,6 +222,7 @@ partial class MRubyState
             {
                 registers[callInfo.ArgumentCount + 1] = registers[callInfo.ArgumentCount + 2]; // copy block
             }
+            callInfo.ArgumentCount--; // remove
         }
 
         // var block = stack[blockArgumentOffset];
@@ -254,8 +254,6 @@ partial class MRubyState
             nextCallInfo.MethodId = default;
             nextCallInfo.Proc = null;
             nextCallInfo.StackPointer = callInfo.StackPointer;
-            callInfo.ArgumentCount = 0;
-            callInfo.KeywordArgumentCount = 0;
             callInfo.CallerType = CallerType.InVmLoop;
             callInfo.Scope = receiverClass;
 
