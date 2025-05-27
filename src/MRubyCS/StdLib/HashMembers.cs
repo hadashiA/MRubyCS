@@ -77,7 +77,7 @@ static class HashMembers
         {
             return value;
         }
-        return state.Send(self, Names.Default);
+        return state.Send(self, Names.Default, key);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
