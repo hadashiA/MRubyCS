@@ -48,7 +48,7 @@ public sealed class RArray : RObject
         data.AsSpan(offset + start, count);
 
     public Span<MRubyValue> AsSpan(int start) =>
-        data.AsSpan(offset + start);
+        data.AsSpan(offset + start, Length - start);
 
     internal RArray(ReadOnlySpan<MRubyValue> values, RClass arrayClass)
         : base(MRubyVType.Array, arrayClass)

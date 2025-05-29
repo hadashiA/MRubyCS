@@ -266,19 +266,6 @@ static class HashMembers
     });
 
     [MRubyMethod(RequiredArguments = 1)]
-    public static MRubyMethod Delete = new((state, self) =>
-    {
-        var h = self.As<RHash>();
-
-        state.EnsureNotFrozen(h);
-        state.EnsureArgumentCount(1);
-
-        var key = state.GetArgumentAt(0);
-        h.TryDelete(key, out var value);
-        return value;
-    });
-
-    [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Clear = new((state, self) =>
     {
         var h = self.As<RHash>();
@@ -301,19 +288,38 @@ static class HashMembers
             result.Push(headValue);
             return MRubyValue.From(result);
         }
+
         return MRubyValue.Nil;
     });
 
-    static MRubyValue GetDefaultValue(MRubyState state, RHash hash, MRubyValue key)
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod InternalDelete = new((state, self) =>
     {
-        if (hash.DefaultValue.HasValue)
+        var h = self.As<RHash>();
+
+        state.EnsureNotFrozen(h);
+        state.EnsureArgumentCount(1);
+
+        var key = state.GetArgumentAt(0);
+        h.TryDelete(key, out var value);
+        return value;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod InternalMerge = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var args = state.GetRestArgumentsAfter(0);
+        foreach (var arg in args)
         {
-            return hash.DefaultValue.Value;
+            state.EnsureValueType(arg, MRubyVType.Hash);
+            var other = arg.As<RHash>();
+            if (h == other) continue;
+            foreach (var entry in other)
+            {
+                h[entry.Key] = entry.Value;
+            }
         }
-        if (hash.DefaultProc is { } proc)
-        {
-            return state.Send(MRubyValue.From(proc), Names.Call, key);
-        }
-        return MRubyValue.Nil;
-    }
+        return self;
+    });
 }
