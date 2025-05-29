@@ -7,6 +7,10 @@ namespace MRubyCS;
 partial class MRubyState
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ModifyCurrentMethodId(Symbol newMethodId) =>
+        context.ModifyCurrentMethodId(newMethodId);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsRecursiveCalling(Symbol methodId, MRubyValue self) =>
         context.IsRecursiveCalling(methodId, self);
 

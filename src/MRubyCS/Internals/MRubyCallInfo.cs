@@ -278,6 +278,11 @@ class MRubyContext
         return Stack.AsMemory(stackPointer);
     }
 
+    public void ModifyCurrentMethodId(Symbol newMethodId)
+    {
+        CurrentCallInfo.MethodId = newMethodId;
+    }
+
     public bool IsRecursiveCalling(Symbol methodId, MRubyValue self, int offset = 0)
     {
         for (var i = CallDepth - 1 - offset; i >= 0; i--)

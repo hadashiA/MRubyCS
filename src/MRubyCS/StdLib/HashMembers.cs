@@ -35,13 +35,19 @@ static class HashMembers
         {
             other.ReplaceTo(hash);
         }
+
         return self;
     });
 
-    public static MRubyMethod ToS = new((state, self) =>
+    public static MRubyMethod Inspect = new((state, self) =>
     {
         var hash = self.As<RHash>();
         var result = state.NewString("{"u8);
+
+        // Currently, the only clue for checking whether a method is being called recursively is the method ID.
+        // To prepare for cases where this method is called by an alias such as to_s, unify the current method ID to inspect.
+        state.ModifyCurrentMethodId(Names.Inspect);
+
         if (state.IsRecursiveCalling(Names.Inspect, self))
         {
             result.Concat("...}"u8);

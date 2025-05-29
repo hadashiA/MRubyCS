@@ -475,8 +475,8 @@ public partial class MRubyState
         HashClass = DefineClass(Intern("Hash"u8), ObjectClass, MRubyVType.Hash);
         DefineMethod(HashClass, Names.Initialize, HashMembers.Initialize);
         DefineMethod(HashClass, Names.InitializeCopy, HashMembers.InitializeCopy);
-        DefineMethod(HashClass, Names.ToS, HashMembers.ToS);
-        DefineMethod(HashClass, Names.Inspect, HashMembers.ToS);
+        DefineMethod(HashClass, Names.ToS, HashMembers.Inspect);
+        DefineMethod(HashClass, Names.Inspect, HashMembers.Inspect);
         // DefineMethod(HashClass, Names.OpEq, HashMembers.OpEq);
         // DefineMethod(HashClass, Names.QEql, HashMembers.Eql);
         DefineMethod(HashClass, Names.OpAref, HashMembers.OpAref);
