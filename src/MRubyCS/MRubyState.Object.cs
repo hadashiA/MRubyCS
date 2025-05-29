@@ -28,7 +28,11 @@ partial class MRubyState
 
     public RArray NewArray(params ReadOnlySpan<MRubyValue> values) => new(values, ArrayClass);
 
-    public RHash NewHash(int capacity) => new(capacity, ValueEqualityComparer, HashClass);
+    public RHash NewHash(int capacity) => new(
+        capacity,
+        HashKeyEqualityComparer,
+        ValueEqualityComparer,
+        HashClass);
 
     public Symbol ToSymbol(MRubyValue value)
     {

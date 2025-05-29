@@ -48,7 +48,9 @@ public partial class MRubyState
 
     public RObject TopSelf { get; private set; } = default!;
     public MRubyLongJumpException? Exception { get; private set; }
+
     public MRubyValueEqualityComparer ValueEqualityComparer { get; }
+    public MRubyValueHashKeyEqualityComparer HashKeyEqualityComparer { get; }
 
     readonly MRubyContext contextRoot;
     readonly MRubyContext context = new();
@@ -64,6 +66,7 @@ public partial class MRubyState
     {
         contextRoot = context;
         ValueEqualityComparer = new MRubyValueEqualityComparer(this);
+        HashKeyEqualityComparer = new MRubyValueHashKeyEqualityComparer(this);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

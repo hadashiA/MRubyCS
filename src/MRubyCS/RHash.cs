@@ -17,20 +17,33 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
 
     readonly List<MRubyValue> keys;
     readonly List<MRubyValue> values;
-    readonly IEqualityComparer<MRubyValue> comparer;
 
-    internal RHash(int capacity, IEqualityComparer<MRubyValue> comparer, RClass hashClass) : base(MRubyVType.Hash, hashClass)
+    readonly IEqualityComparer<MRubyValue> keyComparer;
+    readonly IEqualityComparer<MRubyValue> valueComparer;
+
+    internal RHash(
+        int capacity,
+        IEqualityComparer<MRubyValue> keyComparer,
+        IEqualityComparer<MRubyValue> valueComparer,
+        RClass hashClass) : base(MRubyVType.Hash, hashClass)
     {
+        this.keyComparer = keyComparer;
+        this.valueComparer = valueComparer;
         keys = new List<MRubyValue>(capacity);
         values = new List<MRubyValue>(capacity);
-        this.comparer = comparer;
     }
 
-    RHash(List<MRubyValue> keys, List<MRubyValue> values, IEqualityComparer<MRubyValue> comparer, RClass hashClass) : base(MRubyVType.Hash, hashClass)
+    RHash(
+        List<MRubyValue> keys,
+        List<MRubyValue> values,
+        IEqualityComparer<MRubyValue> keyComparer,
+        IEqualityComparer<MRubyValue> valueComparer,
+        RClass hashClass) : base(MRubyVType.Hash, hashClass)
     {
         this.keys = keys;
         this.values = values;
-        this.comparer = comparer;
+        this.keyComparer = keyComparer;
+        this.valueComparer = valueComparer;
     }
 
     public MRubyValue this[MRubyValue key]
@@ -39,7 +52,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         {
             for (var i = 0; i < keys.Count; i++)
             {
-                if (KeyEquals(keys[i], key))
+                if (KeyEquals(key, keys[i]))
                 {
                     return values[i];
                 }
@@ -50,7 +63,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         {
             for (var i = 0; i < keys.Count; i++)
             {
-                if (KeyEquals(keys[i], key))
+                if (KeyEquals(key, keys[i]))
                 {
                     values[i] = value;
                     return;
@@ -65,7 +78,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     {
         for (var i = 0; i < keys.Count; i++)
         {
-            if (KeyEquals(keys[i], key))
+            if (KeyEquals(key, keys[i]))
             {
                 return values[i];
             }
@@ -101,10 +114,9 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ContainsValue(MRubyValue value)
     {
-        var v = Values;
-        for (var i = 0; i < v.Length;  i++)
+        foreach (var t in Values)
         {
-            if (comparer.Equals(value, v[i])) return true;
+            if (valueComparer.Equals(value, t)) return true;
         }
         return false;
     }
@@ -114,7 +126,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     {
         for (var i = 0; i < keys.Count; i++)
         {
-            if (KeyEquals(keys[i], key))
+            if (KeyEquals(key, keys[i]))
             {
                 value = values[i];
                 return true;
@@ -129,7 +141,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     {
         for (var i = keys.Count - 1; i >= 0; i--)
         {
-            if (KeyEquals(keys[i], key))
+            if (KeyEquals(key, keys[i]))
             {
                 value = values[i];
                 keys.RemoveAt(i);
@@ -180,11 +192,11 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         return false;
     }
 
-    public RHash Dup() => new(keys, values, comparer, Class);
+    public RHash Dup() => new(keys, values, keyComparer, valueComparer, Class);
 
     internal override RObject Clone()
     {
-        var clone = new RHash(Length, comparer, Class);
+        var clone = new RHash(Length, keyComparer, valueComparer, Class);
         InstanceVariables.CopyTo(clone.InstanceVariables);
         return clone;
     }
@@ -233,34 +245,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     bool KeyEquals(MRubyValue a, MRubyValue b)
     {
-        if (a.IsSymbol)
-        {
-            if (!b.IsSymbol) return false;
-            return a.SymbolValue == b.SymbolValue;
-        }
-
-        if (a.IsInteger)
-        {
-            if (!b.IsInteger) return false;
-            return a.IntegerValue == b.IntegerValue;
-        }
-
-        if (a.IsFloat)
-        {
-            if (!b.IsFloat) return false;
-            // ReSharper disable once CompareOfFloatsByEqualityOperator
-            return a.FloatValue == b.FloatValue;
-        }
-
-        if (a.Object is RString strA)
-        {
-            if (b.Object is RString strB)
-            {
-                return strA.Equals(strB);
-            }
-            return false;
-        }
-        return comparer.Equals(a, b);
+        return keyComparer.Equals(a, b);
     }
 
     public Enumerator GetEnumerator() => new(this);
