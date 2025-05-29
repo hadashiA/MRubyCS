@@ -137,19 +137,29 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryDelete(MRubyValue key, out MRubyValue value)
+    public bool TryDelete(MRubyValue key, out MRubyValue value, out bool modified)
     {
-        for (var i = keys.Count - 1; i >= 0; i--)
+        var length = Length;
+        for (var i = length - 1; i >= 0; i--)
         {
+            if (length != Length)
+            {
+                value = default;
+                modified = true;
+                return false;
+            }
+
             if (KeyEquals(key, keys[i]))
             {
                 value = values[i];
                 keys.RemoveAt(i);
                 values.RemoveAt(i);
+                modified = false;
                 return true;
             }
         }
         value = default;
+        modified = false;
         return false;
     }
 

@@ -1117,7 +1117,7 @@ partial class MRubyState
                         }
 
                         registers[bb.A] = value;
-                        kdict.As<RHash>().TryDelete(key, out _);
+                        kdict.As<RHash>().TryDelete(key, out _, out _);
                         goto Next;
                     }
                     case OpCode.KeyP:

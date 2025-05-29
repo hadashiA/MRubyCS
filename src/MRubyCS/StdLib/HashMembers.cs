@@ -307,7 +307,11 @@ static class HashMembers
         state.EnsureArgumentCount(1);
 
         var key = state.GetArgumentAt(0);
-        h.TryDelete(key, out var value);
+        h.TryDelete(key, out var value, out var modified);
+        if (modified)
+        {
+            state.Raise(Names.RuntimeError, "hash modified"u8);
+        }
         return value;
     });
 
