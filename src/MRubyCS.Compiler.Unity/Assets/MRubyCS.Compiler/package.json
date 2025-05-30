@@ -1,7 +1,7 @@
 {
   "name": "jp.hadashikick.mrubycs",
   "displayName": "MRubyCS",
-  "version": "0.7.0-preview",
+  "version": "0.8.0-preview",
   "unity": "2021.3",
   "description": "A new mruby virtual machine implemented in C#.",
   "keywords": ["mruby", "ruby"],

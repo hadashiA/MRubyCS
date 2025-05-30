@@ -1,7 +1,7 @@
 <Project>
     <PropertyGroup>
         <!-- NuGet Packaging -->
-        <PackageVersion>0.7.0-preview</PackageVersion>
+        <PackageVersion>0.8.0-preview</PackageVersion>
         <Authors>hadashiA</Authors>
         <PackageProjectUrl>https://github.com/hadashiA/MRubyCS</PackageProjectUrl>
         <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
