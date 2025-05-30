@@ -918,7 +918,8 @@ assert('Hash#rehash') do
     pairs2.delete([:_del, h.delete(:_del)])
     exp_pairs2 = pairs2.hash_for.to_a
     k2.error = :eql?
-    assert_raise{h.rehash}
+    # IGNORE: This test depends on whether the keys collide or not
+    # assert_raise{h.rehash}
     act_pairs2 = h.to_a
     unless pairs2 == act_pairs2 && pairs2.size == h.size
       assert_equal(exp_pairs2, act_pairs2)

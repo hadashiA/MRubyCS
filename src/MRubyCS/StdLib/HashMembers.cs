@@ -241,6 +241,44 @@ static class HashMembers
         return MRubyValue.Nil;
     });
 
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Assoc = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var searchKey = state.GetArgumentAt(0);
+        foreach (var x in h)
+        {
+            if (state.ValueEquals(searchKey, x.Key))
+            {
+                var result = state.NewArray(2);
+                result.Push(x.Key);
+                result.Push(x.Value);
+                return MRubyValue.From(result);
+            }
+        }
+        return MRubyValue.Nil;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod RAssoc = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+
+        var searchValue = state.GetArgumentAt(0);
+        foreach (var x in h)
+        {
+            if (state.ValueEquals(searchValue, x.Value))
+            {
+                var result = state.NewArray(2);
+                result.Push(x.Key);
+                result.Push(x.Value);
+                return MRubyValue.From(result);
+            }
+        }
+        return MRubyValue.Nil;
+    });
+
+    [MRubyMethod]
     public static MRubyMethod Rehash = new((state, self) =>
     {
         var h = self.As<RHash>();

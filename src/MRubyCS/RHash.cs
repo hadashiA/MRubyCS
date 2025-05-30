@@ -209,6 +209,30 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
 
     public void Rehash()
     {
+        indexTable.Clear();
+        var writePos = 0;
+
+        for (var readPos = 0; readPos < keys.Count; readPos++)
+        {
+            var key = keys[readPos];
+            if (indexTable.TryGetValue(key, out var existingIndex))
+            {
+                values[existingIndex] = values[readPos];
+            }
+            else
+            {
+                if (writePos != readPos)
+                {
+                    keys[writePos] = keys[readPos];
+                    values[writePos] = values[readPos];
+                }
+                indexTable[key] = writePos;
+                writePos++;
+            }
+        }
+
+        keys.RemoveRange(writePos, keys.Count - writePos);
+        values.RemoveRange(writePos, values.Count - writePos);
     }
 
     public struct Enumerator(RHash source) : IEnumerator<KeyValuePair<MRubyValue, MRubyValue>>

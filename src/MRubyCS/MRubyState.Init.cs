@@ -501,6 +501,8 @@ public partial class MRubyState
         DefineMethod(HashClass, Intern("replace"u8), HashMembers.InitializeCopy);
         DefineMethod(HashClass, Intern("store"u8), HashMembers.OpAset);
         DefineMethod(HashClass, Intern("shift"u8), HashMembers.Shift);
+        DefineMethod(HashClass, Intern("assoc"u8), HashMembers.Assoc);
+        DefineMethod(HashClass, Intern("rassoc"u8), HashMembers.RAssoc);
         DefineMethod(HashClass, Intern("rehash"u8), HashMembers.Rehash);
         DefineMethod(HashClass, Intern("__delete"u8), HashMembers.InternalDelete);
         DefineMethod(HashClass, Intern("__merge"u8), HashMembers.InternalMerge);
