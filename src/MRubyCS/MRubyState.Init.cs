@@ -49,11 +49,13 @@ public partial class MRubyState
     public RObject TopSelf { get; private set; } = default!;
     public MRubyLongJumpException? Exception { get; private set; }
 
+    public MRubyValueEqualityComparer ValueEqualityComparer { get; }
+    public MRubyValueHashKeyEqualityComparer HashKeyEqualityComparer { get; }
+
     readonly MRubyContext contextRoot;
     readonly MRubyContext context = new();
     readonly SymbolTable symbolTable = new();
     readonly VariableTable globalVariables = new();
-    readonly MRubyValueEqualityComparer valueEqualityComparer;
 
     RiteParser? riteParser;
 
@@ -63,7 +65,8 @@ public partial class MRubyState
     MRubyState()
     {
         contextRoot = context;
-        valueEqualityComparer = new MRubyValueEqualityComparer(this);
+        ValueEqualityComparer = new MRubyValueEqualityComparer(this);
+        HashKeyEqualityComparer = new MRubyValueHashKeyEqualityComparer(this);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -474,12 +477,35 @@ public partial class MRubyState
     {
         HashClass = DefineClass(Intern("Hash"u8), ObjectClass, MRubyVType.Hash);
         DefineMethod(HashClass, Names.Initialize, HashMembers.Initialize);
-        DefineMethod(HashClass, Names.ToS, HashMembers.ToS);
-        DefineMethod(HashClass, Names.Inspect, HashMembers.ToS);
-        DefineMethod(HashClass, Names.OpEq, HashMembers.OpEq);
-        DefineMethod(HashClass, Names.QEql, HashMembers.Eql);
+        DefineMethod(HashClass, Names.InitializeCopy, HashMembers.InitializeCopy);
+        DefineMethod(HashClass, Names.ToS, HashMembers.Inspect);
+        DefineMethod(HashClass, Names.Inspect, HashMembers.Inspect);
         DefineMethod(HashClass, Names.OpAref, HashMembers.OpAref);
         DefineMethod(HashClass, Names.OpAset, HashMembers.OpAset);
+        DefineMethod(HashClass, Intern("size"u8), HashMembers.Size);
+        DefineMethod(HashClass, Intern("length"u8), HashMembers.Size);
+        DefineMethod(HashClass, Intern("keys"u8), HashMembers.Keys);
+        DefineMethod(HashClass, Intern("values"u8), HashMembers.Values);
+        DefineMethod(HashClass, Intern("has_key?"u8), HashMembers.HasKey);
+        DefineMethod(HashClass, Intern("key?"u8), HashMembers.HasKey);
+        DefineMethod(HashClass, Intern("has_value?"u8), HashMembers.HasValue);
+        DefineMethod(HashClass, Intern("value?"u8), HashMembers.HasValue);
+        DefineMethod(HashClass, Intern("include?"u8), HashMembers.HasKey);
+        DefineMethod(HashClass, Intern("member?"u8), HashMembers.HasKey);
+        DefineMethod(HashClass, Intern("empty?"u8), HashMembers.Empty);
+        DefineMethod(HashClass, Intern("default"u8), HashMembers.Default);
+        DefineMethod(HashClass, Intern("default_proc"u8), HashMembers.DefaultProc);
+        DefineMethod(HashClass, Intern("default="u8), HashMembers.SetDefault);
+        DefineMethod(HashClass, Intern("size"u8), HashMembers.Size);
+        DefineMethod(HashClass, Intern("clear"u8), HashMembers.Clear);
+        DefineMethod(HashClass, Intern("replace"u8), HashMembers.InitializeCopy);
+        DefineMethod(HashClass, Intern("store"u8), HashMembers.OpAset);
+        DefineMethod(HashClass, Intern("shift"u8), HashMembers.Shift);
+        DefineMethod(HashClass, Intern("assoc"u8), HashMembers.Assoc);
+        DefineMethod(HashClass, Intern("rassoc"u8), HashMembers.RAssoc);
+        DefineMethod(HashClass, Intern("rehash"u8), HashMembers.Rehash);
+        DefineMethod(HashClass, Intern("__delete"u8), HashMembers.InternalDelete);
+        DefineMethod(HashClass, Intern("__merge"u8), HashMembers.InternalMerge);
     }
 
     void InitRange()

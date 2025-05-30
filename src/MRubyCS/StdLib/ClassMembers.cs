@@ -51,9 +51,9 @@ static class ClassMembers
 
         var instance = c.InstanceVType switch
         {
-            MRubyVType.Array => state.NewArray(0),
-            MRubyVType.Hash => state.NewHash(0),
-            MRubyVType.String => state.NewString(0),
+            MRubyVType.Array => new RArray(0, c),
+            MRubyVType.Hash => new RHash(0, state.HashKeyEqualityComparer, state.ValueEqualityComparer, c),
+            MRubyVType.String => new RString(0, c),
             MRubyVType.Range => throw new NotImplementedException(),
             MRubyVType.Exception => new RException(null!, c),
             MRubyVType.Object => new RObject(c.InstanceVType, c),

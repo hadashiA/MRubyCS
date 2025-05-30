@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MRubyCS.Internals;
@@ -203,13 +202,12 @@ partial class MRubyState
         if (TryFindMethod(receiverClass, methodId, out var method, out receiverClass))
         {
             callInfo.MethodId = methodId;
+            callInfo.Scope = receiverClass;
         }
         else
         {
             method = PrepareMethodMissing(ref callInfo, self, methodId);
         }
-        callInfo.MethodId = methodId;
-        callInfo.Scope = receiverClass;
 
         if (callInfo.ArgumentPacked)
         {
@@ -224,6 +222,7 @@ partial class MRubyState
             {
                 registers[callInfo.ArgumentCount + 1] = registers[callInfo.ArgumentCount + 2]; // copy block
             }
+            callInfo.ArgumentCount--; // remove
         }
 
         // var block = stack[blockArgumentOffset];
@@ -255,8 +254,6 @@ partial class MRubyState
             nextCallInfo.MethodId = default;
             nextCallInfo.Proc = null;
             nextCallInfo.StackPointer = callInfo.StackPointer;
-            callInfo.ArgumentCount = 0;
-            callInfo.KeywordArgumentCount = 0;
             callInfo.CallerType = CallerType.InVmLoop;
             callInfo.Scope = receiverClass;
 
@@ -521,7 +518,7 @@ partial class MRubyState
                                 registerA = array[(int)valueB.IntegerValue];
                                 goto Next;
                             case RHash hash:
-                                registerA = hash[valueB];
+                                registerA = hash.GetValueOrDefault(valueB, this);
                                 goto Next;
                             case RString str:
                                 switch (valueB.VType)
@@ -928,6 +925,11 @@ partial class MRubyState
                             !callInfo.ArgumentPacked &&
                             callInfo.Proc?.HasFlag(MRubyObjectFlags.ProcStrict) == true)
                         {
+                            if (argc + (callInfo.KeywordArgumentPacked ? 1 : 0) != m1)
+                            {
+                                RaiseArgumentNumberError(argc + (callInfo.KeywordArgumentPacked ? 1 : 0), m1);
+                            }
+
                             // clear local (but non-argument) variables
                             var count = m1 + 2; // self + m1 + block
                             if (irep.LocalVariables.Length - count > 0)
@@ -1115,7 +1117,7 @@ partial class MRubyState
                         }
 
                         registers[bb.A] = value;
-                        kdict.As<RHash>().Delete(key);
+                        kdict.As<RHash>().TryDelete(key, out _);
                         goto Next;
                     }
                     case OpCode.KeyP:
@@ -1135,7 +1137,7 @@ partial class MRubyState
                         if (kargOffset >= 0 &&
                             registers[kargOffset].Object is RHash { Length: > 0 } hash)
                         {
-                            var key1 = hash.Keys.First();
+                            var key1 = hash.Keys[0];
                             Raise(Names.ArgumentError, NewString($"unknown keyword: {Stringify(key1)}"));
                         }
                         goto Next;

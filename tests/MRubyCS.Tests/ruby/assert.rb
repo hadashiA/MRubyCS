@@ -139,6 +139,10 @@ def assert_not_include(*args); _assert_include(false, *args) end
 def assert_operator(*args); _assert_operator(true, *args) end
 def assert_not_operator(*args); _assert_operator(false, *args) end
 
+def pass
+  assert_true(true)
+end
+
 def _assert_operator(affirmed, obj1, op, obj2 = $undefined, msg = nil)
   return _assert_predicate(affirmed, obj1, op, msg) if $undefined.equal?(obj2)
   unless ret = obj1.__send__(op, obj2) == affirmed
