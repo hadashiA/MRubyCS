@@ -14,6 +14,7 @@ static class HashMembers
             {
                 state.Raise(Names.ArgumentError, "invalid block"u8);
             }
+
             hash.DefaultValue = defaultValue;
         }
         else if (block.Object is RProc proc)
@@ -61,16 +62,27 @@ static class HashMembers
                 {
                     result.Concat(", "u8);
                 }
+
                 first = false;
 
                 var keyString = state.Inspect(key);
-                result.Concat(keyString);
-                result.Concat("=>"u8);
+                if (key.IsSymbol)
+                {
+                    result.Concat(state.NameOf(key.SymbolValue));
+                    result.Concat(": "u8);
+                }
+                else
+                {
+                    result.Concat(keyString);
+                    result.Concat(" => "u8);
+                }
                 var valueString = state.Inspect(value);
                 result.Concat(valueString);
             }
+
             result.Concat("}"u8);
         }
+
         return MRubyValue.From(result);
     });
 
@@ -83,6 +95,7 @@ static class HashMembers
         {
             return value;
         }
+
         return state.Send(self, Names.Default, key);
     });
 
@@ -103,66 +116,6 @@ static class HashMembers
         hash[key] = value;
         return value;
     });
-    //
-    // [MRubyMethod(RequiredArguments = 1)]
-    // public static MRubyMethod OpEq = new((state, self) =>
-    // {
-    //     var hash = self.As<RHash>();
-    //     var arg = state.GetArgumentAt(0);
-    //     if (arg.Object is not RHash other || hash.Length != other.Length)
-    //     {[8
-    //         return MRubyValue.False;
-    //     }
-    //
-    //     if (hash == other)
-    //     {
-    //         return MRubyValue.True;
-    //     }
-    //
-    //     foreach (var (key, value) in hash)
-    //     {
-    //         if (other.TryGetValue(key, out var otherValue))
-    //         {
-    //             var valueEquals = state.Send(value, Names.OpEq, otherValue);
-    //             if (valueEquals.Falsy) return MRubyValue.False;
-    //         }
-    //         else
-    //         {
-    //             return MRubyValue.False;
-    //         }
-    //     }
-    //     return MRubyValue.True;
-    // });
-    //
-    // [MRubyMethod(RequiredArguments = 1)]
-    // public static MRubyMethod Eql = new((state, self) =>
-    // {
-    //     var hash = self.As<RHash>();
-    //     var arg = state.GetArgumentAt(0);
-    //     if (arg.Object is not RHash other || hash.Length != other.Length)
-    //     {
-    //         return MRubyValue.False;
-    //     }
-    //
-    //     if (hash == other)
-    //     {
-    //         return MRubyValue.True;
-    //     }
-    //
-    //     foreach (var (key, value) in hash)
-    //     {
-    //         if (other.TryGetValue(key, out var otherValue))
-    //         {
-    //             var valueEquals = state.Send(value, Names.QEql, otherValue);
-    //             if (valueEquals.Falsy) return MRubyValue.False;
-    //         }
-    //         else
-    //         {
-    //             return MRubyValue.False;
-    //         }
-    //     }
-    //     return MRubyValue.True;
-    // });
 
     [MRubyMethod]
     public static MRubyMethod Size = new((state, self) =>
@@ -180,6 +133,7 @@ static class HashMembers
         {
             result.Push(key);
         }
+
         return MRubyValue.From(result);
     });
 
@@ -192,6 +146,7 @@ static class HashMembers
         {
             result.Push(value);
         }
+
         return MRubyValue.From(result);
     });
 
@@ -218,21 +173,6 @@ static class HashMembers
         return MRubyValue.From(h.Length <= 0);
     });
 
-    // [MRubyMethod(RequiredArguments = 1)]
-    // public static MRubyMethod ToA = new((state, self) =>
-    // {
-    //     var h = self.As<RHash>();
-    //     var result = state.NewArray(h.Length);
-    //     for (var i = 0; i < h.Length; i++)
-    //     {
-    //         var entry = state.NewArray(2);
-    //         entry.Push(h.Keys[i]);
-    //         entry.Push(h.Values[i]);
-    //         result.Push(MRubyValue.From(entry));
-    //     }
-    //     return MRubyValue.From(result);
-    // });
-
     [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod Default = new((state, self) =>
     {
@@ -243,10 +183,12 @@ static class HashMembers
         {
             return state.Send(MRubyValue.From(proc), Names.Call, self, key);
         }
+
         if (h.DefaultValue.HasValue)
         {
             return h.DefaultValue.Value;
         }
+
         return MRubyValue.Nil;
     });
 
@@ -258,6 +200,7 @@ static class HashMembers
         {
             return MRubyValue.From(proc);
         }
+
         return MRubyValue.Nil;
     });
 
@@ -298,6 +241,13 @@ static class HashMembers
         return MRubyValue.Nil;
     });
 
+    public static MRubyMethod Rehash = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        h.Rehash();
+        return self;
+    });
+
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod InternalDelete = new((state, self) =>
     {
@@ -307,11 +257,7 @@ static class HashMembers
         state.EnsureArgumentCount(1);
 
         var key = state.GetArgumentAt(0);
-        h.TryDelete(key, out var value, out var modified);
-        if (modified)
-        {
-            state.Raise(Names.RuntimeError, "hash modified"u8);
-        }
+        h.TryDelete(key, out var value);
         return value;
     });
 

@@ -17,6 +17,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
 
     readonly List<MRubyValue> keys;
     readonly List<MRubyValue> values;
+    readonly Dictionary<MRubyValue, int> indexTable;
 
     readonly IEqualityComparer<MRubyValue> keyComparer;
     readonly IEqualityComparer<MRubyValue> valueComparer;
@@ -31,6 +32,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         this.valueComparer = valueComparer;
         keys = new List<MRubyValue>(capacity);
         values = new List<MRubyValue>(capacity);
+        indexTable = new Dictionary<MRubyValue, int>(capacity, keyComparer);
     }
 
     RHash(
@@ -44,44 +46,44 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         this.values = values;
         this.keyComparer = keyComparer;
         this.valueComparer = valueComparer;
+        indexTable = new Dictionary<MRubyValue, int>(keys.Count, keyComparer);
+        for (var i = 0; i < keys.Count; i++)
+        {
+            indexTable[keys[i]] = i;
+        }
     }
 
     public MRubyValue this[MRubyValue key]
     {
         get
         {
-            for (var i = 0; i < keys.Count; i++)
+            if (TryGetIndexOfKey(key, out var index))
             {
-                if (KeyEquals(key, keys[i]))
-                {
-                    return values[i];
-                }
+                return values[index];
             }
             return MRubyValue.Nil;
         }
         set
         {
-            for (var i = 0; i < keys.Count; i++)
+            if (indexTable.TryGetValue(key, out var index))
             {
-                if (KeyEquals(key, keys[i]))
-                {
-                    values[i] = value;
-                    return;
-                }
+                keys[index] = key;
+                values[index] = value;
             }
-            keys.Add(key);
-            values.Add(value);
+            else
+            {
+                indexTable.Add(key, keys.Count);
+                keys.Add(key);
+                values.Add(value);
+            }
         }
     }
 
     public MRubyValue GetValueOrDefault(MRubyValue key, MRubyState state)
     {
-        for (var i = 0; i < keys.Count; i++)
+        if (TryGetIndexOfKey(key, out var index))
         {
-            if (KeyEquals(key, keys[i]))
-            {
-                return values[i];
-            }
+            return values[index];
         }
         if (DefaultProc is { } proc)
         {
@@ -97,19 +99,13 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         {
             throw new InvalidOperationException("Duplicate key");
         }
+        indexTable.Add(key, keys.Count);
         keys.Add(key);
         values.Add(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ContainsKey(MRubyValue key)
-    {
-        foreach (var t in Keys)
-        {
-            if (KeyEquals(key, t)) return true;
-        }
-        return false;
-    }
+    public bool ContainsKey(MRubyValue key) => indexTable.TryGetValue(key, out var i);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ContainsValue(MRubyValue value)
@@ -124,42 +120,31 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(MRubyValue key, out MRubyValue value)
     {
-        for (var i = 0; i < keys.Count; i++)
+        if (TryGetIndexOfKey(key, out var index))
         {
-            if (KeyEquals(key, keys[i]))
-            {
-                value = values[i];
-                return true;
-            }
+            value = values[index];
+            return true;
         }
         value = default;
         return false;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryDelete(MRubyValue key, out MRubyValue value, out bool modified)
+    public bool TryDelete(MRubyValue key, out MRubyValue value)
     {
-        var length = Length;
-        for (var i = length - 1; i >= 0; i--)
+        if (TryGetIndexOfKey(key, out var index))
         {
-            if (length != Length)
+            value = values[index];
+            indexTable.Remove(key);
+            keys.RemoveAt(index);
+            values.RemoveAt(index);
+            for (var i = index; i < keys.Count; i++)
             {
-                value = default;
-                modified = true;
-                return false;
+                indexTable[keys[i]] = i;
             }
-
-            if (KeyEquals(key, keys[i]))
-            {
-                value = values[i];
-                keys.RemoveAt(i);
-                values.RemoveAt(i);
-                modified = false;
-                return true;
-            }
+            return true;
         }
         value = default;
-        modified = false;
         return false;
     }
 
@@ -168,19 +153,20 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     {
         keys.Clear();
         values.Clear();
+        indexTable.Clear();
     }
 
     public void ReplaceTo(RHash other)
     {
-        other.Clear();
-
-        foreach (var k in Keys)
+        other.keys.Clear();
+        other.values.Clear();
+        other.indexTable.Clear();
+        for (var i = 0; i < keys.Count; i++)
         {
+            var k = keys[i];
             other.keys.Add(k);
-        }
-        foreach (var v in Values)
-        {
-            other.values.Add(v);
+            other.values.Add(values[i]);
+            other.indexTable.Add(k, i);
         }
 
         other.DefaultValue = DefaultValue;
@@ -193,8 +179,7 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         {
             headKey = keys[0];
             headValue = values[0];
-            keys.RemoveAt(0);
-            values.RemoveAt(0);
+            TryDelete(headKey, out _);
             return true;
         }
         headValue = default;
@@ -220,6 +205,10 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         {
             this[other.keys[i]] = other.values[i];
         }
+    }
+
+    public void Rehash()
+    {
     }
 
     public struct Enumerator(RHash source) : IEnumerator<KeyValuePair<MRubyValue, MRubyValue>>
@@ -253,9 +242,14 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    bool KeyEquals(MRubyValue a, MRubyValue b)
+    bool TryGetIndexOfKey(MRubyValue key, out int index)
     {
-        return keyComparer.Equals(a, b);
+        if (indexTable.TryGetValue(key, out index))
+        {
+            return true;
+        }
+        index = -1;
+        return false;
     }
 
     public Enumerator GetEnumerator() => new(this);

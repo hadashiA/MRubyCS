@@ -480,8 +480,6 @@ public partial class MRubyState
         DefineMethod(HashClass, Names.InitializeCopy, HashMembers.InitializeCopy);
         DefineMethod(HashClass, Names.ToS, HashMembers.Inspect);
         DefineMethod(HashClass, Names.Inspect, HashMembers.Inspect);
-        // DefineMethod(HashClass, Names.OpEq, HashMembers.OpEq);
-        // DefineMethod(HashClass, Names.QEql, HashMembers.Eql);
         DefineMethod(HashClass, Names.OpAref, HashMembers.OpAref);
         DefineMethod(HashClass, Names.OpAset, HashMembers.OpAset);
         DefineMethod(HashClass, Intern("size"u8), HashMembers.Size);
@@ -499,12 +497,11 @@ public partial class MRubyState
         DefineMethod(HashClass, Intern("default_proc"u8), HashMembers.DefaultProc);
         DefineMethod(HashClass, Intern("default="u8), HashMembers.SetDefault);
         DefineMethod(HashClass, Intern("size"u8), HashMembers.Size);
-        // DefineMethod(HashClass, Intern("delete"u8), HashMembers.Delete);
-        // DefineMethod(HashClass, Intern("to_a"u8), HashMembers.ToA);
         DefineMethod(HashClass, Intern("clear"u8), HashMembers.Clear);
         DefineMethod(HashClass, Intern("replace"u8), HashMembers.InitializeCopy);
         DefineMethod(HashClass, Intern("store"u8), HashMembers.OpAset);
         DefineMethod(HashClass, Intern("shift"u8), HashMembers.Shift);
+        DefineMethod(HashClass, Intern("rehash"u8), HashMembers.Rehash);
         DefineMethod(HashClass, Intern("__delete"u8), HashMembers.InternalDelete);
         DefineMethod(HashClass, Intern("__merge"u8), HashMembers.InternalMerge);
     }
