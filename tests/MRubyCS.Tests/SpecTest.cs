@@ -69,6 +69,8 @@ public class SpecTest
             return MRubyValue.From(regex.Match(str).Success);
         });
 
+        mrb.DefineConst(mrb.ObjectClass, mrb.Intern("FLOAT_TOLERANCE"u8), MRubyValue.From(1e-10));
+
         compiler.LoadExecFile(Path.Join(rubyDir, "assert.rb"));
     }
 
@@ -100,6 +102,7 @@ public class SpecTest
     [TestCase("methods.rb")]
     // lib
     [TestCase("integer.rb")]
+    [TestCase("float.rb")]
     [TestCase("string.rb")]
     [TestCase("array.rb")]
     [TestCase("hash.rb")]
