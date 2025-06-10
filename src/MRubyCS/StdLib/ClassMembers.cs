@@ -31,7 +31,7 @@ static class ClassMembers
             state.Send(newClassValue, Names.Initialize,
                 [MRubyValue.From(superClass)],
                 default,
-                block.IsNil ? null : block.As<RProc>());
+                block);
         }
         state.ClassInheritedHook(superClass, newClass);
         return newClassValue;
@@ -67,11 +67,11 @@ static class ClassMembers
                 InstanceVType = MRubyVType.Undef,
                 Super = null!
             },
+            MRubyVType.Fiber => new RFiber(c),
             _ => throw new InvalidOperationException()
         };
         var instanceValue = MRubyValue.From(instance);
-        state.Send(instanceValue, Names.Initialize, args, kargs,
-            block.IsNil ? null : block.As<RProc>());
+        state.Send(instanceValue, Names.Initialize, args, kargs, block);
         return instanceValue;
     });
 
@@ -92,7 +92,7 @@ static class ClassMembers
     {
         var c = self.As<RClass>();
         var block = state.GetBlockArgument();
-        if (block.Object is RProc proc)
+        if (block is { } proc)
         {
             state.YieldWithClass(c, self, [self], proc);
         }

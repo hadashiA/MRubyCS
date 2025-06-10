@@ -178,11 +178,13 @@ class MRubyContext
 
     public int CallDepth { get; private set; }
 
-    public MRubyContext? Previous;
+    public RFiber? Fiber { get; internal set; }
+    public MRubyContext? Previous { get; internal set; }
+    public FiberState State { get; internal set; } = FiberState.Created;
+    public bool VmExecutedByFiber { get; internal set; }
+
     internal MRubyValue[] Stack  = new MRubyValue[StackInitSize];
     internal MRubyCallInfo[] CallStack = new MRubyCallInfo[CallStackInitSize];
-    // public FiberState FiberState;
-    // public RFiber? fiber;
 
     public ref MRubyCallInfo CurrentCallInfo
     {
@@ -510,4 +512,3 @@ class MRubyContext
         }
     }
 }
-

@@ -42,6 +42,7 @@ public partial class MRubyState
     public RClass FalseClass { get; private set; } = default!;
     public RClass NilClass { get; private set; } = default!;
     public RClass SymbolClass { get; private set; } = default!;
+    public RClass FiberClass { get; private set; } = default!;
     public RClass KernelModule { get; private set; } = default!;
     public RClass ExceptionClass { get; private set; } = default!;
     public RClass StandardErrorClass { get; private set; } = default!;
@@ -52,8 +53,9 @@ public partial class MRubyState
     public MRubyValueEqualityComparer ValueEqualityComparer { get; }
     public MRubyValueHashKeyEqualityComparer HashKeyEqualityComparer { get; }
 
-    readonly MRubyContext contextRoot;
-    readonly MRubyContext context = new();
+    internal MRubyContext Context { get; private set; }
+    internal MRubyContext ContextRoot { get; }= new();
+
     readonly SymbolTable symbolTable = new();
     readonly VariableTable globalVariables = new();
 
@@ -64,7 +66,7 @@ public partial class MRubyState
 
     MRubyState()
     {
-        contextRoot = context;
+        Context = ContextRoot;
         ValueEqualityComparer = new MRubyValueEqualityComparer(this);
         HashKeyEqualityComparer = new MRubyValueHashKeyEqualityComparer(this);
     }
@@ -367,12 +369,16 @@ public partial class MRubyState
         FloatClass = DefineClass(Intern("Float"u8), numericClass, MRubyVType.Float);
         UndefClassMethod(FloatClass, Names.New);
         DefineMethod(FloatClass, Names.ToI, FloatMembers.ToI);
+        DefineMethod(FloatClass, Names.ToF, MRubyMethod.Identity);
         DefineMethod(FloatClass, Names.ToS, FloatMembers.ToS);
         DefineMethod(FloatClass, Names.Inspect, FloatMembers.ToS);
         DefineMethod(FloatClass, Names.OpMod, FloatMembers.Mod);
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
         DefineMethod(FloatClass, Names.OpCmp, NumericMembers.OpCmp);
+        DefineMethod(FloatClass, Names.OpAdd, FloatMembers.OpAdd);
         DefineMethod(FloatClass, Intern("divmod"u8), FloatMembers.DivMod);
+        DefineMethod(FloatClass, Intern("abs"u8), FloatMembers.Abs);
+        DefineMethod(FloatClass, Intern("nan?"u8), FloatMembers.QNan);
 
         DefineConst(FloatClass, Intern("INFINITY"u8), MRubyValue.From(double.PositiveInfinity));
         DefineConst(FloatClass, Intern("NAN"u8), MRubyValue.From(double.NaN));
@@ -539,6 +545,28 @@ public partial class MRubyState
             var irep = riteParser.Parse(bytes);
             Exec(irep);
         }
+    }
+
+    void InitFiber()
+    {
+        FiberClass = DefineClass(Intern("Fiber"u8), ObjectClass, MRubyVType.Fiber);
+
+        DefineMethod(FiberClass, Names.Initialize, FiberMembers.Initialize);
+
+        //
+        // mrb_define_method(mrb, c, "initialize", fiber_init,    MRB_ARGS_NONE()|MRB_ARGS_BLOCK());
+        // mrb_define_method(mrb, c, "resume",     fiber_resume,  MRB_ARGS_ANY());
+        // mrb_define_method(mrb, c, "transfer",   fiber_transfer, MRB_ARGS_ANY());
+        // mrb_define_method(mrb, c, "alive?",     fiber_alive_p, MRB_ARGS_NONE());
+        // mrb_define_method(mrb, c, "==",         fiber_eq,      MRB_ARGS_REQ(1));
+        // mrb_define_method(mrb, c, "to_s",       fiber_to_s,    MRB_ARGS_NONE());
+        // mrb_define_alias(mrb, c, "inspect", "to_s");
+//
+        // mrb_define_class_method(mrb, c, "yield", fiber_yield, MRB_ARGS_ANY());
+        // mrb_define_class_method(mrb, c, "current", fiber_current, MRB_ARGS_NONE());
+//
+        // mrb_define_class(mrb, "FiberError", E_STANDARD_ERROR);
+        DefineClass(Intern("FiberError"u8), StandardErrorClass);
     }
 
     bool TrySetClassPathLink(RClass outer, RClass c, Symbol name)

@@ -74,7 +74,7 @@ partial class MRubyState
 
     public MRubyValue GetClassVariable(Symbol id)
     {
-        ref var ci = ref context.CurrentCallInfo;
+        ref var ci = ref Context.CurrentCallInfo;
         RProc? proc = ci.Proc;
         RClass? c;
         while (true)
@@ -130,7 +130,7 @@ partial class MRubyState
 
     public void SetClassVariable(Symbol id, MRubyValue value)
     {
-        RProc? p = context.CurrentCallInfo.Proc;
+        RProc? p = Context.CurrentCallInfo.Proc;
         RClass? c;
         while (true)
         {
