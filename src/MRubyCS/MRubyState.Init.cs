@@ -320,6 +320,7 @@ public partial class MRubyState
         DefineClass(Names.FrozenError, StandardErrorClass);
         DefineClass(Names.NotImplementedError, StandardErrorClass);
         DefineClass(Names.LocalJumpError, StandardErrorClass);
+        DefineClass(Names.FloatDomainError, StandardErrorClass);
 
         DefineClass(Intern("ScriptError"u8), ExceptionClass);
         DefineClass(Intern("SyntaxError"u8), ExceptionClass);
@@ -369,13 +370,42 @@ public partial class MRubyState
 
         FloatClass = DefineClass(Intern("Float"u8), numericClass, MRubyVType.Float);
         UndefClassMethod(FloatClass, Names.New);
-        DefineMethod(FloatClass, Names.ToI, FloatMembers.ToI);
-        DefineMethod(FloatClass, Names.ToS, FloatMembers.ToS);
-        DefineMethod(FloatClass, Names.Inspect, FloatMembers.ToS);
+        DefineMethod(FloatClass, Names.OpPow, FloatMembers.OpPow);
+        DefineMethod(FloatClass, Names.OpAdd, FloatMembers.OpAdd);
+        DefineMethod(FloatClass, Names.OpSub, FloatMembers.OpSub);
+        DefineMethod(FloatClass, Names.OpMul, FloatMembers.OpMul);
+        DefineMethod(FloatClass, Names.OpDiv, FloatMembers.OpDiv);
         DefineMethod(FloatClass, Names.OpMod, FloatMembers.Mod);
+        DefineMethod(FloatClass, Names.OpCmp, FloatMembers.OpCmp);
+        DefineMethod(FloatClass, Names.OpLt, FloatMembers.OpLt);
+        DefineMethod(FloatClass, Names.OpLe, FloatMembers.OpLe);
+        DefineMethod(FloatClass, Names.OpGt, FloatMembers.OpGt);
+        DefineMethod(FloatClass, Names.OpGe, FloatMembers.OpGe);
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
-        DefineMethod(FloatClass, Names.OpCmp, NumericMembers.OpCmp);
+        DefineMethod(FloatClass, Names.OpPlus, (state, self) => self);
+        DefineMethod(FloatClass, Names.OpMinus, FloatMembers.OpNeg);
+        DefineMethod(FloatClass, Names.OpAnd, FloatMembers.OpAnd);
+        DefineMethod(FloatClass, Names.OpOr, FloatMembers.OpOr);
+        DefineMethod(FloatClass, Names.OpXor, FloatMembers.OpXor);
+        DefineMethod(FloatClass, Names.OpLShift, FloatMembers.OpLshift);
+        DefineMethod(FloatClass, Names.OpRShift, FloatMembers.OpRshift);
+        DefineMethod(FloatClass, Intern("ceil"u8), FloatMembers.Ceil);
+        DefineMethod(FloatClass, Intern("finite?"u8), FloatMembers.QFinite);
+        DefineMethod(FloatClass, Intern("floor"u8), FloatMembers.Floor);
+        DefineMethod(FloatClass, Intern("infinite?"u8), FloatMembers.QInfinite);
+        DefineMethod(FloatClass, Intern("round"u8), FloatMembers.Round);
+        DefineMethod(FloatClass, Intern("to_f"u8), FloatMembers.ToF);
+        DefineMethod(FloatClass, Names.ToI, FloatMembers.ToI);
+        DefineMethod(FloatClass, Intern("truncate"u8), FloatMembers.Truncate);
         DefineMethod(FloatClass, Intern("divmod"u8), FloatMembers.DivMod);
+        DefineMethod(FloatClass, Names.ToS, FloatMembers.ToS);
+        DefineMethod(FloatClass, Names.Inspect, FloatMembers.Inspect);
+        DefineMethod(FloatClass, Intern("nan?"u8), FloatMembers.QNan);
+        DefineMethod(FloatClass, Intern("abs"u8), FloatMembers.Abs);
+        DefineMethod(FloatClass, Names.Hash, FloatMembers.Hash);
+        DefineMethod(FloatClass, Names.QEql, FloatMembers.QEql);
+        DefineMethod(FloatClass, Intern("quo"u8), FloatMembers.Quo);
+        DefineMethod(FloatClass, Intern("div"u8), FloatMembers.Div);
         DefineConst(FloatClass, Intern("INFINITY"u8), MRubyValue.From(double.PositiveInfinity));
         DefineConst(FloatClass, Intern("NAN"u8), MRubyValue.From(double.NaN));
     }

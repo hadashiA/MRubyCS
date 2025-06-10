@@ -233,7 +233,7 @@ partial class MRubyState
         Raise(Names.FrozenError, Utf8String.Format($"can't modify frozen {Stringify(v)}"));
     }
 
-    internal void EnsureValueIsConst(MRubyValue value)
+    public void EnsureValueIsConst(MRubyValue value)
     {
         if (value.VType is not (MRubyVType.Class or MRubyVType.Module or MRubyVType.SClass))
         {
@@ -241,7 +241,7 @@ partial class MRubyState
         }
     }
 
-    internal void EnsureValueIsBlock(MRubyValue value)
+    public void EnsureValueIsBlock(MRubyValue value)
     {
         if (!value.IsProc)
         {
@@ -249,7 +249,7 @@ partial class MRubyState
         }
     }
 
-    internal void EnsureClassOrModule(MRubyValue value)
+    public void EnsureClassOrModule(MRubyValue value)
     {
         if (!value.IsClass)
         {
@@ -257,7 +257,7 @@ partial class MRubyState
         }
     }
 
-    internal void EnsureInheritable(RClass c)
+    public void EnsureInheritable(RClass c)
     {
         if (c.VType != MRubyVType.Class)
         {
@@ -273,7 +273,7 @@ partial class MRubyState
         }
     }
 
-    internal void EnsureValueType(MRubyValue value, MRubyVType expectedType)
+    public void EnsureValueType(MRubyValue value, MRubyVType expectedType)
     {
         if (value.VType == expectedType) return;
 
@@ -300,4 +300,6 @@ partial class MRubyState
         }
         Raise(Names.TypeError, NewString($"wrong argument type {actualValueName} (expected {expectedType})"));
     }
+
+
 }

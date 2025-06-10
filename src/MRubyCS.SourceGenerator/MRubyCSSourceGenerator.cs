@@ -56,6 +56,7 @@ public class MRubyCSSourceGenerator : IIncrementalGenerator
         new("ToSym", "to_sym"),
         new("ToA", "to_a"),
         new("ToI", "to_i"),
+        new("ToF", "to_f"),
         new("Inspect", "inspect"),
         new("Raise", "raise"),
         new("Name", "name"),
@@ -141,7 +142,7 @@ public class MRubyCSSourceGenerator : IIncrementalGenerator
         new("SystemStackError", "SystemStackError"),
         new("FloatDomainError", "FloatDomainError"),
         new("KeyError", "KeyError"),
-        new("FiberError", "FiberError")
+        new("FiberError", "FiberError"),
     ];
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
