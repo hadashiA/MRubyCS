@@ -33,7 +33,7 @@ sealed class ConstSymbolDefinition
 }
 
 [Generator(LanguageNames.CSharp)]
-public class MRubyDSourceGenerator : IIncrementalGenerator
+public class MRubyCSSourceGenerator : IIncrementalGenerator
 {
     static readonly KeyValuePair<string, string>[] KnownSymbols =
     [
@@ -141,6 +141,7 @@ public class MRubyDSourceGenerator : IIncrementalGenerator
         new("SystemStackError", "SystemStackError"),
         new("FloatDomainError", "FloatDomainError"),
         new("KeyError", "KeyError"),
+        new("FiberError", "FiberError")
     ];
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -243,7 +244,7 @@ static class Names
 
     public static bool TryGetName(Symbol symbol, out ReadOnlySpan<byte> name)
     {
-        if (symbol.Value > 0 && symbol.Value < Count)
+        if (symbol.Value > 0 && symbol.Value <= Count)
         {
             name = Utf8Names[(int)symbol.Value - 1];
             return true;
