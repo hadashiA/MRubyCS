@@ -837,9 +837,9 @@ partial class MRubyState
                         if (method.Kind == MRubyMethodKind.CSharpFunc)
                         {
                             var result = method.Invoke(this, self);
-                            Context.Stack[callInfo.StackPointer] = result;
 
                             callInfo = ref Context.CurrentCallInfo;
+                            Context.Stack[callInfo.StackPointer] = result;
                             var keepContext = callInfo.KeepContext;
                             var callerType = callInfo.CallerType;
 
@@ -2126,7 +2126,7 @@ partial class MRubyState
 
             Context.Fiber?.Terminate(ref callInfo);
 
-            // case using Fiber#transfer in mrb_fiber_resume()
+            // case using Fiber#transfer in resume
             if (Context.VmExecutedByFiber || (Context == ContextRoot && Context.CallDepth <= 0))
             {
                 Context.VmExecutedByFiber = false;

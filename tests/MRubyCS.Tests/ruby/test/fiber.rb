@@ -26,115 +26,115 @@
 #      assert_equal([:baz], ary)
 #      assert_false f1.alive?
 #    end
-#
-#    assert('Fiber#alive?') do
-#      f = Fiber.new{ Fiber.yield }
-#      f.resume
-#      assert_true f.alive?
-#      f.resume
-#      assert_false f.alive?
-#    end
-#
-#    assert('Fiber#==') do
-#      root = Fiber.current
-#      assert_equal root, root
-#      assert_equal root, Fiber.current
-#      assert_false root != Fiber.current
-#      f = Fiber.new {
-#        assert_false root == Fiber.current
-#      }
-#      f.resume
-#      assert_false f == root
-#      assert_true f != root
-#    end
-#
-#    assert('Fiber.yield') do
-#      f = Fiber.new{|x| Fiber.yield x }
-#      assert_equal 3, f.resume(3)
-#      assert_true f.alive?
-#    end
-#
-#    assert('FiberError') do
-#      assert_equal StandardError, FiberError.superclass
-#    end
-#
-#    assert('Fiber iteration') do
-#      f1 = Fiber.new{
-#        [1,2,3].each{|x| Fiber.yield(x)}
-#      }
-#      f2 = Fiber.new{
-#        [9,8,7].each{|x| Fiber.yield(x)}
-#      }
-#      a = []
-#      3.times {
-#        a << f1.resume
-#        a << f2.resume
-#      }
-#      assert_equal [1,9,2,8,3,7], a
-#    end
-#
-#    assert('Fiber with splat in the block argument list') {
-#      assert_equal([1], Fiber.new{|*x|x}.resume(1))
-#    }
-#
-#    assert('Fiber raises on resume when dead') do
-#      assert_raise(FiberError) do
-#        f = Fiber.new{}
-#        f.resume
-#        assert_false f.alive?
-#        f.resume
-#      end
-#    end
-#
-#    assert('Yield raises when called on root fiber') do
-#      assert_raise(FiberError) { Fiber.yield }
-#    end
-#
-#    assert('Double resume of Fiber') do
-#      f1 = Fiber.new {}
-#      f2 = Fiber.new {
-#        f1.resume
-#        assert_raise(FiberError) { f2.resume }
-#        Fiber.yield 0
-#      }
-#      assert_equal 0, f2.resume
-#      f2.resume
-#      assert_false f1.alive?
-#      assert_false f2.alive?
-#    end
-#
-#    assert('Recursive resume of Fiber') do
-#      f1, f2 = nil, nil
-#      f1 = Fiber.new { assert_raise(FiberError) { f2.resume } }
-#      f2 = Fiber.new {
-#        f1.resume
-#        Fiber.yield 0
-#      }
-#      f3 = Fiber.new {
-#        f2.resume
-#      }
-#      assert_equal 0, f3.resume
-#      f2.resume
-#      assert_false f1.alive?
-#      assert_false f2.alive?
-#      assert_false f3.alive?
-#    end
-#
-#    assert('Root fiber resume') do
-#      root = Fiber.current
-#      assert_raise(FiberError) { root.resume }
-#      f = Fiber.new {
-#        assert_raise(FiberError) { root.resume }
-#      }
-#      f.resume
-#      assert_false f.alive?
-#    end
-#
-#    assert('Fiber without block') do
-#      assert_raise(ArgumentError) { Fiber.new }
-#    end
-#
-#
+
+   assert('Fiber#alive?') do
+     f = Fiber.new{ Fiber.yield }
+     f.resume
+     assert_true f.alive?
+     f.resume
+     assert_false f.alive?
+   end
+
+   assert('Fiber#==') do
+     root = Fiber.current
+     assert_equal root, root
+     assert_equal root, Fiber.current
+     assert_false root != Fiber.current
+     f = Fiber.new {
+       assert_false root == Fiber.current
+     }
+     f.resume
+     assert_false f == root
+     assert_true f != root
+   end
+
+   assert('Fiber.yield') do
+     f = Fiber.new{|x| Fiber.yield x }
+     assert_equal 3, f.resume(3)
+     assert_true f.alive?
+   end
+
+   assert('FiberError') do
+     assert_equal StandardError, FiberError.superclass
+   end
+
+   assert('Fiber iteration') do
+     f1 = Fiber.new{
+       [1,2,3].each{|x| Fiber.yield(x)}
+     }
+     f2 = Fiber.new{
+       [9,8,7].each{|x| Fiber.yield(x)}
+     }
+     a = []
+     3.times {
+       a << f1.resume
+       a << f2.resume
+     }
+     assert_equal [1,9,2,8,3,7], a
+   end
+
+   assert('Fiber with splat in the block argument list') {
+     assert_equal([1], Fiber.new{|*x|x}.resume(1))
+   }
+
+   assert('Fiber raises on resume when dead') do
+     assert_raise(FiberError) do
+       f = Fiber.new{}
+       f.resume
+       assert_false f.alive?
+       f.resume
+     end
+   end
+
+   assert('Yield raises when called on root fiber') do
+     assert_raise(FiberError) { Fiber.yield }
+   end
+
+   assert('Double resume of Fiber') do
+     f1 = Fiber.new {}
+     f2 = Fiber.new {
+       f1.resume
+       assert_raise(FiberError) { f2.resume }
+       Fiber.yield 0
+     }
+     assert_equal 0, f2.resume
+     f2.resume
+     assert_false f1.alive?
+     assert_false f2.alive?
+   end
+
+   assert('Recursive resume of Fiber') do
+     f1, f2 = nil, nil
+     f1 = Fiber.new { assert_raise(FiberError) { f2.resume } }
+     f2 = Fiber.new {
+       f1.resume
+       Fiber.yield 0
+     }
+     f3 = Fiber.new {
+       f2.resume
+     }
+     assert_equal 0, f3.resume
+     f2.resume
+     assert_false f1.alive?
+     assert_false f2.alive?
+     assert_false f3.alive?
+   end
+
+   assert('Root fiber resume') do
+     root = Fiber.current
+     assert_raise(FiberError) { root.resume }
+     f = Fiber.new {
+       assert_raise(FiberError) { root.resume }
+     }
+     f.resume
+     assert_false f.alive?
+   end
+
+   assert('Fiber without block') do
+     assert_raise(ArgumentError) { Fiber.new }
+   end
+
+
 #    assert('Transfer to self.') do
 #      result = []
 #      f = Fiber.new { result << :start; f.transfer; result << :end }

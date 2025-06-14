@@ -1,4 +1,5 @@
 $undefined = Object.new
+$asserts = []
 
 ##
 # Verify a code block.
@@ -9,8 +10,7 @@ $undefined = Object.new
 #       which will be tested by this
 #       assertion
 def assert(str = 'assert', iso = '')
-  $asserts = []
-
+  $asserts.clear
   begin
     yield
   rescue Exception => e
