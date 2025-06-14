@@ -183,6 +183,7 @@ public sealed class RFiber : RObject
             {
                 context.ExtendStack(args.Length + 2); // for receiver and (optional) block
                 args.CopyTo(context.Stack.AsSpan(1));
+                context.CallStack[0].ArgumentCount = (byte)args.Length;
             }
 
             if (Proc!.Scope is REnv env)

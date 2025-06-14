@@ -839,13 +839,24 @@ partial class MRubyState
                             var result = method.Invoke(this, self);
                             Context.Stack[callInfo.StackPointer] = result;
 
-                            var keepContext = Context.CurrentCallInfo.KeepContext;
+                            callInfo = ref Context.CurrentCallInfo;
+                            var keepContext = callInfo.KeepContext;
+                            var callerType = callInfo.CallerType;
+
                             Context.PopCallStack();
                             callInfo = ref Context.CurrentCallInfo;
                             irep = callInfo.Proc!.Irep;
                             registers = Context.Stack.AsSpan(callInfo.StackPointer);
                             sequence = irep.Sequence.AsSpan();
 
+                            // return from context modifying method (resume/yield)
+                            if (!keepContext)
+                            {
+                                if (callerType == CallerType.Resumed)
+                                {
+                                    return result;
+                                }
+                            }
                             goto Next;
                         }
 
@@ -2121,9 +2132,11 @@ partial class MRubyState
                 Context.VmExecutedByFiber = false;
                 return false;
             }
+
+            callInfo = Context.CurrentCallInfo;
         }
 
-        if (Context.VmExecutedByFiber && callInfo.Scope == null)
+        if (Context.VmExecutedByFiber && !callInfo.KeepContext)
         {
             Context.VmExecutedByFiber = false;
             return false;
