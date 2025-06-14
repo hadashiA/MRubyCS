@@ -14,5 +14,6 @@ public sealed class RException(
         InstanceVariables.CopyTo(clone.InstanceVariables);
         return clone;
     }
-}
 
+    public override string ToString() => $"{Message}";
+}

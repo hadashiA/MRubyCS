@@ -5,6 +5,8 @@ namespace MRubyCS;
 
 partial class MRubyState
 {
+    public RFiber CurrentFiber => Context.Fiber ??= new RFiber(Context, this, FiberClass);
+
     public RFiber CreateFiber(ReadOnlySpan<byte> bytecode)
     {
         var proc  = CreateProc(bytecode);
@@ -28,7 +30,7 @@ partial class MRubyState
         };
     }
 
-    internal void SwitchContextTo(MRubyContext newContext)
+    internal void SwitchToContext(MRubyContext newContext)
     {
         Context = newContext;
     }
@@ -45,7 +47,7 @@ partial class MRubyState
     {
         for (var i = context.CallDepth - 1; i >= 0; i--)
         {
-            if (Context.CallStack[i].CallerType > CallerType.InVmLoop)
+            if (context.CallStack[i].CallerType > CallerType.InVmLoop)
             {
                 Raise(Names.FiberError, "can't cross C# function boundary"u8);
             }

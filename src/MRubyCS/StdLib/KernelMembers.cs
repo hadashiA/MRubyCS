@@ -271,18 +271,17 @@ static class KernelMembers
     public static MRubyMethod Lambda = new((state, self) =>
     {
         var block = state.GetBlockArgument();
-        if (block.IsNil)
+        if (block == null)
         {
             state.Raise(Names.ArgumentError, "tried to create Proc object without a block"u8);
         }
-        state.EnsureBlockGiven(block);
-        var p = block.As<RProc>();
-        if (!p.HasFlag(MRubyObjectFlags.ProcStrict))
+
+        if (!block!.HasFlag(MRubyObjectFlags.ProcStrict))
         {
-            var dup = p.Dup();
+            var dup = block.Dup();
             dup.SetFlag(MRubyObjectFlags.ProcStrict);
             return MRubyValue.From(dup);
         }
-        return block;
+        return MRubyValue.From(block);
     });
 }

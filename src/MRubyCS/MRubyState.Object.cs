@@ -391,7 +391,7 @@ partial class MRubyState
             return MRubyValue.From(array.Dup());
         }
 
-        var methodId = Intern("to_a"u8);
+        var methodId = Names.ToA;
         if (!RespondTo(value, methodId))
         {
             return MRubyValue.From(NewArray(value));

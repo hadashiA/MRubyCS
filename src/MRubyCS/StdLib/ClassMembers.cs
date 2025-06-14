@@ -67,7 +67,7 @@ static class ClassMembers
                 InstanceVType = MRubyVType.Undef,
                 Super = null!
             },
-            MRubyVType.Fiber => new RFiber(c),
+            MRubyVType.Fiber => new RFiber(state, c),
             _ => throw new InvalidOperationException()
         };
         var instanceValue = MRubyValue.From(instance);

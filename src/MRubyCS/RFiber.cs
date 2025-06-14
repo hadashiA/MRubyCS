@@ -18,57 +18,42 @@ public sealed class RFiber : RObject
         this.state = state;
     }
 
-    public void Reset(RProc proc)
+    internal RFiber(MRubyContext context, MRubyState state, RClass c) : base(MRubyVType.Fiber, c)
     {
-        Proc = proc;
-
-        context.UnwindStack();
-
-        // copy receiver from a block
-        context.Stack[0] = state.Context.CurrentStack[0];
-
-        // adjust return callinfo
-        ref var callInfo = ref context.CurrentCallInfo;
-        callInfo.Scope = proc.Scope!;
-        callInfo.Proc = proc;
-
-        // push dummy callinfo
-        context.CallStack[1] = state.Context.CallStack[0];
-        context.PushCallStack();
+        this.context = context;
+        this.context.Fiber = this;
+        this.state = state;
     }
 
-    public bool Resume(ReadOnlySpan<MRubyValue> args, out RException? error)
+    public bool Resume(ReadOnlySpan<MRubyValue> args, out MRubyValue result)
     {
-        return MoveNext(args, false, true, out error);
+        return MoveNext(args, false, true, out result);
     }
 
-    public bool Transfer(ReadOnlySpan<MRubyValue> args, out RException? error)
+    public bool Transfer(ReadOnlySpan<MRubyValue> args, out MRubyValue result)
     {
         state.EnsureValidFiberBoundaryRecursive();
         if (context.State == FiberState.Resumed)
         {
-            error = FiberError("attempt to transfer to a resuming fiber"u8);
-            return false;
+            state.Raise(Names.FiberError, "attempt to transfer to a resuming fiber"u8);
         }
 
         if (context == state.ContextRoot)
         {
             state.Context.State = FiberState.Transferred;
-            state.SwitchContextTo(context);
+            state.SwitchToContext(context);
             context.State = FiberState.Running;
-            context.CurrentCallInfo.Scope = null!;
-
-            error = default!;
+            context.CurrentCallInfo.MarkContextModify();
+            result = state.AsFiberResult(args);
             return true;
         }
 
         if (context == state.Context)
         {
-            error = default!;
+            result = state.AsFiberResult(args);
             return true;
         }
-
-        return MoveNext(args, true, false, out error);
+        return MoveNext(args, true, false, out result);
     }
 
     public void Yield()
@@ -92,35 +77,70 @@ public sealed class RFiber : RObject
         context.State = FiberState.Suspended;
 
         context.Previous!.State = FiberState.Running;
-        state.SwitchContextTo(context.Previous);
+        state.SwitchToContext(context.Previous);
         context.Previous = null;
+
+        ref var currentCallInfo = ref state.Context.CurrentCallInfo;
+        if (context.VmExecutedByFiber)
+        {
+            context.VmExecutedByFiber = false;
+            currentCallInfo.CallerType = CallerType.Resumed;
+        }
+        currentCallInfo.MarkContextModify();
     }
 
-    internal bool MoveNext(
-        ReadOnlySpan<MRubyValue> args,
-        bool transfer,
-        bool vmexec,
-        out RException error)
+    internal void Reset(RProc proc)
+    {
+        Proc = proc;
+
+        context.UnwindStack();
+
+        // copy receiver from a block
+        context.Stack[0] = state.Context.Stack[state.Context.CurrentCallInfo.StackPointer];
+
+        // adjust return callinfo
+        ref var callInfo = ref context.CurrentCallInfo;
+        callInfo.Scope = proc.Scope!.TargetClass;
+        callInfo.Proc = proc;
+
+        // push dummy callinfo
+        context.CallStack[1] = context.CallStack[0];
+        context.PushCallStack();
+    }
+
+    internal void Terminate(ref MRubyCallInfo callInfo)
+    {
+        callInfo.MarkContextModify();
+        context.UnwindStack();
+        context.State = FiberState.Terminated;
+        context.CallStack.AsSpan().Clear();
+        context.Stack.AsSpan().Clear();
+
+        state.SwitchToContext(context.Previous ?? state.ContextRoot);
+        context.Previous = null;
+        state.Context.State = FiberState.Running;
+    }
+
+    internal bool MoveNext(ReadOnlySpan<MRubyValue> args, bool transfer, bool vmexec, out MRubyValue result)
     {
         if (!transfer && context == state.Context)
         {
-            error = FiberError("attempt to resume the current fiber"u8);
-            return false;
+            state.Raise(Names.FiberError, "attempt to transfer to a resuming fiber"u8);
         }
 
         var currentStatus = context.State;
         switch (currentStatus)
         {
             case FiberState.Transferred:
-                error = FiberError("resuming transferred fiber"u8);
-                return false;
+                state.Raise(Names.FiberError, "resuming transferred fiber"u8);
+                break;
             case FiberState.Running:
             case FiberState.Resumed:
-                error = FiberError("double resume"u8);
-                return false;
+                state.Raise(Names.FiberError, "double resume"u8);
+                break;
             case FiberState.Terminated:
-                error = FiberError("resuming dead fiber"u8);
-                return false;
+                state.Raise(Names.FiberError, "resuming dead fiber"u8);
+                break;
         }
 
         state.EnsureValidFiberBoundary(context);
@@ -138,15 +158,13 @@ public sealed class RFiber : RObject
             context.Previous = currentContext;
         }
 
-        context.Previous = currentContext;
-        state.SwitchContextTo(context);
+        state.SwitchToContext(context);
 
         if (currentStatus == FiberState.Created)
         {
             if (context.CurrentCallInfo.Proc == null)
             {
-                error = FiberError("double resume (current)"u8);
-                return false;
+                state.Raise(Names.FiberError, "double resume (current)"u8);
             }
 
             if (vmexec)
@@ -167,8 +185,7 @@ public sealed class RFiber : RObject
                 args.CopyTo(context.Stack.AsSpan(1));
             }
 
-            MRubyValue result;
-            if (context.CallStack[0].Scope is REnv env)
+            if (Proc!.Scope is REnv env)
             {
                 result = env.Stack[0];
             }
@@ -181,10 +198,11 @@ public sealed class RFiber : RObject
         }
         else
         {
+            result = state.AsFiberResult(args);
             if (vmexec)
             {
-                context.PopCallStack(); // pop dummy callinfo
-                context.Stack[0] = state.AsFiberResult(args);
+                if (context.CallDepth > 0) context.PopCallStack(); // pop dummy callinfo
+                context.Stack[context.CallStack[1].StackPointer] = result;
             }
         }
 
@@ -193,30 +211,16 @@ public sealed class RFiber : RObject
             var currentCallerType = currentContext.CurrentCallInfo.CallerType;
             context.VmExecutedByFiber = true;
 
-            state.Exec(Proc!.Irep);
-            state.SwitchContextTo(currentContext);
+            result = state.Exec(Proc!.Irep);
+            state.SwitchToContext(currentContext);
             // restore values as they may have changed in Fiber.yield
             currentContext.CurrentCallInfo.CallerType = currentCallerType;
         }
         else
         {
-            context.CallStack[0].Scope = null!;
+            context.CurrentCallInfo.MarkContextModify();
         }
 
-        error = default!;
-        return true;
-    }
-
-    internal void Terminate(ref MRubyCallInfo callInfo)
-    {
-
-    }
-
-
-RException FiberError(ReadOnlySpan<byte> message)
-    {
-        return new RException(
-            state.NewString(message),
-            state.GetExceptionClass(Names.FiberError));
+        return IsAlive;
     }
 }

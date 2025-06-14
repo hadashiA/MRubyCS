@@ -87,6 +87,8 @@ struct MRubyCallInfo
         }
     }
 
+    public bool KeepContext => Scope != null;
+
     public void Clear()
     {
         // Proc?.SetFlag(MRubyObjectFlags.ProcOrphan);
@@ -105,6 +107,11 @@ struct MRubyCallInfo
     public void MarkAsKeywordArgumentPacked()
     {
         KeywordArgumentCount = CallMaxArgs;
+    }
+
+    public void MarkContextModify()
+    {
+        Scope = null!;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

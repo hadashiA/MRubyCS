@@ -9,9 +9,9 @@ static class ModuleMembers
     {
         var mod = self.As<RClass>();
         var block = state.GetBlockArgument();
-        if (block.Object is RProc proc)
+        if (block != null)
         {
-            state.YieldWithClass(mod, self, [self], proc);
+            state.YieldWithClass(mod, self, [self], block);
         }
         return self;
     });
@@ -68,7 +68,7 @@ static class ModuleMembers
     public static MRubyMethod ClassEval = new((state, self) =>
     {
         var block = state.GetBlockArgument(false);
-        return state.EvalUnder(self, block.As<RProc>(), self.As<RClass>());
+        return state.EvalUnder(self, block!, self.As<RClass>());
     });
 
     [MRubyMethod(RestArguments = true)]
@@ -308,9 +308,9 @@ static class ModuleMembers
         var block = state.GetBlockArgument();
 
         RProc? p;
-        if (block.Object is RProc blockObj)
+        if (block != null)
         {
-            p = blockObj;
+            p = block;
         }
         else
         {

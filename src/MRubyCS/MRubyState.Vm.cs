@@ -208,7 +208,7 @@ partial class MRubyState
             var block = GetBlockArgument();
             var args = GetRestArgumentsAfter(1);
             var kargs = GetKeywordArguments();
-            return Send(self, methodId, args, kargs, block.IsNil ? null : block.As<RProc>());
+            return Send(self, methodId, args, kargs, block);
         }
 
         var registers = Context.Stack.AsSpan(callInfo.StackPointer + 1);
@@ -839,11 +839,13 @@ partial class MRubyState
                             var result = method.Invoke(this, self);
                             Context.Stack[callInfo.StackPointer] = result;
 
+                            var keepContext = Context.CurrentCallInfo.KeepContext;
                             Context.PopCallStack();
                             callInfo = ref Context.CurrentCallInfo;
                             irep = callInfo.Proc!.Irep;
                             registers = Context.Stack.AsSpan(callInfo.StackPointer);
                             sequence = irep.Sequence.AsSpan();
+
                             goto Next;
                         }
 
@@ -1161,7 +1163,7 @@ partial class MRubyState
                         Markers.Return();
                         a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
                         var returnValue = registers[a];
-                        if (TryReturnJump(ref callInfo, Context.CallDepth, registers[a]))
+                        if (TryReturnJump(ref callInfo, Context.CallDepth, returnValue))
                         {
                             goto JumpAndNext;
                         }
@@ -2096,6 +2098,7 @@ partial class MRubyState
                     Tag = BreakTag.Break,
                     Value = returnValue
                 });
+                Context.VmExecutedByFiber = false;
                 throw Exception;
             }
         }
@@ -2110,10 +2113,21 @@ partial class MRubyState
                 return false;
             }
 
-            // TODO: Fiber terminate
+            Context.Fiber?.Terminate(ref callInfo);
+
+            // case using Fiber#transfer in mrb_fiber_resume()
+            if (Context.VmExecutedByFiber || (Context == ContextRoot && Context.CallDepth <= 0))
+            {
+                Context.VmExecutedByFiber = false;
+                return false;
+            }
         }
 
-        // TODO: Check Fiber switched
+        if (Context.VmExecutedByFiber && callInfo.Scope == null)
+        {
+            Context.VmExecutedByFiber = false;
+            return false;
+        }
 
         var returnOffset = callInfo.StackPointer;
         Context.PopCallStack();
@@ -2167,10 +2181,13 @@ partial class MRubyState
             else
             {
                 // Fiber context
-
-
-                // TODO: Fiber terminate
-                throw new NotSupportedException();
+                Context.Fiber?.Terminate(ref callInfo);
+                callInfo = ref Context.CurrentCallInfo;
+                if (!Context.VmExecutedByFiber)
+                {
+                    return TryRaiseJump(ref callInfo);
+                }
+                return false;
             }
         }
     }

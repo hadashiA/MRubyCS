@@ -23,6 +23,7 @@ public partial class MRubyState
         mrb.InitHash();
         mrb.InitRange();
         mrb.InitEnumerable();
+        mrb.InitFiber();
         mrb.InitMrbLib();
         return mrb;
     }
@@ -369,17 +370,12 @@ public partial class MRubyState
         FloatClass = DefineClass(Intern("Float"u8), numericClass, MRubyVType.Float);
         UndefClassMethod(FloatClass, Names.New);
         DefineMethod(FloatClass, Names.ToI, FloatMembers.ToI);
-        DefineMethod(FloatClass, Names.ToF, MRubyMethod.Identity);
         DefineMethod(FloatClass, Names.ToS, FloatMembers.ToS);
         DefineMethod(FloatClass, Names.Inspect, FloatMembers.ToS);
         DefineMethod(FloatClass, Names.OpMod, FloatMembers.Mod);
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
         DefineMethod(FloatClass, Names.OpCmp, NumericMembers.OpCmp);
-        DefineMethod(FloatClass, Names.OpAdd, FloatMembers.OpAdd);
         DefineMethod(FloatClass, Intern("divmod"u8), FloatMembers.DivMod);
-        DefineMethod(FloatClass, Intern("abs"u8), FloatMembers.Abs);
-        DefineMethod(FloatClass, Intern("nan?"u8), FloatMembers.QNan);
-
         DefineConst(FloatClass, Intern("INFINITY"u8), MRubyValue.From(double.PositiveInfinity));
         DefineConst(FloatClass, Intern("NAN"u8), MRubyValue.From(double.NaN));
     }
@@ -552,20 +548,15 @@ public partial class MRubyState
         FiberClass = DefineClass(Intern("Fiber"u8), ObjectClass, MRubyVType.Fiber);
 
         DefineMethod(FiberClass, Names.Initialize, FiberMembers.Initialize);
+        DefineMethod(FiberClass, Names.OpEq, FiberMembers.OpEq);
+        DefineMethod(FiberClass, Names.ToS, FiberMembers.ToS);
+        DefineMethod(FiberClass, Names.Inspect, FiberMembers.ToS);
+        DefineMethod(FiberClass, Intern("resume"u8), FiberMembers.Resume);
+        DefineMethod(FiberClass, Intern("transfer"u8), FiberMembers.Transfer);
+        DefineMethod(FiberClass, Intern("alive?"u8), FiberMembers.Alive);
+        DefineClassMethod(FiberClass, Intern("yield"u8), FiberMembers.Yield);
+        DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
 
-        //
-        // mrb_define_method(mrb, c, "initialize", fiber_init,    MRB_ARGS_NONE()|MRB_ARGS_BLOCK());
-        // mrb_define_method(mrb, c, "resume",     fiber_resume,  MRB_ARGS_ANY());
-        // mrb_define_method(mrb, c, "transfer",   fiber_transfer, MRB_ARGS_ANY());
-        // mrb_define_method(mrb, c, "alive?",     fiber_alive_p, MRB_ARGS_NONE());
-        // mrb_define_method(mrb, c, "==",         fiber_eq,      MRB_ARGS_REQ(1));
-        // mrb_define_method(mrb, c, "to_s",       fiber_to_s,    MRB_ARGS_NONE());
-        // mrb_define_alias(mrb, c, "inspect", "to_s");
-//
-        // mrb_define_class_method(mrb, c, "yield", fiber_yield, MRB_ARGS_ANY());
-        // mrb_define_class_method(mrb, c, "current", fiber_current, MRB_ARGS_NONE());
-//
-        // mrb_define_class(mrb, "FiberError", E_STANDARD_ERROR);
         DefineClass(Intern("FiberError"u8), StandardErrorClass);
     }
 
