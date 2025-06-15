@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace MRubyCS.Internals;
 
@@ -182,8 +183,10 @@ class MRubyContext
     const int CallStackInitSize = 128;
     const int StackInitSize = 32;
     const int CallDepthMax = 512;
+    static int LastId = -1;
 
     public int CallDepth { get; private set; }
+    public int Id { get; }
 
     public RFiber? Fiber { get; internal set; }
     public MRubyContext? Previous { get; internal set; }
@@ -212,6 +215,7 @@ class MRubyContext
     public MRubyContext()
     {
         CallStack[0] = new MRubyCallInfo();
+        Id = Interlocked.Increment(ref LastId);
     }
 
     public bool CheckProcIsOrphan(RProc proc)

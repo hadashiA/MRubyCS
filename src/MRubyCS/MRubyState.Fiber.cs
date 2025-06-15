@@ -33,6 +33,7 @@ partial class MRubyState
     internal void SwitchToContext(MRubyContext newContext)
     {
         Context = newContext;
+        newContext.State = FiberState.Running;
     }
 
     internal void EnsureFiberInitialized(RFiber fiber)
@@ -45,7 +46,7 @@ partial class MRubyState
 
     internal void EnsureValidFiberBoundary(MRubyContext context)
     {
-        for (var i = context.CallDepth - 1; i >= 0; i--)
+        for (var i = context.CallDepth; i >= 0; i--)
         {
             if (context.CallStack[i].CallerType > CallerType.InVmLoop)
             {
@@ -54,14 +55,14 @@ partial class MRubyState
         }
     }
 
-    internal void EnsureValidFiberBoundaryRecursive()
+    internal void EnsureValidFiberBoundaryRecursive(MRubyContext context)
     {
-        var context = Context.Previous;
-        while (context != null)
+        var c = context.Previous;
+        while (c != null)
         {
-            EnsureValidFiberBoundary(context);
-            if (context == ContextRoot) break;
-            context = Context.Previous;
+            EnsureValidFiberBoundary(c);
+            if (c == ContextRoot) break;
+            c = c.Previous;
         }
     }
 }

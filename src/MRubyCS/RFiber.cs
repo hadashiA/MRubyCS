@@ -8,6 +8,7 @@ public sealed class RFiber : RObject
     public RProc? Proc { get; private set; }
     public FiberState State => context.State;
     public bool IsAlive => context.State != FiberState.Terminated;
+    public bool IsRoot => context == state.ContextRoot;
 
     readonly MRubyContext context = new();
     readonly MRubyState state;
@@ -32,7 +33,7 @@ public sealed class RFiber : RObject
 
     public bool Transfer(ReadOnlySpan<MRubyValue> args, out MRubyValue result)
     {
-        state.EnsureValidFiberBoundaryRecursive();
+        state.EnsureValidFiberBoundaryRecursive(state.Context);
         if (context.State == FiberState.Resumed)
         {
             state.Raise(Names.FiberError, "attempt to transfer to a resuming fiber"u8);
@@ -42,7 +43,6 @@ public sealed class RFiber : RObject
         {
             state.Context.State = FiberState.Transferred;
             state.SwitchToContext(context);
-            context.State = FiberState.Running;
             context.CurrentCallInfo.MarkContextModify();
             result = state.AsFiberResult(args);
             return true;
@@ -76,8 +76,7 @@ public sealed class RFiber : RObject
         state.EnsureValidFiberBoundary(context);
         context.State = FiberState.Suspended;
 
-        context.Previous!.State = FiberState.Running;
-        state.SwitchToContext(context.Previous);
+        state.SwitchToContext(context.Previous!);
         context.Previous = null;
 
         ref var currentCallInfo = ref state.Context.CurrentCallInfo;
@@ -118,7 +117,6 @@ public sealed class RFiber : RObject
 
         state.SwitchToContext(context.Previous ?? state.ContextRoot);
         context.Previous = null;
-        state.Context.State = FiberState.Running;
     }
 
     internal bool MoveNext(ReadOnlySpan<MRubyValue> args, bool transfer, bool vmexec, out MRubyValue result)
@@ -132,7 +130,10 @@ public sealed class RFiber : RObject
         switch (currentStatus)
         {
             case FiberState.Transferred:
-                state.Raise(Names.FiberError, "resuming transferred fiber"u8);
+                if (!transfer)
+                {
+                    state.Raise(Names.FiberError, "resuming transferred fiber"u8);
+                }
                 break;
             case FiberState.Running:
             case FiberState.Resumed:
