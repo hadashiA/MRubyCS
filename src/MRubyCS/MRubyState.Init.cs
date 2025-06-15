@@ -23,6 +23,7 @@ public partial class MRubyState
         mrb.InitHash();
         mrb.InitRange();
         mrb.InitEnumerable();
+        mrb.InitFiber();
         mrb.InitMrbLib();
         return mrb;
     }
@@ -42,6 +43,7 @@ public partial class MRubyState
     public RClass FalseClass { get; private set; } = default!;
     public RClass NilClass { get; private set; } = default!;
     public RClass SymbolClass { get; private set; } = default!;
+    public RClass FiberClass { get; private set; } = default!;
     public RClass KernelModule { get; private set; } = default!;
     public RClass ExceptionClass { get; private set; } = default!;
     public RClass StandardErrorClass { get; private set; } = default!;
@@ -52,8 +54,9 @@ public partial class MRubyState
     public MRubyValueEqualityComparer ValueEqualityComparer { get; }
     public MRubyValueHashKeyEqualityComparer HashKeyEqualityComparer { get; }
 
-    readonly MRubyContext contextRoot;
-    readonly MRubyContext context = new();
+    internal MRubyContext Context { get; private set; }
+    internal MRubyContext ContextRoot { get; }= new();
+
     readonly SymbolTable symbolTable = new();
     readonly VariableTable globalVariables = new();
 
@@ -64,7 +67,7 @@ public partial class MRubyState
 
     MRubyState()
     {
-        contextRoot = context;
+        Context = ContextRoot;
         ValueEqualityComparer = new MRubyValueEqualityComparer(this);
         HashKeyEqualityComparer = new MRubyValueHashKeyEqualityComparer(this);
     }
@@ -373,7 +376,6 @@ public partial class MRubyState
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
         DefineMethod(FloatClass, Names.OpCmp, NumericMembers.OpCmp);
         DefineMethod(FloatClass, Intern("divmod"u8), FloatMembers.DivMod);
-
         DefineConst(FloatClass, Intern("INFINITY"u8), MRubyValue.From(double.PositiveInfinity));
         DefineConst(FloatClass, Intern("NAN"u8), MRubyValue.From(double.NaN));
     }
@@ -539,6 +541,23 @@ public partial class MRubyState
             var irep = riteParser.Parse(bytes);
             Exec(irep);
         }
+    }
+
+    void InitFiber()
+    {
+        FiberClass = DefineClass(Intern("Fiber"u8), ObjectClass, MRubyVType.Fiber);
+
+        DefineMethod(FiberClass, Names.Initialize, FiberMembers.Initialize);
+        DefineMethod(FiberClass, Names.OpEq, FiberMembers.OpEq);
+        DefineMethod(FiberClass, Names.ToS, FiberMembers.ToS);
+        DefineMethod(FiberClass, Names.Inspect, FiberMembers.ToS);
+        DefineMethod(FiberClass, Intern("resume"u8), FiberMembers.Resume);
+        DefineMethod(FiberClass, Intern("transfer"u8), FiberMembers.Transfer);
+        DefineMethod(FiberClass, Intern("alive?"u8), FiberMembers.Alive);
+        DefineClassMethod(FiberClass, Intern("yield"u8), FiberMembers.Yield);
+        DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
+
+        DefineClass(Intern("FiberError"u8), StandardErrorClass);
     }
 
     bool TrySetClassPathLink(RClass outer, RClass c, Symbol name)

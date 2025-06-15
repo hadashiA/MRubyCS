@@ -6,7 +6,7 @@ public sealed class RException(
     : RObject(MRubyVType.Exception, exceptionClass)
 {
     public RString? Message { get; set; } = message;
-    public Backtrace? Backtrace { get; set; }
+    public Backtrace? Backtrace { get; init; }
 
     internal override RObject Clone()
     {
@@ -14,5 +14,6 @@ public sealed class RException(
         InstanceVariables.CopyTo(clone.InstanceVariables);
         return clone;
     }
-}
 
+    public override string ToString() => $"{Message}";
+}

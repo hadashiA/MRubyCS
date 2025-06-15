@@ -24,7 +24,7 @@ static class BasicObjectMembers
     public static MRubyMethod InstanceEval = new((state, self) =>
     {
         var block = state.GetBlockArgument(false);
-        return state.EvalUnder(self, block.As<RProc>(), state.SingletonClassOf(self)!);
+        return state.EvalUnder(self, block!, state.SingletonClassOf(self));
     });
 
     public static MRubyMethod MethodMissing = new((state, self) =>

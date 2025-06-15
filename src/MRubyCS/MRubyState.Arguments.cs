@@ -8,38 +8,38 @@ partial class MRubyState
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ModifyCurrentMethodId(Symbol newMethodId) =>
-        context.ModifyCurrentMethodId(newMethodId);
+        Context.ModifyCurrentMethodId(newMethodId);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsRecursiveCalling(Symbol methodId, MRubyValue self) =>
-        context.IsRecursiveCalling(methodId, self);
+        Context.IsRecursiveCalling(methodId, self);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsRecursiveCalling(Symbol methodId, MRubyValue self, MRubyValue arg0) =>
-        context.IsRecursiveCalling(methodId, self, arg0);
+        Context.IsRecursiveCalling(methodId, self, arg0);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int GetArgumentCount() => context.GetArgumentCount();
+    public int GetArgumentCount() => Context.GetArgumentCount();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int GetKeywordArgumentCount() => context.GetKeywordArgumentCount();
+    public int GetKeywordArgumentCount() => Context.GetKeywordArgumentCount();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MRubyValue GetArgumentAt(int index) => context.GetArgumentAt(index);
+    public MRubyValue GetArgumentAt(int index) => Context.GetArgumentAt(index);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MRubyValue GetKeywordArgument(Symbol key) => context.GetKeywordArgument(key);
+    public MRubyValue GetKeywordArgument(Symbol key) => Context.GetKeywordArgument(key);
 
     public bool TryGetArgumentAt(int index, out MRubyValue value) =>
-        context.TryGetArgumentAt(index, out value);
+        Context.TryGetArgumentAt(index, out value);
 
     public bool TryGetKeywordArgument(Symbol key, out MRubyValue value) =>
-        context.TryGetKeywordArgument(key, out value);
+        Context.TryGetKeywordArgument(key, out value);
 
-    public MRubyValue GetSelf() => context.GetSelf();
+    public MRubyValue GetSelf() => Context.GetSelf();
 
     public ReadOnlySpan<KeyValuePair<Symbol, MRubyValue>> GetKeywordArguments() =>
-        context.GetKeywordArgs(ref context.CurrentCallInfo);
+        Context.GetKeywordArgs(ref Context.CurrentCallInfo);
 
     public RClass GetArgumentAsClassAt(int index)
     {
@@ -111,15 +111,20 @@ partial class MRubyState
     }
 
     public ReadOnlySpan<MRubyValue> GetRestArgumentsAfter(int startIndex) =>
-        context.GetRestArgumentsAfter(startIndex);
+        Context.GetRestArgumentsAfter(startIndex);
 
-    public MRubyValue GetBlockArgument(bool optional = true)
+    public RProc? GetBlockArgument(bool optional = true)
     {
-        var blockArg = context.GetBlockArgument();
-        if (!optional && blockArg.IsNil)
+        var blockArg = Context.GetBlockArgument();
+        if (blockArg.Object is RProc proc)
+        {
+            return proc;
+        }
+
+        if (!optional)
         {
             Raise(Names.ArgumentError, "no block given"u8);
         }
-        return blockArg;
+        return null;
     }
 }

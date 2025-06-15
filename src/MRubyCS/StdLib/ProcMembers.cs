@@ -6,7 +6,7 @@ static class ProcMembers
     public static MRubyMethod New = new((state, self) =>
     {
         var block = state.GetBlockArgument(false);
-        var proc = block.As<RProc>().Dup();
+        var proc = block!.Dup();
         var procValue = MRubyValue.From(proc);
         state.Send(procValue, Names.Initialize, procValue);
         if (!proc.HasFlag(MRubyObjectFlags.ProcStrict) &&

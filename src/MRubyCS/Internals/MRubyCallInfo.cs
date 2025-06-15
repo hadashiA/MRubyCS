@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace MRubyCS.Internals;
 
@@ -87,6 +88,8 @@ struct MRubyCallInfo
         }
     }
 
+    public bool KeepContext => Scope != null;
+
     public void Clear()
     {
         // Proc?.SetFlag(MRubyObjectFlags.ProcOrphan);
@@ -105,6 +108,11 @@ struct MRubyCallInfo
     public void MarkAsKeywordArgumentPacked()
     {
         KeywordArgumentCount = CallMaxArgs;
+    }
+
+    public void MarkContextModify()
+    {
+        Scope = null!;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -175,14 +183,18 @@ class MRubyContext
     const int CallStackInitSize = 128;
     const int StackInitSize = 32;
     const int CallDepthMax = 512;
+    static int LastId = -1;
 
     public int CallDepth { get; private set; }
+    public int Id { get; }
 
-    public MRubyContext? Previous;
+    public RFiber? Fiber { get; internal set; }
+    public MRubyContext? Previous { get; internal set; }
+    public FiberState State { get; internal set; } = FiberState.Created;
+    public bool VmExecutedByFiber { get; internal set; }
+
     internal MRubyValue[] Stack  = new MRubyValue[StackInitSize];
     internal MRubyCallInfo[] CallStack = new MRubyCallInfo[CallStackInitSize];
-    // public FiberState FiberState;
-    // public RFiber? fiber;
 
     public ref MRubyCallInfo CurrentCallInfo
     {
@@ -203,6 +215,7 @@ class MRubyContext
     public MRubyContext()
     {
         CallStack[0] = new MRubyCallInfo();
+        Id = Interlocked.Increment(ref LastId);
     }
 
     public bool CheckProcIsOrphan(RProc proc)
@@ -510,4 +523,3 @@ class MRubyContext
         }
     }
 }
-

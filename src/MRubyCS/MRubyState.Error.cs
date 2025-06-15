@@ -43,13 +43,13 @@ partial class MRubyState
             ? $"{ex.Message} ({typeName})"
             : typeName.ToString();
 
-        Exception = new MRubyRaiseException(message, this, ex, context.CallDepth);
+        Exception = new MRubyRaiseException(message, this, ex, Context.CallDepth);
         throw Exception;
     }
 
     public void Raise(RClass exceptionClass, RString message)
     {
-        var backtrace = Backtrace.Capture(context);
+        var backtrace = Backtrace.Capture(Context);
         var ex = new RException(message, exceptionClass)
         {
             Backtrace = backtrace
@@ -129,6 +129,21 @@ partial class MRubyState
         {
             RaiseFrozenError(MRubyValue.From(o));
         }
+    }
+
+    public RClass GetExceptionClass(Symbol name)
+    {
+        if (!TryGetConst(name, out var value) || value.VType != MRubyVType.Class)
+        {
+            Raise(ExceptionClass, "exception corrupted"u8);
+        }
+
+        var exceptionClass = value.As<RClass>();
+        if (!exceptionClass.Is(ExceptionClass))
+        {
+            Raise(ExceptionClass, "non-exception raised"u8);
+        }
+        return exceptionClass;
     }
 
     internal void EnsureConstName(Symbol constName)
@@ -284,20 +299,5 @@ partial class MRubyState
             actualValueName = NameOf(ClassOf(value));
         }
         Raise(Names.TypeError, NewString($"wrong argument type {actualValueName} (expected {expectedType})"));
-    }
-
-    RClass GetExceptionClass(Symbol name)
-    {
-        if (!TryGetConst(name, out var value) || value.VType != MRubyVType.Class)
-        {
-            Raise(ExceptionClass, "exception corrupted"u8);
-        }
-
-        var exceptionClass = value.As<RClass>();
-        if (!exceptionClass.Is(ExceptionClass))
-        {
-            Raise(ExceptionClass, "non-exception raised"u8);
-        }
-        return exceptionClass;
     }
 }

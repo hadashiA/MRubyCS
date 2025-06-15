@@ -109,6 +109,7 @@ public class SpecTest
     [TestCase("typeerror.rb")]
     [TestCase("localjumperror.rb")]
     // [TestCase("namerror.rb")]
+    [TestCase("fiber.rb")]
     public void RubyScript(string fileName)
     {
         Assert.Multiple(() =>

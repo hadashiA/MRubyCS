@@ -14,7 +14,7 @@ static class ExceptionMembers
         if (state.TryFindMethod(c, Names.Initialize, out var method, out _) &&
             method != MRubyMethod.Nop)
         {
-            state.Send(value, Names.Initialize, args, kargs: null, block: block.IsNil ? null : block.As<RProc>());
+            state.Send(value, Names.Initialize, args, kargs: null, block: block);
         }
         return value;
     });

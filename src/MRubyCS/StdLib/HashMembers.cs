@@ -10,16 +10,16 @@ static class HashMembers
         var block = state.GetBlockArgument();
         if (state.TryGetArgumentAt(0, out var defaultValue))
         {
-            if (!block.IsNil)
+            if (block != null)
             {
                 state.Raise(Names.ArgumentError, "invalid block"u8);
             }
 
             hash.DefaultValue = defaultValue;
         }
-        else if (block.Object is RProc proc)
+        else if (block != null)
         {
-            hash.DefaultProc = proc;
+            hash.DefaultProc = block;
         }
         return self;
     });

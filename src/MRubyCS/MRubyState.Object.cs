@@ -361,7 +361,7 @@ partial class MRubyState
             if (obj.InstanceVariables.Length > 0)
             {
                 var s = NewString($"-<{NameOf(obj.Class)}:{obj.GetHashCode()} ");
-                if (context.IsRecursiveCalling(Names.Inspect, value))
+                if (Context.IsRecursiveCalling(Names.Inspect, value))
                 {
                     s.Concat(" ...>"u8);
                     return s;
@@ -391,7 +391,7 @@ partial class MRubyState
             return MRubyValue.From(array.Dup());
         }
 
-        var methodId = Intern("to_a"u8);
+        var methodId = Names.ToA;
         if (!RespondTo(value, methodId))
         {
             return MRubyValue.From(NewArray(value));
@@ -471,7 +471,7 @@ partial class MRubyState
 
     RProc NewProc(Irep irep, RClass? targetClass = null)
     {
-        ref var callInfo = ref context.CurrentCallInfo;
+        ref var callInfo = ref Context.CurrentCallInfo;
 
         targetClass ??= (callInfo.Proc?.Scope ?? callInfo.Scope).TargetClass;
         return new RProc(irep, 0, ProcClass)
@@ -483,7 +483,7 @@ partial class MRubyState
 
     RProc NewClosure(Irep irep)
     {
-        ref var callInfo = ref context.CurrentCallInfo;
+        ref var callInfo = ref Context.CurrentCallInfo;
         var env = callInfo.Scope as REnv;
 
         if (env is null)
@@ -499,7 +499,7 @@ partial class MRubyState
                 var stackSize = upper.Irep.RegisterVariableCount;
                 env = new REnv
                 {
-                    Context = context,
+                    Context = Context,
                     StackPointer = callInfo.StackPointer,
                     StackSize = stackSize,
                     MethodId = methodId,
