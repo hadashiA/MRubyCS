@@ -178,7 +178,7 @@ partial class MRubyState
         callInfo.Proc = proc;
         callInfo.Scope = ObjectClass;
         callInfo.MethodId = default;
-        callInfo.CallerType = CallerType.VmExecuted;
+        callInfo.CallerType = CallerType.InVmLoop;
         Context.Stack[0] = MRubyValue.From(TopSelf);
         return Exec(irep, 0, 1);
     }
