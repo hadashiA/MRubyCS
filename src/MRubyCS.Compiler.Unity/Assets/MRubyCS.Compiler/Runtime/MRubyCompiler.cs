@@ -58,6 +58,18 @@ public class MRubyCompiler : IDisposable
         return mruby.Exec(Compile(code));
     }
 
+    public RFiber LoadAsFiber(ReadOnlySpan<byte> code)
+    {
+        var irep = Compile(code);
+        return mruby.CreateFiber(irep);
+    }
+
+    public RFiber LoadFileAsFiber(string path)
+    {
+        var irep = CompileFile(path);
+        return mruby.CreateFiber(irep);
+    }
+
     public unsafe MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> source)
     {
         var mrbPtr = compileStateHandle.DangerousGetPtr();

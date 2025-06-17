@@ -20,8 +20,7 @@ static class FiberMembers
         var fiber = self.As<RFiber>();
         var args = state.GetRestArgumentsAfter(0);
         var vmexec = state.Context.CurrentCallInfo.CallerType > CallerType.InVmLoop;
-        fiber.MoveNext(args, false, vmexec, out var result);
-        return result;
+        return fiber.MoveNext(args, false, vmexec);
     });
 
     [MRubyMethod(RestArguments = true)]
@@ -29,8 +28,7 @@ static class FiberMembers
     {
         var fiber = self.As<RFiber>();
         var args = state.GetRestArgumentsAfter(0);
-        fiber.Transfer(args, out var result);
-        return result;
+        return fiber.Transfer(args);
     });
 
     [MRubyMethod]
