@@ -31,8 +31,7 @@ public class FiberTest
                    end
                    """u8;
 
-        var irep = compiler.Compile(code);
-        var fiber = mrb.CreateFiber(irep);
+        var fiber = compiler.LoadAsFiber(code);
 
         var result1 = fiber.Resume(MRubyValue.From(100));
         Assert.That(result1.IntegerValue, Is.EqualTo(200));
@@ -57,8 +56,7 @@ public class FiberTest
                    end
                    """u8;
 
-        var irep = compiler.Compile(code);
-        var fiber = mrb.CreateFiber(irep);
+        var fiber = compiler.LoadAsFiber(code);
 
         var count = 0;
         var completed = false;

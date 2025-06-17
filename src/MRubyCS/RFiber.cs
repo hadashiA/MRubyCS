@@ -175,6 +175,7 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
 
     internal MRubyValue MoveNext(ReadOnlySpan<MRubyValue> args, bool transfer, bool vmexec)
     {
+        var version = resume.Version;
         try
         {
             if (!transfer && context == state.Context)
@@ -290,6 +291,13 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
             resume.SetException(ex);
             throw;
         }
+        finally
+        {
+            if (version == resume.Version)
+            {
+                resume.Reset();
+            }
+        }
     }
 
     MRubyValue IValueTaskSource<MRubyValue>.GetResult(short token)
@@ -300,7 +308,10 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
         }
         finally
         {
-            resume.Reset();
+            if (token == resume.Version)
+            {
+                resume.Reset();
+            }
         }
     }
 
