@@ -200,12 +200,4 @@ public class MultiConsumerValueTaskNotifier<T>
         }
         ArrayPool<WaiterNode>.Shared.Return(waiterToNotify);
     }
-
-    void ValidateToken(short token)
-    {
-        if (version != token)
-        {
-            throw new InvalidOperationException("invalid token");
-        }
-    }
 }

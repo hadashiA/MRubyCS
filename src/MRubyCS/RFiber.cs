@@ -55,8 +55,19 @@ public sealed class RFiber : RObject
         return result;
     }
 
+    public async IAsyncEnumerable<MRubyValue> AsAsyncEnumerable(MRubyValue[] args, CancellationToken cancellation = default)
+    {
+        var result = Resume(args.AsSpan());
+        while (IsAlive)
+        {
+            result = await WaitForResumeAsync(cancellation);
+            yield return result;
+        }
+    }
+
     public ValueTask<MRubyValue> WaitForResumeAsync(CancellationToken cancellation = default)
     {
+        if (!IsAlive) return default;
         return resumeSource.WaitAsync(cancellation);
     }
 

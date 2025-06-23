@@ -46,27 +46,26 @@ public class FiberTest
         Assert.That(fiber.IsAlive, Is.False);
     }
 
-    // [Test]
-    // public async Task RunAsync()
-    // {
-    //     var code = """
-    //                Fiber.new do |x|
-    //                  Fiber.yield
-    //                  Fiber.yield
-    //                end
-    //                """u8;
-    //
-    //     var fiber = compiler.LoadAsFiber(code);
-    //     Assert.That(fiber.IsAlive, Is.True);
-    //
-    //     var run = fiber.RunAsync();
-    //     fiber.Resume();
-    //     fiber.Resume();
-    //     fiber.Resume();
-    //     await run;
-    //
-    //     Assert.That(fiber.IsAlive, Is.False);
-    // }
+    [Test]
+    public async Task RunAsync()
+    {
+        var code = """
+                   Fiber.new do |x|
+                     Fiber.yield
+                     Fiber.yield
+                   end
+                   """u8;
+
+        var fiber = compiler.LoadAsFiber(code);
+        Assert.That(fiber.IsAlive, Is.True);
+
+        var run = fiber.RunAsync();
+        fiber.Resume();
+        fiber.Resume();
+        await run;
+
+        Assert.That(fiber.IsAlive, Is.False);
+    }
 
     [Test]
     public async Task WaitForResumeAsync()
