@@ -1,12 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Sources;
 using MRubyCS.Internals;
 
 namespace MRubyCS;
 
-public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
+public sealed class RFiber : RObject
 {
     public RProc? Proc { get; private set; }
     public FiberState State => context.State;
@@ -15,8 +15,7 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
 
     readonly MRubyContext context = new();
     readonly MRubyState state;
-
-    ManualResetValueTaskSourceCore<MRubyValue> resume;
+    readonly MultiConsumerValueTaskNotifier<MRubyValue> resumeSource = new();
 
     internal RFiber(MRubyState state, RClass c) : base(MRubyVType.Fiber, c)
     {
@@ -41,9 +40,9 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
         return RunAsync([arg0], cancellation);
     }
 
-    public ValueTask<MRubyValue> RunAsync(MRubyValue arg0, MRubyValue arg1, CancellationToken cancellation = default)
+    public ValueTask<MRubyValue> RunAsync(MRubyValue arg0, MRubyValue arg1, MRubyValue arg2, CancellationToken cancellation = default)
     {
-        return RunAsync([arg0, arg1], cancellation);
+        return RunAsync([arg0, arg1, arg2], cancellation);
     }
 
     public async ValueTask<MRubyValue> RunAsync(MRubyValue[] args, CancellationToken cancellation = default)
@@ -58,25 +57,7 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
 
     public ValueTask<MRubyValue> WaitForResumeAsync(CancellationToken cancellation = default)
     {
-        var task = new ValueTask<MRubyValue>(this, resume.Version);
-        return !cancellation.CanBeCanceled ? task : WithCancellationAsync();
-
-        async ValueTask<MRubyValue> WithCancellationAsync()
-        {
-            var registration = cancellation.UnsafeRegister(static x =>
-            {
-                var fiber = (RFiber)x!;
-                fiber.resume.SetException(new OperationCanceledException());
-            }, this);
-            try
-            {
-                return await task;
-            }
-            finally
-            {
-                registration.Dispose();
-            }
-        }
+        return resumeSource.WaitAsync(cancellation);
     }
 
     public MRubyValue Resume(params ReadOnlySpan<MRubyValue> args)
@@ -175,7 +156,6 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
 
     internal MRubyValue MoveNext(ReadOnlySpan<MRubyValue> args, bool transfer, bool vmexec)
     {
-        var version = resume.Version;
         try
         {
             if (!transfer && context == state.Context)
@@ -283,49 +263,17 @@ public sealed class RFiber : RObject, IValueTaskSource<MRubyValue>
                 context.CurrentCallInfo.MarkContextModify();
             }
 
-            resume.SetResult(result);
+            resumeSource.SetResult(result);
             return result;
         }
         catch (Exception ex)
         {
-            resume.SetException(ex);
+            resumeSource.SetException(ex);
             throw;
         }
         finally
         {
-            if (version == resume.Version)
-            {
-                resume.Reset();
-            }
+            resumeSource.Reset();
         }
-    }
-
-    MRubyValue IValueTaskSource<MRubyValue>.GetResult(short token)
-    {
-        try
-        {
-            return resume.GetResult(token);
-        }
-        finally
-        {
-            if (token == resume.Version)
-            {
-                resume.Reset();
-            }
-        }
-    }
-
-    ValueTaskSourceStatus IValueTaskSource<MRubyValue>.GetStatus(short token)
-    {
-        return resume.GetStatus(token);
-    }
-
-    void IValueTaskSource<MRubyValue>.OnCompleted(
-        Action<object> continuation,
-        object state,
-        short token,
-        ValueTaskSourceOnCompletedFlags flags)
-    {
-        resume.OnCompleted(continuation, state, token, flags);
     }
 }
