@@ -54,7 +54,7 @@ static class ClassMembers
             MRubyVType.Array => new RArray(0, c),
             MRubyVType.Hash => new RHash(0, state.HashKeyEqualityComparer, state.ValueEqualityComparer, c),
             MRubyVType.String => new RString(0, c),
-            MRubyVType.Range => throw new NotImplementedException(),
+            MRubyVType.Range => new RRange(default, default, false, c),
             MRubyVType.Exception => new RException(null!, c),
             MRubyVType.Object => new RObject(c.InstanceVType, c),
             MRubyVType.Class => new RClass(c, c.InstanceVType)
