@@ -9,8 +9,30 @@ partial class MRubyState
 
     public RFiber CreateFiber(ReadOnlySpan<byte> bytecode)
     {
-        var proc  = CreateProc(bytecode);
-        return CreateFiber(proc);
+        var result  = Exec(bytecode);
+        if (result.Object is RProc proc)
+        {
+            return CreateFiber(proc);
+        }
+        if (result.Object is RFiber fiber)
+        {
+            return fiber;
+        }
+        throw new InvalidOperationException($"Evaluate result cannot convert to be a Fiber. {result}");
+    }
+
+    public RFiber CreateFiber(Irep irep)
+    {
+        var result  = Exec(irep);
+        if (result.Object is RProc proc)
+        {
+            return CreateFiber(proc);
+        }
+        if (result.Object is RFiber fiber)
+        {
+            return fiber;
+        }
+        throw new InvalidOperationException($"Evaluate result cannot convert to be a Fiber. {result}");
     }
 
     public RFiber CreateFiber(RProc proc)
@@ -33,7 +55,6 @@ partial class MRubyState
     internal void SwitchToContext(MRubyContext newContext)
     {
         Context = newContext;
-        newContext.State = FiberState.Running;
     }
 
     internal void EnsureFiberInitialized(RFiber fiber)

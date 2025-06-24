@@ -149,6 +149,11 @@ partial class MRubyState
     {
         riteParser ??= new RiteParser(this);
         var irep = riteParser.Parse(bytecode);
+        return CreateProc(irep);
+    }
+
+    public RProc CreateProc(Irep irep)
+    {
         return new RProc(irep, 0, ProcClass)
         {
             Upper = null,
@@ -305,7 +310,7 @@ partial class MRubyState
     /// <summary>
     /// Execute irep assuming the Stack values are placed
     /// </summary>
-    MRubyValue Exec(Irep irep, int pc, int stackKeep)
+    internal MRubyValue Exec(Irep irep, int pc, int stackKeep)
     {
         Exception = null;
 
@@ -324,7 +329,7 @@ partial class MRubyState
         //     }
         // }
 
-        ReadOnlySpan<byte> sequence = irep.Sequence.AsSpan(pc);
+        ReadOnlySpan<byte> sequence = irep.Sequence;
 
         ref var callInfo = ref Context.CurrentCallInfo;
         Context.ExtendStack(callInfo.StackPointer + registerVariableCount);
@@ -839,15 +844,10 @@ partial class MRubyState
                             var result = method.Invoke(this, self);
 
                             callInfo = ref Context.CurrentCallInfo;
-                            Context.Stack[callInfo.StackPointer] = result;
                             var keepContext = callInfo.KeepContext;
                             var callerType = callInfo.CallerType;
 
-                            Context.PopCallStack();
-                            callInfo = ref Context.CurrentCallInfo;
-                            irep = callInfo.Proc!.Irep;
-                            registers = Context.Stack.AsSpan(callInfo.StackPointer);
-                            sequence = irep.Sequence.AsSpan();
+                            Context.Stack[callInfo.StackPointer] = result;
 
                             // return from context modifying method (resume/yield)
                             if (!keepContext)
@@ -857,6 +857,13 @@ partial class MRubyState
                                     return result;
                                 }
                             }
+
+                            Context.PopCallStack();
+                            callInfo = ref Context.CurrentCallInfo;
+                            irep = callInfo.Proc!.Irep;
+                            registers = Context.Stack.AsSpan(callInfo.StackPointer);
+                            sequence = irep.Sequence.AsSpan();
+
                             goto Next;
                         }
 
