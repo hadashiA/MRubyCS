@@ -30,45 +30,32 @@ public sealed class RFiber : RObject
         this.state = state;
     }
 
-    public ValueTask<MRubyValue> RunAsync(CancellationToken cancellation = default)
-    {
-        return RunAsync([], cancellation);
-    }
-
-    public ValueTask<MRubyValue> RunAsync(MRubyValue arg0, CancellationToken cancellation = default)
-    {
-        return RunAsync([arg0], cancellation);
-    }
-
-    public ValueTask<MRubyValue> RunAsync(MRubyValue arg0, MRubyValue arg1, MRubyValue arg2, CancellationToken cancellation = default)
-    {
-        return RunAsync([arg0, arg1, arg2], cancellation);
-    }
-
-    public async ValueTask<MRubyValue> RunAsync(MRubyValue[] args, CancellationToken cancellation = default)
-    {
-        var result = Resume(args.AsSpan());
-        while (IsAlive)
-        {
-            result = await WaitForResumeAsync(cancellation);
-        }
-        return result;
-    }
-
-    public async IAsyncEnumerable<MRubyValue> AsAsyncEnumerable(MRubyValue[] args, CancellationToken cancellation = default)
-    {
-        var result = Resume(args.AsSpan());
-        while (IsAlive)
-        {
-            result = await WaitForResumeAsync(cancellation);
-            yield return result;
-        }
-    }
-
     public ValueTask<MRubyValue> WaitForResumeAsync(CancellationToken cancellation = default)
     {
         if (!IsAlive) return default;
         return resumeSource.WaitAsync(cancellation);
+    }
+
+    public async ValueTask<MRubyValue> WaitForTerminateAsync(CancellationToken cancellation = default)
+    {
+        // Wait for fiber completion
+        MRubyValue result = default;
+        while (IsAlive)
+        {
+            var wait = WaitForResumeAsync(cancellation);
+            if (wait.IsCompleted) continue;
+            result = await wait;
+        }
+        return result;
+    }
+
+    public async IAsyncEnumerable<MRubyValue> AsAsyncEnumerable(CancellationToken cancellation = default)
+    {
+        while (IsAlive)
+        {
+            var result = await WaitForResumeAsync(cancellation);
+            yield return result;
+        }
     }
 
     public MRubyValue Resume(params ReadOnlySpan<MRubyValue> args)
@@ -275,16 +262,15 @@ public sealed class RFiber : RObject
             }
 
             resumeSource.SetResult(result);
+            // Reset after setting result to prepare for next wait
+            resumeSource.Reset();
             return result;
         }
         catch (Exception ex)
         {
             resumeSource.SetException(ex);
-            throw;
-        }
-        finally
-        {
             resumeSource.Reset();
+            throw;
         }
     }
 }

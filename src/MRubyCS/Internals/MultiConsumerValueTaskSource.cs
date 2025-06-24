@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,44 +12,49 @@ public class MultiConsumerValueTaskNotifier<T>
 {
     class WaiterNode : IValueTaskSource<T>
     {
+        static readonly ConcurrentQueue<WaiterNode> Pool = new();
+
+        public static WaiterNode Rent(short tag)
+        {
+            if (!Pool.TryDequeue(out var node))
+            {
+                node = new WaiterNode();
+            }
+            node.Tag = tag;
+            return node;
+        }
+
         public CancellationTokenRegistration CancellationTokenRegistration { get; set; }
         ManualResetValueTaskSourceCore<T> core;
 
-        public short Version { get; }
+        public short Tag { get; private set; }
+        public short Version => core.Version;
 
-        public WaiterNode(short version)
+        WaiterNode()
         {
-            Version = version;
             core.RunContinuationsAsynchronously = false;
         }
 
         public void SetResult(T result)
         {
-            try
-            {
-                core.SetResult(result);
-            }
-            finally
-            {
-                CancellationTokenRegistration.Dispose();
-            }
+            core.SetResult(result);
         }
 
         public void SetException(Exception exception)
         {
-            try
-            {
-                core.SetException(exception);
-            }
-            finally
-            {
-                CancellationTokenRegistration.Dispose();
-            }
+            core.SetException(exception);
         }
 
         public void SetCanceled()
         {
             SetException(new OperationCanceledException(CancellationTokenRegistration.Token));
+        }
+
+        void Return()
+        {
+            CancellationTokenRegistration.Dispose();
+            core.Reset();
+            Pool.Enqueue(this);
         }
 
         T IValueTaskSource<T>.GetResult(short token)
@@ -59,7 +65,7 @@ public class MultiConsumerValueTaskNotifier<T>
             }
             finally
             {
-                CancellationTokenRegistration.Dispose();
+                Return();
             }
         }
 
@@ -68,7 +74,7 @@ public class MultiConsumerValueTaskNotifier<T>
             return core.GetStatus(token);
         }
 
-        void IValueTaskSource<T>.OnCompleted(Action<object> continuation, object state, short token, ValueTaskSourceOnCompletedFlags flags)
+        void IValueTaskSource<T>.OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
         {
             core.OnCompleted(continuation, state, token, flags);
         }
@@ -79,24 +85,12 @@ public class MultiConsumerValueTaskNotifier<T>
 
     bool hasResult;
     T? result;
-    Exception? exception;
+    Exception? error;
     short version;
 
     public ValueTask<T> WaitAsync(CancellationToken cancellation)
     {
-        lock (gate)
-        {
-            if (hasResult)
-            {
-                if (exception != null)
-                {
-                    return new ValueTask<T>(Task.FromException<T>(exception));
-                }
-                return new ValueTask<T>(result!);
-            }
-        }
-
-        var node = new WaiterNode(version);
+        var node = WaiterNode.Rent(version);
         if (cancellation.CanBeCanceled)
         {
             node.CancellationTokenRegistration = cancellation.UnsafeRegister(static state =>
@@ -109,21 +103,32 @@ public class MultiConsumerValueTaskNotifier<T>
         {
             waiters.Add(node);
         }
-        return new ValueTask<T>(node, 0);
+        return new ValueTask<T>(node, node.Version);
     }
 
     public void Reset()
     {
         WaiterNode[] waiterToNotify = [];
         int count;
+        bool currentResultExists;
+        int currentVersion;
+        T? currentResult;
+        Exception? currentError;
 
         lock (gate)
         {
-            version++;
-            exception = null;
-            result = default;
-            hasResult = false;
+            currentResultExists = this.hasResult;
+            currentResult = this.result;
+            currentError = this.error;
+
+            this.hasResult = false;
+            this.result = default;
+            this.error = null;
+
             count = waiters.Count;
+            currentVersion = version;
+            unchecked { version++; }
+
             if (count > 0)
             {
                 waiterToNotify = ArrayPool<WaiterNode>.Shared.Rent(count);
@@ -134,7 +139,22 @@ public class MultiConsumerValueTaskNotifier<T>
 
         for (var i = 0; i < count; i++)
         {
-            waiterToNotify[i].SetException(new InvalidOperationException());
+            var waiter = waiterToNotify[i];
+            if (currentResultExists)
+            {
+                if (currentError is not null)
+                {
+                    waiter.SetException(currentError);
+                }
+                else
+                {
+                    waiter.SetResult(currentResult!);
+                }
+            }
+            else
+            {
+                waiter.SetException(new InvalidOperationException("source was reset before await."));
+            }
         }
         ArrayPool<WaiterNode>.Shared.Return(waiterToNotify);
     }
@@ -147,9 +167,10 @@ public class MultiConsumerValueTaskNotifier<T>
 
         lock (gate)
         {
-            hasResult = true;
             currentVersion = version;
+            this.hasResult = true;
             this.result = result;
+            this.error = null;
 
             waitersCount = waiters.Count;
             if (waitersCount > 0)
@@ -163,14 +184,7 @@ public class MultiConsumerValueTaskNotifier<T>
         for (var i = 0; i < waitersCount; i++)
         {
             var waiter = waiterToNotify[i];
-            if (waiter.Version != currentVersion)
-            {
-                waiter.SetException(new InvalidOperationException("invalid version"));
-            }
-            else
-            {
-                waiter.SetResult(result);
-            }
+            waiter.SetResult(result);
         }
         ArrayPool<WaiterNode>.Shared.Return(waiterToNotify);
     }
@@ -183,8 +197,8 @@ public class MultiConsumerValueTaskNotifier<T>
         lock (gate)
         {
             hasResult = true;
-            this.exception = exception;
-
+            this.error = exception;
+            this.result = default;
             waitersCount = waiters.Count;
             if (waitersCount > 0)
             {
