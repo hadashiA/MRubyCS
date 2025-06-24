@@ -169,6 +169,7 @@ public sealed class RFiber : RObject
                     {
                         state.Raise(Names.FiberError, "resuming transferred fiber"u8);
                     }
+
                     break;
                 case FiberState.Running:
                 case FiberState.Resumed:
@@ -262,14 +263,11 @@ public sealed class RFiber : RObject
             }
 
             resumeSource.SetResult(result);
-            // Reset after setting result to prepare for next wait
-            resumeSource.Reset();
             return result;
         }
         catch (Exception ex)
         {
             resumeSource.SetException(ex);
-            resumeSource.Reset();
             throw;
         }
     }

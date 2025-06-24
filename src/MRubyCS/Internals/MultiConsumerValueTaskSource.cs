@@ -90,6 +90,7 @@ public class MultiConsumerValueTaskNotifier<T>
 
     public ValueTask<T> WaitAsync(CancellationToken cancellation)
     {
+        // Create and register waiter
         var node = WaiterNode.Rent(version);
         if (cancellation.CanBeCanceled)
         {
@@ -101,62 +102,37 @@ public class MultiConsumerValueTaskNotifier<T>
 
         lock (gate)
         {
+            // Check if result is already available
+            if (hasResult)
+            {
+                // Cancel the registration if it was created
+                if (cancellation.CanBeCanceled)
+                {
+                    node.CancellationTokenRegistration.Dispose();
+                }
+
+                if (error != null)
+                {
+                    return new ValueTask<T>(Task.FromException<T>(error));
+                }
+                return new ValueTask<T>(result!);
+            }
+
             waiters.Add(node);
+            return new ValueTask<T>(node, node.Version);
         }
-        return new ValueTask<T>(node, node.Version);
     }
 
     public void Reset()
     {
-        WaiterNode[] waiterToNotify = [];
-        int count;
-        bool currentResultExists;
-        int currentVersion;
-        T? currentResult;
-        Exception? currentError;
-
         lock (gate)
         {
-            currentResultExists = this.hasResult;
-            currentResult = this.result;
-            currentError = this.error;
-
             this.hasResult = false;
             this.result = default;
             this.error = null;
-
-            count = waiters.Count;
-            currentVersion = version;
             unchecked { version++; }
-
-            if (count > 0)
-            {
-                waiterToNotify = ArrayPool<WaiterNode>.Shared.Rent(count);
-                waiters.CopyTo(waiterToNotify);
-                waiters.Clear();
-            }
+            waiters.Clear();
         }
-
-        for (var i = 0; i < count; i++)
-        {
-            var waiter = waiterToNotify[i];
-            if (currentResultExists)
-            {
-                if (currentError is not null)
-                {
-                    waiter.SetException(currentError);
-                }
-                else
-                {
-                    waiter.SetResult(currentResult!);
-                }
-            }
-            else
-            {
-                waiter.SetException(new InvalidOperationException("source was reset before await."));
-            }
-        }
-        ArrayPool<WaiterNode>.Shared.Return(waiterToNotify);
     }
 
     public void SetResult(T result)
@@ -179,6 +155,11 @@ public class MultiConsumerValueTaskNotifier<T>
                 waiters.CopyTo(waiterToNotify);
                 waiters.Clear();
             }
+
+            // Auto-reset after notifying waiters
+            this.hasResult = false;
+            this.result = default;
+            this.error = null;
         }
 
         for (var i = 0; i < waitersCount; i++)
@@ -206,6 +187,11 @@ public class MultiConsumerValueTaskNotifier<T>
                 waiters.CopyTo(waiterToNotify);
                 waiters.Clear();
             }
+
+            // Auto-reset after notifying waiters
+            this.hasResult = false;
+            this.error = null;
+            this.result = default;
         }
 
         for (var i = 0; i < waitersCount; i++)
