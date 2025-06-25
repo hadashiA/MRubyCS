@@ -71,13 +71,13 @@ $ mrbc -o fibonaci.mrbc fibonacci.rb
 using MRubyCS;
 
 // Read the .mrb byte-code.
-var bytes = File.ReadAllBytes("fibonacci.mrb");
+var bytecode = File.ReadAllBytes("fibonacci.mrb");
 
 // initialize state
 var state = MRubyState.Create();
 
 // execute bytecoe
-var result = state.LoadBytecode(bytes);
+var result = state.LoadBytecode(bytecode);
 
 result.IsInteger    //=> true
 result.IntegerValue //=> 55
