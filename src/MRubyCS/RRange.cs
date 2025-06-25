@@ -20,9 +20,9 @@ public enum RangeCalculateResult
 
 public sealed class RRange : RObject
 {
-    public MRubyValue Begin { get; }
-    public MRubyValue End { get; }
-    public bool Exclusive { get; }
+    public MRubyValue Begin { get; set; }
+    public MRubyValue End { get; set; }
+    public bool Exclusive { get; set; }
 
     internal RRange(MRubyValue begin, MRubyValue end, bool exclusive, RClass rangeClass)
         : base(MRubyVType.Range, rangeClass)
@@ -30,6 +30,13 @@ public sealed class RRange : RObject
         Begin = begin;
         End = end;
         Exclusive = exclusive;
+    }
+
+    internal override RObject Clone()
+    {
+        var clone = new RRange(default, default, false, Class);
+        InstanceVariables.CopyTo(clone.InstanceVariables);
+        return clone;
     }
 
     public RangeCalculateResult Calculate(

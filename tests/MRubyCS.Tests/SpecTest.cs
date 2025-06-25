@@ -103,13 +103,14 @@ public class SpecTest
     [TestCase("string.rb")]
     [TestCase("array.rb")]
     [TestCase("hash.rb")]
+    [TestCase("range.rb")]
+    [TestCase("fiber.rb")]
     // error
     [TestCase("exception.rb")]
     [TestCase("indexerror.rb")]
     [TestCase("typeerror.rb")]
     [TestCase("localjumperror.rb")]
     // [TestCase("namerror.rb")]
-    [TestCase("fiber.rb")]
     public void RubyScript(string fileName)
     {
         Assert.Multiple(() =>

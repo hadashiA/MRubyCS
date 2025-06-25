@@ -1836,6 +1836,7 @@ partial class MRubyState
                         var begin = registerA;
                         var end = Unsafe.Add(ref registerA, 1);
                         var range = new RRange(begin, end, opcode == OpCode.RangeExc, RangeClass);
+                        range.MarkAsFrozen();
                         registers[a] = MRubyValue.From(range);
                         goto Next;
                     }

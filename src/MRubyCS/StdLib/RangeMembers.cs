@@ -1,9 +1,45 @@
-using System.Runtime.CompilerServices;
-
 namespace MRubyCS.StdLib;
 
 static class RangeMembers
 {
+    [MRubyMethod(RequiredArguments = 2, OptionalArguments = 1)]
+    public static MRubyMethod Initialize = new((state, self) =>
+    {
+        var range = self.As<RRange>();
+        if (range.IsFrozen)
+        {
+            state.Raise(Names.NameError, "'initialize' called twice"u8);
+        }
+        range.Begin = state.GetArgumentAt(0);
+        range.End = state.GetArgumentAt(1);
+        if (state.TryGetArgumentAt(2, out var exclusiveValue))
+        {
+            range.Exclusive = exclusiveValue.Truthy;
+        }
+        range.MarkAsFrozen();
+        return self;
+    });
+
+    public static MRubyMethod InitializeCopy = new((state, self) =>
+    {
+        var range = self.As<RRange>();
+        if (range.IsFrozen)
+        {
+            state.Raise(Names.NameError, "'initialize_copy' called twice"u8);
+        }
+        var src = state.GetArgumentAsRangeAt(0);
+        if (range == src)
+        {
+            return self;
+        }
+
+        range.Begin = src.Begin;
+        range.End = src.End;
+        range.Exclusive = src.Exclusive;
+        range.MarkAsFrozen();
+        return self;
+    });
+
     public static MRubyMethod Begin = new((state, self) =>
     {
         return self.As<RRange>().Begin;
@@ -30,9 +66,10 @@ static class RangeMembers
         {
             return MRubyValue.False;
         }
-        return MRubyValue.From(range.Begin == rangeOther.Begin &&
-                               range.End == rangeOther.End &&
-                               range.Exclusive == rangeOther.Exclusive);
+        return MRubyValue.From(
+            state.ValueEquals(range.Begin, rangeOther.Begin) &&
+            state.ValueEquals(range.End, rangeOther.End) &&
+            range.Exclusive == rangeOther.Exclusive);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -87,16 +124,42 @@ static class RangeMembers
         var result = state.NewString(6);
         if (!range.Begin.IsNil)
         {
-            var b = state.InspectObject(range.Begin);
-            result.Concat(b);
+            result.Concat(state.Inspect(range.Begin));
         }
         result.Concat(range.Exclusive ? "..."u8 : ".."u8);
         if (!range.End.IsNil)
         {
-            var e = state.InspectObject(range.End);
-            result.Concat(e);
+            result.Concat(state.Inspect(range.End));
         }
         return MRubyValue.From(result);
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod OpEql = new((state, self) =>
+    {
+        var arg0 = state.GetArgumentAt(0);
+        if (self == arg0) return MRubyValue.True;
+
+        var range = self.As<RRange>();
+        if (arg0.Object is not RRange rangeOther)
+        {
+            return MRubyValue.False;
+        }
+
+        // Use eql? instead of == for stricter equality
+        var beginEql = state.Send(range.Begin, Names.QEql, rangeOther.Begin);
+        var endEql = state.Send(range.End, Names.QEql, rangeOther.End);
+        return MRubyValue.From(beginEql.Truthy && endEql.Truthy && range.Exclusive == rangeOther.Exclusive);
+    });
+
+    public static MRubyMethod First = new((state, self) =>
+    {
+        return self.As<RRange>().Begin;
+    });
+
+    public static MRubyMethod Last = new((state, self) =>
+    {
+        return self.As<RRange>().End;
     });
 
     public static MRubyMethod InternalNumToA = new((state, self) =>

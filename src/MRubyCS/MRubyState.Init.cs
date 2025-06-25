@@ -515,8 +515,13 @@ public partial class MRubyState
         RangeClass = DefineClass(Intern("Range"u8), ObjectClass, MRubyVType.Range);
         DefineMethod(RangeClass, Intern("begin"u8), RangeMembers.Begin);
         DefineMethod(RangeClass, Intern("end"u8), RangeMembers.End);
+        DefineMethod(RangeClass, Intern("first"u8), RangeMembers.First);
+        DefineMethod(RangeClass, Intern("last"u8), RangeMembers.Last);
         DefineMethod(RangeClass, Intern("exclude_end?"u8), RangeMembers.ExcludeEnd);
         DefineMethod(RangeClass, Intern("member?"u8), RangeMembers.IsInclude);
+        DefineMethod(RangeClass, Intern("eql?"u8), RangeMembers.OpEql);
+        DefineMethod(RangeClass, Names.Initialize, RangeMembers.Initialize);
+        DefineMethod(RangeClass, Names.InitializeCopy, RangeMembers.InitializeCopy);
         DefineMethod(RangeClass, Names.OpEq, RangeMembers.OpEq);
         DefineMethod(RangeClass, Names.OpEqq, RangeMembers.IsInclude);
         DefineMethod(RangeClass, Names.QInclude, RangeMembers.IsInclude);
