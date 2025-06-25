@@ -124,14 +124,12 @@ static class RangeMembers
         var result = state.NewString(6);
         if (!range.Begin.IsNil)
         {
-            var b = state.Send(range.Begin, state.Intern("inspect"u8));
-            result.Concat(b.As<RString>().AsSpan());
+            result.Concat(state.Inspect(range.Begin));
         }
         result.Concat(range.Exclusive ? "..."u8 : ".."u8);
         if (!range.End.IsNil)
         {
-            var e = state.Send(range.End, state.Intern("inspect"u8));
-            result.Concat(e.As<RString>().AsSpan());
+            result.Concat(state.Inspect(range.End));
         }
         return MRubyValue.From(result);
     });
@@ -149,8 +147,8 @@ static class RangeMembers
         }
 
         // Use eql? instead of == for stricter equality
-        var beginEql = state.Send(range.Begin, state.Intern("eql?"u8), rangeOther.Begin);
-        var endEql = state.Send(range.End, state.Intern("eql?"u8), rangeOther.End);
+        var beginEql = state.Send(range.Begin, Names.QEql, rangeOther.Begin);
+        var endEql = state.Send(range.End, Names.QEql, rangeOther.End);
         return MRubyValue.From(beginEql.Truthy && endEql.Truthy && range.Exclusive == rangeOther.Exclusive);
     });
 
