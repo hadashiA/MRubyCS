@@ -139,6 +139,19 @@ def assert_not_include(*args); _assert_include(false, *args) end
 def assert_operator(*args); _assert_operator(true, *args) end
 def assert_not_operator(*args); _assert_operator(false, *args) end
 
+# Fails unless +exp+ is equal to +act+ in terms of a Float
+def assert_float(exp, act, msg = nil)
+  e, a = exp.to_f, act.to_f
+  if e.finite? && a.finite? && (n = (e - a).abs) > FLOAT_TOLERANCE
+    $asserts.push ["    Expected |#{exp} - #{act}| (#{n}) to be <= #{FLOAT_TOLERANCE}."]
+  elsif (e.infinite? || a.infinite?) && e != a ||
+    e.nan? && !a.nan? || !e.nan? && a.nan?
+    $asserts.push [false, msg, "    Expected #{act} to be #{exp}."]
+  else
+    $asserts.push [true, msg]
+  end
+end
+
 def pass
   assert_true(true)
 end
