@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace MRubyCS.StdLib;
 
 static class RangeMembers

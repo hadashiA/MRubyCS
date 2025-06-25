@@ -31,7 +31,7 @@ public class FiberTest
                    end
                    """u8;
 
-        var fiber = compiler.LoadAsFiber(code);
+        var fiber = compiler.LoadSourceCode(code).As<RFiber>();
 
         var result1 = fiber.Resume(MRubyValue.From(100));
         Assert.That(result1.IntegerValue, Is.EqualTo(200));
@@ -56,7 +56,7 @@ public class FiberTest
                    end
                    """u8;
 
-        var fiber = compiler.LoadAsFiber(code);
+        var fiber = compiler.LoadSourceCode(code).As<RFiber>();
         Assert.That(fiber.IsAlive, Is.True);
 
         var run = fiber.WaitForTerminateAsync();
@@ -78,7 +78,7 @@ public class FiberTest
                    end
                    """u8;
 
-        var fiber = compiler.LoadAsFiber(code);
+        var fiber = compiler.LoadSourceCode(code).As<RFiber>();
 
         var wait1 = fiber.WaitForResumeAsync();
         Assert.That(wait1.IsCompleted, Is.False);
@@ -103,7 +103,7 @@ public class FiberTest
                    end
                    """u8;
 
-        var fiber = compiler.LoadAsFiber(code);
+        var fiber = compiler.LoadSourceCode(code).As<RFiber>();
 
         var wait1 = fiber.WaitForResumeAsync();
         Assert.That(wait1.IsCompleted, Is.False);
@@ -129,7 +129,7 @@ public class FiberTest
                    end
                    """u8;
 
-        var fiber = compiler.LoadAsFiber(code);
+        var fiber = compiler.LoadSourceCode(code).As<RFiber>();
 
         var consumer1Results = new List<MRubyValue>();
         var consumer2Results = new List<MRubyValue>();

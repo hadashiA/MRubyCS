@@ -7,34 +7,6 @@ partial class MRubyState
 {
     public RFiber CurrentFiber => Context.Fiber ??= new RFiber(Context, this, FiberClass);
 
-    public RFiber CreateFiber(ReadOnlySpan<byte> bytecode)
-    {
-        var result  = Exec(bytecode);
-        if (result.Object is RProc proc)
-        {
-            return CreateFiber(proc);
-        }
-        if (result.Object is RFiber fiber)
-        {
-            return fiber;
-        }
-        throw new InvalidOperationException($"Evaluate result cannot convert to be a Fiber. {result}");
-    }
-
-    public RFiber CreateFiber(Irep irep)
-    {
-        var result  = Exec(irep);
-        if (result.Object is RProc proc)
-        {
-            return CreateFiber(proc);
-        }
-        if (result.Object is RFiber fiber)
-        {
-            return fiber;
-        }
-        throw new InvalidOperationException($"Evaluate result cannot convert to be a Fiber. {result}");
-    }
-
     public RFiber CreateFiber(RProc proc)
     {
         var fiber = new RFiber(this, FiberClass);

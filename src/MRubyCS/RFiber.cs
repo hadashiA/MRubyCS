@@ -252,7 +252,7 @@ public sealed class RFiber : RObject
                 context.VmExecutedByFiber = true;
 
                 ref var callInfo = ref context.CurrentCallInfo;
-                result = state.Exec(callInfo.Proc!.Irep, callInfo.ProgramCounter, args.Length + 1);
+                result = state.Execute(callInfo.Proc!.Irep, callInfo.ProgramCounter, args.Length + 1);
                 state.SwitchToContext(currentContext);
                 // restore values as they may have changed in Fiber.yield
                 currentContext.CurrentCallInfo.CallerType = currentCallerType;
