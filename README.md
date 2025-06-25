@@ -1,9 +1,6 @@
 # MRubyCS
 
 > [!NOTE]
-> This library is currently in preview
-
-> [!NOTE]
 > This project was initially called MRubyD, but was renamed to MRubyCS.
 
 
@@ -47,7 +44,7 @@ dotnet add package MRubyCS
 > Requirements: Unity 2021.3 or later.
 
 1. Install [NugetForUnity](https://github.com/GlitchEnzo/NuGetForUnity).
-2. Open the NuGet window by going to NuGet > Manage NuGet Packages, “Show Prelease” toggled on, after search for the "MRubyCS" package, and install it.
+2. Open the NuGet window by going to NuGet > Manage NuGet Packages, “Show Prelease�toggled on, after search for the "MRubyCS" package, and install it.
 3. (Optional) To install utilities for generating mrb bytecode, refer to the [How to compile .mrb](#how-to-compile-mrb) section.
 
 ## Basic Usage
@@ -70,11 +67,11 @@ $ mrbc -o fibonaci.mrbc fibonacci.rb
 ``` cs
 using MRubyCS;
 
-// Read the .mrb byte-code.
-var bytecode = File.ReadAllBytes("fibonacci.mrb");
-
 // initialize state
 var state = MRubyState.Create();
+
+// Read the .mrb byte-code.
+var bytecode = File.ReadAllBytes("fibonacci.mrb");
 
 // execute bytecoe
 var result = state.LoadBytecode(bytecode);
@@ -82,6 +79,18 @@ var result = state.LoadBytecode(bytecode);
 result.IsInteger    //=> true
 result.IntegerValue //=> 55
 ```
+
+You can also parse bytecode in advance.
+The result of parsing bytecode is called `Irep` in mruby terminology.
+
+``` cs
+Irep irep = state.RiteParser.Parse(bytecode);
+
+state.Exuecute(irep);
+```
+
+`Irep` can be executed as is, or converted to Fiber before use. For details on Fiber, refer to the [Fiber](#fiber-coroutine) section.
+
 
 This is a sample of executing bytecode.
 See the [How to compile .mrb ](#how-to-compile-mrb) section for information on how to convert Ruby source code to mruby bytecode.
@@ -273,6 +282,21 @@ var result3 = fiber.Resume(MRubyValue.From(10));  // => 40 (final return value)
 // Check if fiber is still alive
 fiber.IsAlive  // => false
 ```
+
+If you want to execute arbitrary code snippets as fibers, do the following.
+
+```
+var fiber = compiler.LoadSourceCodeAsFiber("""
+  x = 1
+  y = 2
+  Fiber.yield (x + y) * 100
+  Fiber.yield (x + y) * 200
+"""u8);
+
+fiber.Resume(); //=> 300
+fiber.Resume(); //=> 600
+```
+
 
 #### Async/Await Integration
 

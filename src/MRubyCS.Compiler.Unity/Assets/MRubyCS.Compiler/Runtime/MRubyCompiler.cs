@@ -28,7 +28,6 @@ public class MRubyCompiler : IDisposable
     }
 
     readonly MRubyState mruby;
-    readonly RiteParser riteParser;
     readonly MrbStateHandle compileStateHandle;
     readonly MRubyCompileOptions options;
 
@@ -40,7 +39,6 @@ public class MRubyCompiler : IDisposable
         this.mruby = mruby;
         this.compileStateHandle = compileStateHandle;
         this.options = options ?? MRubyCompileOptions.Default;
-        riteParser = new RiteParser(mruby);
     }
 
     public MRubyValue LoadSourceCodeFile(string path)
@@ -62,6 +60,18 @@ public class MRubyCompiler : IDisposable
     {
         var utf8Source = Encoding.UTF8.GetBytes(source);
         return LoadSourceCode(utf8Source);
+    }
+
+    public RFiber LoadSourceCodeAsFiber(ReadOnlySpan<byte> utf8Source)
+    {
+        var irep = Compile(utf8Source);
+        return mruby.CreateFiber(irep);
+    }
+
+    public RFiber LoadSourceCodeAsFiber(string source)
+    {
+        var utf8Source = Encoding.UTF8.GetBytes(source);
+        return LoadSourceCodeAsFiber(utf8Source);
     }
 
     public unsafe MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> utf8Source)
@@ -134,7 +144,7 @@ public class MRubyCompiler : IDisposable
                 }
             }
             var span = new ReadOnlySpan<byte>(bin, binLength);
-            return riteParser.Parse(span);
+            return mruby.RiteParser.Parse(span);
         }
         finally
         {

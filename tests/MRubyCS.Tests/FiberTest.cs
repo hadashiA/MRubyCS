@@ -179,4 +179,17 @@ public class FiberTest
             Assert.That(results[2].IntegerValue, Is.EqualTo(40));
         }
     }
+
+    [Test]
+    public void CreateFiber()
+    {
+        var code = """
+                   Fiber.yield(1)
+                   Fiber.yield(2)
+                   """u8;
+
+        var fiber = compiler.LoadSourceCodeAsFiber(code);
+        Assert.That(fiber.Resume(), Is.EqualTo(MRubyValue.From(1)));
+        Assert.That(fiber.Resume(), Is.EqualTo(MRubyValue.From(2)));
+    }
 }

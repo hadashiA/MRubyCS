@@ -57,6 +57,8 @@ public partial class MRubyState
     internal MRubyContext Context { get; private set; }
     internal MRubyContext ContextRoot { get; }= new();
 
+    public RiteParser RiteParser => riteParser ??= new RiteParser(this);
+
     readonly SymbolTable symbolTable = new();
     readonly VariableTable globalVariables = new();
 
@@ -568,12 +570,11 @@ public partial class MRubyState
 
     void InitMrbLib()
     {
-        riteParser ??= new RiteParser(this);
         var executingDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         foreach (var path in Directory.EnumerateFiles(executingDir!, "*.mrb", SearchOption.AllDirectories))
         {
             var bytes = File.ReadAllBytes(path);
-            var irep = riteParser.Parse(bytes);
+            var irep = RiteParser.Parse(bytes);
             Execute(irep);
         }
     }

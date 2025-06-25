@@ -149,13 +149,6 @@ partial class MRubyState
         return Execute(block.Irep, block.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
     }
 
-    public RProc CreateProc(ReadOnlySpan<byte> bytecode)
-    {
-        riteParser ??= new RiteParser(this);
-        var irep = riteParser.Parse(bytecode);
-        return CreateProc(irep);
-    }
-
     public RProc CreateProc(Irep irep)
     {
         return new RProc(irep, 0, ProcClass)
@@ -167,8 +160,7 @@ partial class MRubyState
 
     public MRubyValue LoadBytecode(ReadOnlySpan<byte> bytecode)
     {
-        riteParser ??= new RiteParser(this);
-        var irep = riteParser.Parse(bytecode);
+        var irep = RiteParser.Parse(bytecode);
         return Execute(irep);
     }
 
