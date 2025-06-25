@@ -38,7 +38,7 @@ partial class MRubyState
     {
         if (value.IsSymbol) return value.SymbolValue;
         if (value.VType == MRubyVType.String) return Intern(value.As<RString>());
-        Raise(Names.TypeError, NewString($"{Stringify(value)} is not a symbol nor a string"));
+        Raise(Names.TypeError, $"{Stringify(value)} is not a symbol nor a string");
         return default; // not reached
     }
 
@@ -51,14 +51,14 @@ partial class MRubyState
             var f = value.FloatValue;
             if (double.IsNaN(f) || double.IsInfinity(f))
             {
-                Raise(Names.RangeError, NewString($"float `{f}` out of range"));
+                Raise(Names.RangeError, $"float `{f}` out of range");
             }
             return FloatMembers.ToI.Invoke(this, value).IntegerValue;
         }
 
         // TODO: more numeric types
 
-        Raise(Names.TypeError, NewString($"{Stringify(value)} cannot be converted to Integer"));
+        Raise(Names.TypeError, $"{Stringify(value)} cannot be converted to Integer");
         return default;
     }
 
@@ -76,7 +76,7 @@ partial class MRubyState
             case MRubyVType.Float:
                 return value.FloatValue;
         }
-        Raise(Names.TypeError, NewString($"{Stringify(value)} cannot be converted to Float"));
+        Raise(Names.TypeError, $"{Stringify(value)} cannot be converted to Float");
         return default;
     }
 
@@ -422,7 +422,7 @@ partial class MRubyState
             start += array.Length;
             if (start < 0)
             {
-                Raise(Names.IndexError, NewString($"index {start} is out of array"));
+                Raise(Names.IndexError, $"index {start} is out of array");
             }
         }
 
@@ -582,7 +582,7 @@ partial class MRubyState
     {
         if (!RespondTo(value, convertMethodId))
         {
-            Raise(Names.TypeError, NewString($"can't convert type {value.VType} into {vtype}"));
+            Raise(Names.TypeError, $"can't convert type {value.VType} into {vtype}");
             return MRubyValue.Nil;
         }
         return Send(value, convertMethodId);

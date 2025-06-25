@@ -124,7 +124,7 @@ partial class MRubyState
             }
         }
 
-        Raise(Names.NameError, NewString($"uninitialized class variable {NameOf(id)} in {NameOf(c!)}"));
+        Raise(Names.NameError, $"uninitialized class variable {NameOf(id)} in {NameOf(c!)}");
         return default;
     }
 

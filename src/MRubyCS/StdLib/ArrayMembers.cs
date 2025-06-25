@@ -78,7 +78,7 @@ static class ArrayMembers
                             state.SpliceArray(array, calculatedIndex, calculatedLength, val);
                             break;
                         case RangeCalculateResult.Out:
-                            state.Raise(Names.RangeError, state.NewString($"`{state.Stringify(key)}` out of range"));
+                            state.Raise(Names.RangeError, $"`{state.Stringify(key)}` out of range");
                             break;
                         default:
                             throw new ArgumentOutOfRangeException();

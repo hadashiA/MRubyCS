@@ -81,7 +81,7 @@ static class KernelMembers
                         break;
                     }
                     default:
-                        state.Raise(Names.TypeError, state.NewString($"exception class/object expected"));
+                        state.Raise(Names.TypeError, $"exception class/object expected");
                         break;
                 }
                 break;

@@ -73,7 +73,7 @@ partial class MRubyState
         {
             return str;
         }
-        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to String"));
+        Raise(Names.TypeError, $"{StringifyAny(arg)} cannot be converted to String");
         return default!;
     }
 
@@ -84,7 +84,7 @@ partial class MRubyState
         {
             return array;
         }
-        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Array"));
+        Raise(Names.TypeError, $"{StringifyAny(arg)} cannot be converted to Array");
         return default!;
     }
 
@@ -95,7 +95,7 @@ partial class MRubyState
         {
             return hash;
         }
-        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Hash"));
+        Raise(Names.TypeError, $"{StringifyAny(arg)} cannot be converted to Hash");
         return default!;
     }
 
@@ -106,7 +106,7 @@ partial class MRubyState
         {
             return range;
         }
-        Raise(Names.TypeError, NewString($"{StringifyAny(arg)} cannot be converted to Range"));
+        Raise(Names.TypeError, $"{StringifyAny(arg)} cannot be converted to Range");
         return default!;
     }
 

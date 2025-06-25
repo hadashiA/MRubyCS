@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using MRubyCS.Internals;
 using Utf8StringInterpolation;
 
@@ -57,7 +58,73 @@ partial class MRubyState
         Raise(ex);
     }
 
-    public void RaiseConstMissing(RClass mod, Symbol name)
+    public void Raise(RClass exceptionClass, ReadOnlySpan<byte> message)
+    {
+        Raise(exceptionClass, NewString(message));
+    }
+
+    public void Raise(RClass exceptionClass, ref Utf8StringWriter<ArrayBufferWriter<byte>> format)
+    {
+        format.Flush();
+        Raise(exceptionClass, NewString(format.GetBufferWriter().WrittenSpan));
+    }
+
+    public void Raise(Symbol errorType, RString message)
+    {
+        Raise(GetExceptionClass(errorType), message);
+    }
+
+    public void Raise(Symbol errorType, ReadOnlySpan<byte> message)
+    {
+        Raise(GetExceptionClass(errorType), NewString(message));
+    }
+
+    public void Raise(Symbol errorType, ref Utf8StringWriter<ArrayBufferWriter<byte>> format)
+    {
+        format.Flush();
+        Raise(GetExceptionClass(errorType), NewString(format.GetBufferWriter().WrittenSpan));
+    }
+
+    public void RaiseArgumentNumberError(int argc, int expected)
+    {
+        Raise(Names.ArgumentError, $"wrong number of arguments (given {argc}, expected {expected})");
+    }
+
+    public void RaiseArgumentNumberError(int argc, int min, int max)
+    {
+        RString message;
+        if (min == max)
+        {
+            message = NewString($"wrong number of arguments (given {argc}, expected {min})");
+        }
+        else if (max < 0)
+        {
+            message = NewString($"wrong number of arguments (given {argc}, expected {min}+)");
+        }
+        else
+        {
+            message = NewString($"wrong number of arguments (given {argc}, expected {min}..{max})");
+        }
+
+        Raise(Names.ArgumentError, message);
+    }
+
+    public RClass GetExceptionClass(Symbol name)
+    {
+        if (!TryGetConst(name, out var value) || value.VType != MRubyVType.Class)
+        {
+            Raise(ExceptionClass, "exception corrupted"u8);
+        }
+
+        var exceptionClass = value.As<RClass>();
+        if (!exceptionClass.Is(ExceptionClass))
+        {
+            Raise(ExceptionClass, "non-exception raised"u8);
+        }
+        return exceptionClass;
+    }
+
+    internal void RaiseConstMissing(RClass mod, Symbol name)
     {
         if (mod.GetRealClass() != ObjectClass)
         {
@@ -69,23 +136,7 @@ partial class MRubyState
         }
     }
 
-    public void RaiseMethodMissing(Symbol methodId, MRubyValue self, MRubyValue args)
-    {
-        var exceptionClass = GetExceptionClass(Names.NoMethodError);
-        var ex = new RException(NewString($"undefined method {NameOf(methodId)} for {ClassNameOf(self)}"), exceptionClass);
-        ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(methodId));
-        ex.InstanceVariables.Set(Names.ArgsVariable, args);
-        Raise(ex);
-    }
-
-    public void RaiseNameError(Symbol name, RString message)
-    {
-        var ex = new RException(message, GetExceptionClass(Names.NameError));
-        ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(name));
-        Raise(ex);
-    }
-
-    public void EnsureArgumentCount(int expected)
+    internal void EnsureArgumentCount(int expected)
     {
         var argc = GetArgumentCount();
         if (expected != argc)
@@ -131,19 +182,20 @@ partial class MRubyState
         }
     }
 
-    public RClass GetExceptionClass(Symbol name)
+    internal void RaiseMethodMissing(Symbol methodId, MRubyValue self, MRubyValue args)
     {
-        if (!TryGetConst(name, out var value) || value.VType != MRubyVType.Class)
-        {
-            Raise(ExceptionClass, "exception corrupted"u8);
-        }
+        var exceptionClass = GetExceptionClass(Names.NoMethodError);
+        var ex = new RException(NewString($"undefined method {NameOf(methodId)} for {ClassNameOf(self)}"), exceptionClass);
+        ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(methodId));
+        ex.InstanceVariables.Set(Names.ArgsVariable, args);
+        Raise(ex);
+    }
 
-        var exceptionClass = value.As<RClass>();
-        if (!exceptionClass.Is(ExceptionClass))
-        {
-            Raise(ExceptionClass, "non-exception raised"u8);
-        }
-        return exceptionClass;
+    internal void RaiseNameError(Symbol name, RString message)
+    {
+        var ex = new RException(message, GetExceptionClass(Names.NameError));
+        ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(name));
+        Raise(ex);
     }
 
     internal void EnsureConstName(Symbol constName)
@@ -188,46 +240,6 @@ partial class MRubyState
         }
     }
 
-    public void RaiseArgumentNumberError(int argc, int expected)
-    {
-        var message = NewString($"wrong number of arguments (given {argc}, expected {expected})");
-        Raise(Names.ArgumentError, message);
-    }
-
-    public void RaiseArgumentNumberError(int argc, int min, int max)
-    {
-        RString message;
-        if (min == max)
-        {
-            message = NewString($"wrong number of arguments (given {argc}, expected {min})");
-        }
-        else if (max < 0)
-        {
-            message = NewString($"wrong number of arguments (given {argc}, expected {min}+)");
-        }
-        else
-        {
-            message = NewString($"wrong number of arguments (given {argc}, expected {min}..{max})");
-        }
-
-        Raise(Names.ArgumentError, message);
-    }
-
-    internal void Raise(RClass exceptionClass, ReadOnlySpan<byte> message)
-    {
-        Raise(exceptionClass, NewString(message));
-    }
-
-    internal void Raise(Symbol errorType, ReadOnlySpan<byte> message)
-    {
-        Raise(GetExceptionClass(errorType), NewString(message));
-    }
-
-    internal void Raise(Symbol errorType, RString message)
-    {
-        Raise(GetExceptionClass(errorType), message);
-    }
-
     internal void RaiseFrozenError(MRubyValue v)
     {
         Raise(Names.FrozenError, Utf8String.Format($"can't modify frozen {Stringify(v)}"));
@@ -253,7 +265,7 @@ partial class MRubyState
     {
         if (!value.IsClass)
         {
-            Raise(Names.TypeError, NewString($"{Stringify(value)} is not a class/module"));
+            Raise(Names.TypeError, $"{Stringify(value)} is not a class/module");
         }
     }
 
@@ -261,7 +273,7 @@ partial class MRubyState
     {
         if (c.VType != MRubyVType.Class)
         {
-            Raise(Names.TypeError, NewString($"superclass must be a Class ({NameOf(c)} given)"));
+            Raise(Names.TypeError, $"superclass must be a Class ({NameOf(c)} given)");
         }
         if (c.VType != MRubyVType.SClass)
         {
@@ -298,7 +310,7 @@ partial class MRubyState
         {
             actualValueName = NameOf(ClassOf(value));
         }
-        Raise(Names.TypeError, NewString($"wrong argument type {actualValueName} (expected {expectedType})"));
+        Raise(Names.TypeError, $"wrong argument type {actualValueName} (expected {expectedType})");
     }
 
 
