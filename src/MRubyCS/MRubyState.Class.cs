@@ -99,7 +99,7 @@ partial class MRubyState
         RClass c;
         if (super.VType != MRubyVType.Class)
         {
-            Raise(Names.TypeError, NewString($"super class must be a Class ({super.VType} given)"));
+            Raise(Names.TypeError, $"super class must be a Class ({super.VType} given)");
         }
 
         if (TryGetConst(name, outer, out var value))
@@ -110,8 +110,7 @@ partial class MRubyState
             c = value.As<RClass>();
             if (c.Super.GetRealClass() != super)
             {
-                Raise(Names.TypeError, NewString(
-                    $"superclass mismatch for Class {NameOf(name)} ({StringifyModule(c.Super)} not {StringifyModule(super)})"));
+                Raise(Names.TypeError, $"superclass mismatch for Class {NameOf(name)} ({StringifyModule(c.Super)} not {StringifyModule(super)})");
             }
             return c;
         }
@@ -197,7 +196,7 @@ partial class MRubyState
     {
         if (!TryFindMethod(c, methodId, out _, out _))
         {
-            Raise(Names.NameError, NewString($"undefined method '{NameOf(methodId)}' for class '{NameOf(c)}'"));
+            Raise(Names.NameError, $"undefined method '{NameOf(methodId)}' for class '{NameOf(c)}'");
         }
         DefineMethod(c, methodId, MRubyMethod.Undef);
     }

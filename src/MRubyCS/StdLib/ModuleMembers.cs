@@ -318,7 +318,7 @@ static class ModuleMembers
             {
                 state.Raise(
                     Names.TypeError,
-                    state.NewString($"wrong argument type {state.Stringify(proc)} (expected Proc)"));
+                    $"wrong argument type {state.Stringify(proc)} (expected Proc)");
             }
             p = proc.As<RProc>();
         }

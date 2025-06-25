@@ -845,7 +845,7 @@ partial class MRubyState
                         {
                             method = PrepareMethodMissing(ref callInfo, self, methodId,
                                 opcode == OpCode.Super
-                                    ? static (state, self, methodId) => state.Raise(Names.NoMethodError, state.NewString($"no superclass method '{state.NameOf(methodId)}' for {state.StringifyAny(self)}"))
+                                    ? static (state, self, methodId) => state.Raise(Names.NoMethodError, $"no superclass method '{state.NameOf(methodId)}' for {state.StringifyAny(self)}")
                                     : null);
                         }
 
@@ -1156,14 +1156,14 @@ partial class MRubyState
                         var kargOffset = callInfo.KeywordArgumentOffset;
                         if (kargOffset < 0)
                         {
-                            Raise(Names.ArgumentError, NewString($"missing keyword: {Stringify(key)}"));
+                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(key)}");
                         }
                         var kdict = registers[kargOffset];
                         var value = MRubyValue.Nil;
                         if (kdict.VType != MRubyVType.Hash ||
                             !registers[kargOffset].As<RHash>().TryGetValue(key, out value))
                         {
-                            Raise(Names.ArgumentError, NewString($"missing keyword: {Stringify(key)}"));
+                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(key)}");
                         }
 
                         registers[bb.A] = value;
@@ -1188,7 +1188,7 @@ partial class MRubyState
                             registers[kargOffset].Object is RHash { Length: > 0 } hash)
                         {
                             var key1 = hash.Keys[0];
-                            Raise(Names.ArgumentError, NewString($"unknown keyword: {Stringify(key1)}"));
+                            Raise(Names.ArgumentError, $"unknown keyword: {Stringify(key1)}");
                         }
                         goto Next;
                     }
@@ -1891,7 +1891,7 @@ partial class MRubyState
                             }
                             else
                             {
-                                Raise(Names.TypeError, NewString($"superclass must be a Class ({Stringify(super)} given)"));
+                                Raise(Names.TypeError, $"superclass must be a Class ({Stringify(super)} given)");
                             }
                         }
 
@@ -1900,7 +1900,7 @@ partial class MRubyState
                             var old = GetConst(id, outerClass);
                             if (!old.IsClass)
                             {
-                                Raise(Names.TypeError, NewString($"{StringifyAny(old)} is not a class)"));
+                                Raise(Names.TypeError, $"{StringifyAny(old)} is not a class)");
                             }
 
                             definedClass = old.As<RClass>();
@@ -1909,7 +1909,7 @@ partial class MRubyState
                                 // check super class
                                 if (definedClass.Super.GetRealClass() != superClass)
                                 {
-                                    Raise(Names.TypeError, NewString($"superclass mismatch for {Stringify(old)}"));
+                                    Raise(Names.TypeError, $"superclass mismatch for {Stringify(old)}");
                                 }
                             }
                         }
@@ -1945,7 +1945,7 @@ partial class MRubyState
                             var old = GetConst(id, outerClass);
                             if (old.VType != MRubyVType.Module)
                             {
-                                Raise(Names.TypeError, NewString($"{StringifyAny(old)} is not a module"));
+                                Raise(Names.TypeError, $"{StringifyAny(old)} is not a module");
                             }
                             definedModule = old.As<RClass>();
                         }

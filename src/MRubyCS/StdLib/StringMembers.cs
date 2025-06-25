@@ -20,7 +20,7 @@ static class StringMembers
             }
             else
             {
-                state.Raise(Names.TypeError, state.NewString($"{state.StringifyAny(arg)} cannot be converted to String"));
+                state.Raise(Names.TypeError, $"{state.StringifyAny(arg)} cannot be converted to String");
             }
         }
         return self;
@@ -177,7 +177,7 @@ static class StringMembers
                     format = 'g';
                     break;
                 default:
-                    state.Raise(Names.ArgumentError, state.NewString($"invalid radix {basis}"));
+                    state.Raise(Names.ArgumentError, $"invalid radix {basis}");
                     format = default;
                     break;
             }
@@ -745,7 +745,7 @@ static class StringMembers
         var value = (int)state.GetArgumentAsIntegerAt(1);
         if (pos < -str.Length || str.Length <= pos)
         {
-            state.Raise(Names.IndexError, state.NewString($"index {pos} out of string"));
+            state.Raise(Names.IndexError, $"index {pos} out of string");
         }
         if (pos < 0)
         {

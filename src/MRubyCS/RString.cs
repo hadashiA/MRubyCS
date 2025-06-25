@@ -204,7 +204,7 @@ public class RString : RObject, IEquatable<RString>
                 }
                 if (calculatedOffset < 0 || calculatedOffset > charCount)
                 {
-                    state.Raise(Names.IndexError, state.NewString($"index {state.Stringify(indexValue)} out of string"));
+                    state.Raise(Names.IndexError, $"index {state.Stringify(indexValue)} out of string");
                 }
                 calculatedOffset = Utf8Helper.FindByteIndexAt(span, calculatedOffset);
                 calculatedLength = Utf8Helper.FindByteIndexAt(span, calculatedLength);
@@ -226,7 +226,7 @@ public class RString : RObject, IEquatable<RString>
 
         if (pos < 0 || pos > Length)
         {
-            state.Raise(Names.IndexError, state.NewString($"index {pos} out of string"));
+            state.Raise(Names.IndexError, $"index {pos} out of string");
         }
 
         var currentLength = Length;
