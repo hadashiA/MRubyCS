@@ -69,7 +69,7 @@ public class SpecTest
             return MRubyValue.From(regex.Match(str).Success);
         });
 
-        compiler.LoadExecFile(Path.Join(rubyDir, "assert.rb"));
+        compiler.LoadSourceCodeFile(Path.Join(rubyDir, "assert.rb"));
     }
 
     [TearDown]
@@ -121,6 +121,6 @@ public class SpecTest
 
     void Exec(string fileName)
     {
-        compiler.LoadExecFile(Path.Join(rubyTestDir, fileName));
+        compiler.LoadSourceCodeFile(Path.Join(rubyTestDir, fileName));
     }
 }

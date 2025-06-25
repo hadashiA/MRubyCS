@@ -26,19 +26,11 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 ## Limitations (Preview Release)
 
-This release is a preview version and comes with the following constraints:
-
-- Built-in types and methods are still being implemented.
-  - Please refer to [ruby test](https://github.com/hadashiA/MRubyCS/tree/main/tests/MRubyCS.Tests/ruby/test), etc., for currently supported methods.
-  - We are working on supporting all methods that are built into mruby by default.
 - `private` and `protected` visibitily is not yet implemented. (mruby got support for this in 3.4)
 - This project provides only the VM implementation; it does not include a compiler. To compile mruby scripts, you need the native mruby-compiler.
 
 ### Most recent roadmap
 
-- [ ] Implement builtin ruby libs
-- [ ] Support Fiber
-- [ ] All ruby code port to C# (for performance reason)
 - [ ] [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) for the new version.
 
 ## Installation
@@ -85,7 +77,7 @@ var bytes = File.ReadAllBytes("fibonacci.mrb");
 var state = MRubyState.Create();
 
 // execute bytecoe
-var result = state.Exec(bytes);
+var result = state.LoadBytecode(bytes);
 
 result.IsInteger    //=> true
 result.IntegerValue //=> 55
@@ -94,12 +86,12 @@ result.IntegerValue //=> 55
 This is a sample of executing bytecode.
 See the [How to compile .mrb ](#how-to-compile-mrb) section for information on how to convert Ruby source code to mruby bytecode.
 
-### Handlding `MRubyValue`
+### Handling `MRubyValue`
 
 Above `result` is `MRubyValue`. This represents a Ruby value.
 
 ``` cs
-value.IsNil //=> true if nol
+value.IsNil //=> true if `nil`
 value.IsInteger //=> true if integrr
 value.IsFloat //=> true if float
 value.IsSymbol //=> true if Symbol
@@ -111,7 +103,9 @@ value.IntegerValue //=> get as C# Int64
 value.FloatValue //=> get as C# float
 value.SymbolValue //=> get as `Symbol`
 
-value.As<RString>() //=> get as object value
+value.As<RString>() //=> get as internal String representation
+value.As<RArray>() //=> get as internal Array representation
+value.As<RHash>() //=> get as internal Hash representation
 
 // pattern matching
 if (vlaue.Object is RString str)
@@ -236,8 +230,174 @@ To create a symbol from C#, use `Intern`.
 // symbol literal
 var sym1 = state.Intern("sym"u8)
 
+// symbol to utf8 bytes
+var utf8 = state.NameOf(sym1); //=> "sym"u8
+
 // symbol from string
 var sym2 = state.ToSymbol(state.NewString("sym2"u8));
+```
+
+### Fiber (Coroutine)
+
+MRubyCS supports Ruby Fibers, which are lightweight concurrency primitives that allow you to pause and resume code execution. In addition to standard Ruby Fiber features, MRubyCS provides seamless integration with C#'s async/await pattern.
+
+#### Basic Fiber Usage
+
+```cs
+using MRubyCS;
+using MRubyCS.Compiler;
+
+// Create state and compiler
+var state = MRubyState.Create();
+var compiler = MRubyCompiler.Create(state);
+
+// Define a fiber that yields values
+var code = """
+    Fiber.new do |x|
+      Fiber.yield(x * 2)
+      Fiber.yield(x * 3)
+      x * 4
+    end
+    """u8;
+
+// Load the Ruby code as a Fiber
+var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+
+// Resume the fiber with initial value
+var result1 = fiber.Resume(MRubyValue.From(10));  // => 20
+
+var result2 = fiber.Resume(MRubyValue.From(10));  // => 30
+
+var result3 = fiber.Resume(MRubyValue.From(10));  // => 40 (final return value)
+
+// Check if fiber is still alive
+fiber.IsAlive  // => false
+```
+
+#### Async/Await Integration
+
+MRubyCS provides unique C# async integration features for working with Fibers:
+
+```cs
+// Wait for fiber to terminate
+var code = """
+    Fiber.new do |x|
+      Fiber.yield
+      Fiber.yield
+      "done"
+    end
+    """u8;
+
+var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+
+// Start async wait before resuming
+var terminateTask = fiber.WaitForTerminateAsync();
+
+// Resume the fiber multiple times
+fiber.Resume();
+fiber.Resume();
+fiber.Resume();
+
+// Wait for completion
+await terminateTask;
+Console.WriteLine("Fiber has terminated");
+```
+
+You can consume fiber results as async enumerable:
+
+```cs
+var code = """
+    Fiber.new do |x|
+      3.times do |i|
+        Fiber.yield(x * (i + 1))
+      end
+    end
+    """u8;
+
+var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+
+// Process each yielded value asynchronously
+await foreach (var value in fiber.AsAsyncEnumerable())
+{
+    Console.WriteLine($"Yielded: {value.IntegerValue}");
+}
+```
+
+MRubyCS supports multiple consumers waiting for fiber results simultaneously:
+
+```cs
+var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+
+// Create multiple consumers
+var consumer1 = Task.Run(async () =>
+{
+    while (fiber.IsAlive)
+    {
+        var result = await fiber.WaitForResumeAsync();
+        Console.WriteLine($"Consumer 1 received: {result}");
+    }
+});
+
+var consumer2 = Task.Run(async () =>
+{
+    while (fiber.IsAlive)
+    {
+        var result = await fiber.WaitForResumeAsync();
+        Console.WriteLine($"Consumer 2 received: {result}");
+    }
+});
+
+// Resume fiber and both consumers will receive the results
+fiber.Resume(MRubyValue.From(10));
+fiber.Resume(MRubyValue.From(20));
+fiber.Resume(MRubyValue.From(30));
+
+await Task.WhenAll(consumer1, consumer2);
+```
+
+> [!CAUTION]
+> Waiting for fiber can be performed in a separate thread.
+> However, MRubyState and mruby methods are not thread-safe.
+> Please note that when using mruby functions, you must always return to the original thread.
+
+#### Error Handling in Fibers
+
+Exceptions raised within fibers are properly propagated:
+
+```cs
+var code = """
+    Fiber.new do |x|
+      Fiber.yield(x)
+      raise "Something went wrong"
+    end
+    """u8;
+
+var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+
+// First resume succeeds
+var result1 = fiber.Resume(MRubyValue.From(10));  // => 10
+
+// Second resume will throw
+try
+{
+    fiber.Resume();
+}
+catch (MRubyRaiseException ex)
+{
+    Console.WriteLine($"Ruby exception: {ex.Message}");
+}
+
+// Async wait will also propagate the exception
+var waitTask = fiber.WaitForResumeAsync();
+try
+{
+    fiber.Resume();
+    await waitTask;
+}
+catch (MRubyRaiseException ex)
+{
+    Console.WriteLine($"Async exception: {ex.Message}");
+}
 ```
 
 ## How to compile .mrb ?
@@ -285,7 +445,7 @@ var state = MRubyState.Create();
 
 var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
        .First(x => x.name.EndsWith(".mrb"));
-state.Exec(bytecodeAsset.GetData<byte>().AsSpan());
+state.LoadBytecode(bytecodeAsset.GetData<byte>().AsSpan());
 ```
 
 For manual compilation, refer to the following.
@@ -296,21 +456,24 @@ For manual compilation, refer to the following.
 using MRubyCS.Compiler;
 
 var source = """
-def a
-  1
+def f(a)
+  1 * a
 end
 
-a
+f 100
 """u8;
 
 var state = MRubyState.Create();
 var compiler = MRubyCompiler.Create(state);
 
+// Compile to irep (internal executable representation)
 var irep = compiler.Compile(source);
+var result = state.Execute(irep); // => 100
 
-state.Exec(irep); // => 1
+// Compile and evaluate:
+result = compiler.LoadSourceCode("f(100)"u8);
+result = compiler.LoadSourceCode("f(100)");
 ```
-
 
 ## LICENSE
 

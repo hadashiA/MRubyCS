@@ -24,11 +24,11 @@ Console.WriteLine(Encoding.UTF8.GetString(arrayBufferWriter.WrittenSpan));
 File.WriteAllBytes(GetAbsolutePath("dump.txt"), arrayBufferWriter.WrittenSpan);
 
 
-Console.WriteLine(mRubyDState.Exec(fileIrep));
+Console.WriteLine(mRubyDState.Execute(fileIrep));
 
 for (int i = 0; i < 10000; i++)
 {
-    mRubyDState.Exec(fileIrep);
+    mRubyDState.Execute(fileIrep);
 }
 
 var savePath = GetAbsolutePath("history");

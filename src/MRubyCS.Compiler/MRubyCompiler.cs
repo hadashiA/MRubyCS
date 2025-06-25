@@ -1,6 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MRubyCS.Compiler
 {
@@ -10,14 +13,6 @@ public class MRubyCompileException : Exception
     {
     }
 }
-
-// public static class MRubyStateExtensions
-// {
-//     public static MRubyValue Evaluate(this MRubyState state, ReadOnlySpan<char> rubySourceCode)
-//     {
-//
-//     }
-// }
 
 public record MRubyCompileOptions
 {
@@ -48,41 +43,40 @@ public class MRubyCompiler : IDisposable
         riteParser = new RiteParser(mruby);
     }
 
-    public MRubyValue LoadExecFile(string path)
+    public MRubyValue LoadSourceCodeFile(string path)
     {
-        return mruby.Exec(CompileFile(path));
+        return mruby.Execute(CompileFile(path));
     }
 
-    public MRubyValue LoadExec(ReadOnlySpan<byte> code)
+    public async Task<MRubyValue> LoadSourceCodeFileAsync(string path, CancellationToken cancellationToken = default)
     {
-        return mruby.Exec(Compile(code));
+        return mruby.Execute(await CompileFileAsync(path, cancellationToken));
     }
 
-    public RFiber LoadAsFiber(ReadOnlySpan<byte> code)
+    public MRubyValue LoadSourceCode(ReadOnlySpan<byte> utf8Source)
     {
-        var irep = Compile(code);
-        return mruby.CreateFiber(irep);
+        return mruby.Execute(Compile(utf8Source));
     }
 
-    public RFiber LoadFileAsFiber(string path)
+    public MRubyValue LoadSourceCode(string source)
     {
-        var irep = CompileFile(path);
-        return mruby.CreateFiber(irep);
+        var utf8Source = Encoding.UTF8.GetBytes(source);
+        return LoadSourceCode(utf8Source);
     }
 
-    public unsafe MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> source)
+    public unsafe MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> utf8Source)
     {
         var mrbPtr = compileStateHandle.DangerousGetPtr();
         byte* bin = null;
         var binLength = 0;
         byte* errorMessageCStr = null;
         int resultCode;
-        fixed (byte* sourcePtr = source)
+        fixed (byte* sourcePtr = utf8Source)
         {
             resultCode = NativeMethods.MrbcsCompile(
                 mrbPtr,
                 sourcePtr,
-                source.Length,
+                utf8Source.Length,
                 &bin,
                 &binLength,
                 &errorMessageCStr);
@@ -105,19 +99,25 @@ public class MRubyCompiler : IDisposable
         return Compile(bytes);
     }
 
-    public unsafe Irep Compile(ReadOnlySpan<byte> code)
+    public async Task<Irep> CompileFileAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+        return Compile(bytes);
+    }
+
+    public unsafe Irep Compile(ReadOnlySpan<byte> utf8Source)
     {
         var mrbPtr = compileStateHandle.DangerousGetPtr();
         byte* bin = null;
         var binLength = 0;
         byte* errorMessageCStr = null;
         int resultCode;
-        fixed (byte* codePtr = code)
+        fixed (byte* codePtr = utf8Source)
         {
             resultCode = NativeMethods.MrbcsCompile(
                 mrbPtr,
                 codePtr,
-                code.Length,
+                utf8Source.Length,
                 &bin,
                 &binLength,
                 &errorMessageCStr);
@@ -150,92 +150,5 @@ public class MRubyCompiler : IDisposable
         compileStateHandle.Dispose();
         GC.SuppressFinalize(this);
     }
-
-//     unsafe Irep GetIrepFromNative(MrbIrepNative* irepNative)
-//     {
-//         var sequenceLength = irepNative->ilen + irepNative->clen * 13; // TODO:
-//         var sequence = new byte[sequenceLength];
-//         fixed (byte* dst = sequence)
-//         {
-//             Buffer.MemoryCopy(irepNative->iseq, dst, sequenceLength, sequenceLength);
-//         }
-//
-//         var symbolsLength = irepNative->slen;
-//         var symbols = new Symbol[symbolsLength];
-//         fixed (Symbol* dst = symbols)
-//         {
-//             Buffer.MemoryCopy(irepNative->syms, dst, symbolsLength, symbolsLength);
-//         }
-//
-//         var localVariablesLength = irepNative->nlocals;
-//         var localVariables = new Symbol[localVariablesLength];
-//         fixed (Symbol* dst = localVariables)
-//         {
-//             Buffer.MemoryCopy(irepNative->lv, dst, localVariablesLength, localVariablesLength);
-//         }
-//
-//         var childCount = irepNative->rlen;
-//         var children = new Irep[childCount];
-//         for (var i = 0; i < childCount; i++)
-//         {
-//             children[i] = GetIrepFromNative(irepNative->reps + i);
-//         }
-//
-//         var poolValueCount = irepNative->plen;
-//         var poolValues = new IrepPoolValue[poolValueCount];
-//         for (var i = 0; i < poolValueCount; i++)
-//         {
-//             var poolNative = irepNative->pool + i;
-//             switch (poolNative->tt)
-//             {
-//                 case MrbIrepPoolNative.TT_INT32:
-//                     poolValues[i] = new IrepPoolValue(poolNative->i32);
-//                     break;
-//                 case MrbIrepPoolNative.TT_INT64:
-//                     poolValues[i] = new IrepPoolValue(poolNative->i64);
-//                     break;
-//                 case MrbIrepPoolNative.TT_BIGINT:
-//                     throw new NotSupportedException();
-//                 case MrbIrepPoolNative.TT_FLOAT:
-//                     poolValues[i] = new IrepPoolValue(poolNative->f);
-//                     break;
-//                 default:
-//                     if ((poolNative->tt & MrbIrepPoolNative.TT_STR) != 0 ||
-//                         (poolNative->tt & MrbIrepPoolNative.TT_SSTR) != 0)
-//                     {
-//                         var length = poolNative->tt >> 2;
-//                         var span = new ReadOnlySpan<byte>(poolNative->str, (int)length);
-//                         poolValues[i] = new IrepPoolValue(span.ToArray());
-//                     }
-//                     break;
-//             }
-//         }
-//
-//         var catchHandlerCount = irepNative->clen;
-//         var catchHandlers = new CatchHandler[catchHandlerCount];
-//         if (catchHandlerCount > 0)
-//         {
-//             var catchHandlerPtr = (MrbIrepCatchHandlerNative*)(irepNative->iseq + irepNative->ilen);
-//             for (var i = 0; i < catchHandlerCount; i++)
-//             {
-//                 var ptr = catchHandlerPtr + i;
-//                 var type = (CatchHandlerType)ptr->type;
-//                 var begin = BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(ptr->begin, sizeof(uint)));
-//                 var end = BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(ptr->end, sizeof(uint)));
-//                 var target = BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(ptr->target, sizeof(uint)));
-//                 catchHandlers[i] = new CatchHandler(type, begin, end, target);
-//             }
-//         }
-//
-//         return new Irep
-//         {
-//             Sequence = sequence,
-//             Symbols = symbols,
-//             LocalVariables = localVariables,
-//             Children = children,
-//             PoolValues = poolValues,
-//             CatchHandlers = catchHandlers,
-//         };
-//     }
 }
 }

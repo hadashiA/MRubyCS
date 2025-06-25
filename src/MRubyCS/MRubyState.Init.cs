@@ -544,7 +544,7 @@ public partial class MRubyState
         {
             var bytes = File.ReadAllBytes(path);
             var irep = riteParser.Parse(bytes);
-            Exec(irep);
+            Execute(irep);
         }
     }
 

@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
 
@@ -104,7 +108,7 @@ partial class MRubyState
             var irepProc = nextCallInfo.Proc!;
             nextCallInfo.CallerType = CallerType.VmExecuted;
             nextCallInfo.ProgramCounter = irepProc.ProgramCounter;
-            return Exec(irepProc.Irep, irepProc.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
+            return Execute(irepProc.Irep, irepProc.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
         }
     }
 
@@ -142,7 +146,7 @@ partial class MRubyState
 
         nextCallInfo.KeywordArgumentCount = 0;
 
-        return Exec(block.Irep, block.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
+        return Execute(block.Irep, block.ProgramCounter, nextCallInfo.BlockArgumentOffset + 1);
     }
 
     public RProc CreateProc(ReadOnlySpan<byte> bytecode)
@@ -161,14 +165,26 @@ partial class MRubyState
         };
     }
 
-    public MRubyValue Exec(ReadOnlySpan<byte> bytecode)
+    public MRubyValue LoadBytecode(ReadOnlySpan<byte> bytecode)
     {
         riteParser ??= new RiteParser(this);
         var irep = riteParser.Parse(bytecode);
-        return Exec(irep);
+        return Execute(irep);
     }
 
-    public MRubyValue Exec(Irep irep)
+    public MRubyValue LoadBytecodeFile(string filePath)
+    {
+        var bytecode = File.ReadAllBytes(filePath);
+        return LoadBytecode(bytecode);
+    }
+
+    public async Task<MRubyValue> LoadBytecodeFileAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var bytecode = await File.ReadAllBytesAsync(filePath, cancellationToken);
+        return LoadBytecode(bytecode);
+    }
+
+    public MRubyValue Execute(Irep irep)
     {
         var proc = new RProc(irep, 0, ProcClass)
         {
@@ -185,7 +201,7 @@ partial class MRubyState
         callInfo.MethodId = default;
         callInfo.CallerType = CallerType.InVmLoop;
         Context.Stack[0] = MRubyValue.From(TopSelf);
-        return Exec(irep, 0, 1);
+        return Execute(irep, 0, 1);
     }
 
     public string GetBacktraceString()
@@ -310,7 +326,7 @@ partial class MRubyState
     /// <summary>
     /// Execute irep assuming the Stack values are placed
     /// </summary>
-    internal MRubyValue Exec(Irep irep, int pc, int stackKeep)
+    internal MRubyValue Execute(Irep irep, int pc, int stackKeep)
     {
         Exception = null;
 

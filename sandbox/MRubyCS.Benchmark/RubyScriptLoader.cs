@@ -69,7 +69,7 @@ unsafe class RubyScriptLoader : IDisposable
 
     public MRubyValue RunMRubyCS()
     {
-        return mrubyCSState.Exec(currentMRubyCSIrep!);
+        return mrubyCSState.Execute(currentMRubyCSIrep!);
     }
 
     public MrbValueNative RunMRubyNative()
