@@ -607,7 +607,6 @@ static class FloatMembers
         {
             state.Raise(Names.FloatDomainError, "-Infinity"u8);
         }
-
         if (double.IsPositiveInfinity(value))
         {
             state.Raise(Names.FloatDomainError, "Infinity"u8);

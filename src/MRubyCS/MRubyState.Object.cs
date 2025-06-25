@@ -48,6 +48,11 @@ partial class MRubyState
 
         if (value.IsFloat)
         {
+            var f = value.FloatValue;
+            if (double.IsNaN(f) || double.IsInfinity(f))
+            {
+                Raise(Names.RangeError, NewString($"float `{f}` out of range"));
+            }
             return FloatMembers.ToI.Invoke(this, value).IntegerValue;
         }
 
