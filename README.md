@@ -452,7 +452,7 @@ dotnet add package MRubyCS.Compiler
 Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
 
 ```
-https://github.com/hadashiA/VYaml.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.6.0-preview
+https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.6.0-preview
 ```
 
 If you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
