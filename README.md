@@ -12,14 +12,14 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
   Utilizes the robust capabilities of C# to ensure seamless integration with C#-based game engines.
 
 - **High Performance**
-  Takes advantage of modern C# language features—such as managed pointers, `Span`, and the performance benefits of the .NET runtime’s GC and JIT compiler—to deliver superior speed and efficiency.
+  Takes advantage of modern C# language featuresâ€”such as managed pointers, `Span`, and the performance benefits of the .NET runtimeâ€™s GC and JIT compilerâ€”to deliver superior speed and efficiency.
 
 - **High compatibility with Ruby-level APIs  (Work in progress)**
   It is intended for use in software with a certain amount of resources, such as games. For this reason, we are focusing on Ruby API compatibility.
   At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) tests from the mruby repository.
 
 - **Rich Library Integration & Extensibility**
-  Compared to the original C implementation, calling C#’s extensive libraries from Ruby is straightforward, making the VM highly extensible.
+  Compared to the original C implementation, calling C#â€™s extensive libraries from Ruby is straightforward, making the VM highly extensible.
 
 ## Limitations (Preview Release)
 
@@ -44,7 +44,7 @@ dotnet add package MRubyCS
 > Requirements: Unity 2021.3 or later.
 
 1. Install [NugetForUnity](https://github.com/GlitchEnzo/NuGetForUnity).
-2. Open the NuGet window by going to NuGet > Manage NuGet Packages, “Show Prelease�toggled on, after search for the "MRubyCS" package, and install it.
+2. Open the NuGet window by going to NuGet > Manage NuGet Packages, â€œShow Preleaseâ€toggled on, after search for the "MRubyCS" package, and install it.
 3. (Optional) To install utilities for generating mrb bytecode, refer to the [How to compile .mrb](#how-to-compile-mrb) section.
 
 ## Basic Usage
@@ -452,7 +452,7 @@ dotnet add package MRubyCS.Compiler
 Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
 
 ```
-https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.6.0-preview
+https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.10.1
 ```
 
 If you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
