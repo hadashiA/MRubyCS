@@ -14,12 +14,12 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - **High Performance**
   Takes advantage of modern C# language featuresâ€”such as managed pointers, `Span`, and the performance benefits of the .NET runtimeâ€™s GC and JIT compilerâ€”to deliver superior speed and efficiency.
 
-- **High compatibility with Ruby-level APIs  (Work in progress)**
+- **High compatibility with Ruby-level APIs**
   It is intended for use in software with a certain amount of resources, such as games. For this reason, we are focusing on Ruby API compatibility.
-  At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) tests from the mruby repository.
+  At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) and built-in libs tests from the mruby repository.
 
 - **Rich Library Integration & Extensibility**
-  Compared to the original C implementation, calling C#â€™s extensive libraries from Ruby is straightforward, making the VM highly extensible.
+  Compared to the original C implementation, calling C# extensive libraries from Ruby is straightforward, making the VM highly extensible.
 
 ## Limitations (Preview Release)
 
