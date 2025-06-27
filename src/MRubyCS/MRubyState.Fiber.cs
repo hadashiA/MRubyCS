@@ -14,16 +14,6 @@ partial class MRubyState
         return fiber;
     }
 
-    public RFiber CreateFiber(Irep irep)
-    {
-        var proc = new RProc(irep, 0, ProcClass)
-        {
-            Upper = null,
-            Scope = ObjectClass
-        };
-        return CreateFiber(proc);
-    }
-
     internal MRubyValue AsFiberResult(ReadOnlySpan<MRubyValue> args)
     {
         return args.Length switch
