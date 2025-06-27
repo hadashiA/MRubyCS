@@ -202,8 +202,6 @@ PublishScripts/
 *.nupkg
 # NuGet Symbol Packages
 *.snupkg
-# The packages folder can be ignored because of Package Restore
-**/[Pp]ackages/*
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
 # Uncomment if necessary however generally it will be regenerated when needed
@@ -491,6 +489,7 @@ src/MRubyCS.Compiler.Unity/Logs/*
 src/MRubyCS.Compiler.Unity/*.csproj
 src/MRubyCS.Compiler.Unity/*.sln
 src/MRubyCS.Compiler.Unity/UserSettings
+!src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler
 
 /Assets/Packages/*
 

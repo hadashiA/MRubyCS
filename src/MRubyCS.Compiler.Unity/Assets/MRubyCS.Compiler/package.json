@@ -1,9 +1,9 @@
 {
-  "name": "jp.hadashikick.mrubycs",
-  "displayName": "MRubyCS",
+  "name": "jp.hadashikick.mrubycs-compiler",
+  "displayName": "MRubyCS.Compiler",
   "version": "0.10.1",
   "unity": "2021.3",
-  "description": "A new mruby virtual machine implemented in C#.",
+  "description": "mruby compiler wrappter for MRubyCS",
   "keywords": ["mruby", "ruby"],
   "license": "MIT",
   "documentationUrl": "https://github.com/hadashiA/MRubyCS",
