@@ -65,7 +65,8 @@ public class MRubyCompiler : IDisposable
     public RFiber LoadSourceCodeAsFiber(ReadOnlySpan<byte> utf8Source)
     {
         var irep = Compile(utf8Source);
-        return mruby.CreateFiber(irep);
+        var proc = mruby.CreateProc(irep);
+        return mruby.CreateFiber(proc);
     }
 
     public RFiber LoadSourceCodeAsFiber(string source)

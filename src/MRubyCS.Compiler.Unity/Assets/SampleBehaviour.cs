@@ -9,7 +9,7 @@ public class SampleBehaviour : MonoBehaviour
     {
         var state = MRubyState.Create();
         var compiler = MRubyCompiler.Create(state);
-        var result = compiler.LoadExec(Encoding.UTF8.GetBytes("1 + 1"));
+        var result = compiler.LoadSourceCode(Encoding.UTF8.GetBytes("1 + 1"));
         Debug.Log(result);
     }
 }
