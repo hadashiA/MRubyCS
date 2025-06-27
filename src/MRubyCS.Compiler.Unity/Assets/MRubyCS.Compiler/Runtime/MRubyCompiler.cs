@@ -62,17 +62,6 @@ public class MRubyCompiler : IDisposable
         return LoadSourceCode(utf8Source);
     }
 
-    public RFiber LoadSourceCodeAsFiber(ReadOnlySpan<byte> utf8Source)
-    {
-        var irep = Compile(utf8Source);
-        return mruby.CreateFiber(irep);
-    }
-
-    public RFiber LoadSourceCodeAsFiber(string source)
-    {
-        var utf8Source = Encoding.UTF8.GetBytes(source);
-        return LoadSourceCodeAsFiber(utf8Source);
-    }
 
     public unsafe MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> utf8Source)
     {
