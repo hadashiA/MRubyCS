@@ -12,14 +12,17 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
   Utilizes the robust capabilities of C# to ensure seamless integration with C#-based game engines.
 
 - **High Performance**
-  Takes advantage of modern C# language featuresâ€”such as managed pointers, `Span`, and the performance benefits of the .NET runtimeâ€™s GC and JIT compilerâ€”to deliver superior speed and efficiency.
+  Takes advantage of modern C# language featuresâ€”such as managed pointers, `Span`, and the performance benefits of the .NET runtimes GC and JIT compiler to deliver superior speed and efficiency.
 
 - **High compatibility with Ruby-level APIs**
   It is intended for use in software with a certain amount of resources, such as games. For this reason, we are focusing on Ruby API compatibility.
   At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) and built-in libs tests from the mruby repository.
 
-- **Rich Library Integration & Extensibility**
+- **Portability & Extensibility**
   Compared to the original C implementation, calling C# extensive libraries from Ruby is straightforward, making the VM highly extensible.
+
+- *WWith Fiber support*
+  You can communicate between the Ruby world and the C# world like channels without blocking threads. This enables integration such as suspending Ruby and then executing async methods in the C# world.
 
 ## Limitations (Preview Release)
 
