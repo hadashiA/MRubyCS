@@ -215,6 +215,65 @@ public class VmTest
         Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
     }
 
+
+    [Test]
+    public void IntegerOverflowAdd()
+    {
+        Assert.Throws<MRubyRaiseException>(() =>
+        {
+            Exec("""
+                                  a = 9223372036854775807
+                                   a += 8
+                                  return a
+                 """u8);
+        }, "Integer overflow in add (RangeError)");
+
+        Assert.Throws<MRubyRaiseException>(() =>
+        {
+            Exec("""
+                                  a = 9223372036854775807
+                                   a += 8000
+                                  return a
+                 """u8);
+        }, "Integer overflow in add (RangeError)");
+    }
+
+    [Test]
+    public void IntegerOverflowSub()
+    {
+        Assert.Throws<MRubyRaiseException>(() =>
+        {
+            Exec("""
+                                  a = -9223372036854775806
+                                   a -= 8
+                                  return a
+                 """u8);
+        }, "Integer overflow in sub (RangeError)");
+
+        Assert.Throws<MRubyRaiseException>(() =>
+        {
+            Exec("""
+                                  a = -9223372036854775806
+                                   a -= 8000
+                                  return a
+                 """u8);
+        }, "Integer overflow in sub (RangeError)");
+    }
+
+    [Test]
+    public void IntegerOverflowMul()
+    {
+        Assert.Throws<MRubyRaiseException>(() =>
+        {
+            Exec("""
+                                  a = 10000000000
+                                   a *= 10000000000
+                                  return a
+                 """u8);
+        }, "Integer overflow in mul (RangeError)");
+    }
+
+
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
         var irep = compiler.Compile(code);
