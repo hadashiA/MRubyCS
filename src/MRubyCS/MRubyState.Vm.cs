@@ -1397,7 +1397,14 @@ partial class MRubyState
                         switch (registerA.VType)
                         {
                             case MRubyVType.Integer:
-                                registerA = MRubyValue.From(registerA.IntegerValue + rV);
+                                try
+                                {
+                                    registerA = MRubyValue.From(checked(registerA.IntegerValue + rV));
+                                }
+                                catch (OverflowException)
+                                {
+                                    IntegerMembers.RaiseIntegerOverflowError(this, opcode == OpCode.AddI ? "add"u8 : "sub"u8);
+                                }
                                 goto Next;
                             case MRubyVType.Float:
                                 registerA = MRubyValue.From(registerA.FloatValue + rV);
