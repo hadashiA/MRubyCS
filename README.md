@@ -21,8 +21,8 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - **Portability & Extensibility**
   Compared to the original C implementation, calling C# extensive libraries from Ruby is straightforward, making the VM highly extensible.
 
-- *Support Fiber*
-  You can communicate between the Ruby world and the C# world like channels without blocking threads. This enables integration such as suspending Ruby and then executing async methods in the C# world.
+- *Fiber and async/await integration*
+  You can communicate between the Ruby world and the C# world like channels without blocking threads with `Fiber`. This enables integration such as suspending Ruby and then executing async methods in the C# world.
 
 ## Limitations (Preview Release)
 
