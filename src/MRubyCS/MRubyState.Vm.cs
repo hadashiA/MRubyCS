@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
+// ReSharper disable UnreachableSwitchArmDueToIntegerAnalysis
 
 namespace MRubyCS;
 
@@ -518,7 +518,6 @@ partial class MRubyState
                         bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
                         registerA = ref registers[bb.A];
                     {
-
                         //var mod = registers[bb.A];
                         var name = irep.Symbols[bb.B];
                         registerA = GetConst(name, registerA.As<RClass>());
@@ -1294,36 +1293,88 @@ partial class MRubyState
                         goto Next;
                     }
                     case OpCode.Add:
+                    case OpCode.Sub:
+                    case OpCode.Mul:
+                    case OpCode.Div:
                         Markers.Add();
+                        Markers.Sub();
+                        Markers.Mul();
+                        Markers.Div();
                         a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
                         registerA = ref registers[a];
                         var rhs = Unsafe.Add(ref registerA, 1);
-                    {
-                        switch (registerA.VType, rhs.VType)
+                        var lhsVType = registerA.VType;
+                        var rhsVType = rhs.VType;
+                        if (lhsVType == MRubyVType.Integer && rhsVType == MRubyVType.Integer)
                         {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                // TODO: overflow handling
-                                registerA = MRubyValue.From(registerA.IntegerValue + rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue + rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.FloatValue + rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue + rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.String, MRubyVType.String):
-                                registerA = MRubyValue.From(registerA.As<RString>() + rhs.As<RString>());
-                                goto Next;
+                            var leftInt = registerA.IntegerValue;
+                            var rightInt = rhs.IntegerValue;
+                            try
+                            {
+                                registerA = MRubyValue.From(opcode switch
+                                {
+                                    OpCode.Add  => checked(leftInt + rightInt),
+                                    OpCode.Sub => checked(leftInt - rightInt),
+                                    OpCode.Mul => checked(leftInt * rightInt),
+                                    OpCode.Div => leftInt / rightInt,
+                                    _ => 0
+                                });
+                            }
+                            catch (OverflowException)
+                            {
+                                IntegerMembers.RaiseIntegerOverflowError(this, opcode switch
+                                {
+                                    OpCode.Add => "add"u8,
+                                    OpCode.Sub => "sub"u8,
+                                    OpCode.Mul => "mul"u8,
+                                    OpCode.Div => "div"u8,
+                                    _ => default
+                                });
+                            }
+                            catch (DivideByZeroException)
+                            {
+                                IntegerMembers.RaiseDivideByZeroError(this);
+                            }
+                            goto Next;
                         }
-                        // Jump to send :+
+
+                        if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
+                            rhsVType is MRubyVType.Integer or MRubyVType.Float)
+                        {
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : rhs.FloatValue;
+
+                            registerA = MRubyValue.From(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+
+                        if (lhsVType == MRubyVType.String && rhsVType == MRubyVType.String && opcode == OpCode.Add)
+                        {
+                            registerA = MRubyValue.From(registerA.As<RString>() + rhs.As<RString>());
+                            goto Next;
+                        }
+
+                    {
+                        // Jump to send : + or :- or :* or :/
                         var nextStackPointer = callInfo.StackPointer + a;
                         callInfo = ref Context.PushCallStack();
                         callInfo.CallerType = CallerType.InVmLoop;
                         callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpAdd;
+                        callInfo.MethodId = opcode switch
+                        {
+                            OpCode.Add  => Names.OpAdd,
+                            OpCode.Sub => Names.OpSub,
+                            OpCode.Mul => Names.OpMul,
+                            OpCode.Div => Names.OpDiv,
+                            _ => default
+                        };
                         callInfo.ArgumentCount = 1;
                         callInfo.KeywordArgumentCount = 0;
                         goto case OpCode.SendInternal;
@@ -1338,7 +1389,14 @@ partial class MRubyState
                         switch (registerA.VType)
                         {
                             case MRubyVType.Integer:
-                                registerA = MRubyValue.From(registerA.IntegerValue + rV);
+                                try
+                                {
+                                    registerA = MRubyValue.From(checked(registerA.IntegerValue + rV));
+                                }
+                                catch (OverflowException)
+                                {
+                                    IntegerMembers.RaiseIntegerOverflowError(this, opcode == OpCode.AddI ? "add"u8 : "sub"u8);
+                                }
                                 goto Next;
                             case MRubyVType.Float:
                                 registerA = MRubyValue.From(registerA.FloatValue + rV);
@@ -1352,103 +1410,6 @@ partial class MRubyState
                         callInfo.CallerType = CallerType.InVmLoop;
                         callInfo.StackPointer = nextStackPointer;
                         callInfo.MethodId = opcode == OpCode.AddI ? Names.OpAdd : Names.OpSub;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
-                    case OpCode.Sub:
-                    {
-                        Markers.Sub();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                // TODO: overflow handling
-                                registerA = MRubyValue.From(registerA.IntegerValue - rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue - rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.FloatValue - rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue - rhs.FloatValue);
-                                goto Next;
-                        }
-
-                        // Jump to send :-
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpSub;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
-                    case OpCode.Mul:
-                    {
-                        Markers.Mul();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                // TODO: overflow handling
-                                registerA = MRubyValue.From(registerA.IntegerValue * rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue * rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.FloatValue * rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue * rhs.FloatValue);
-                                goto Next;
-                        }
-                        // Jump to send :*
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpMul;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
-                    case OpCode.Div:
-                    {
-                        Markers.Div();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                // TODO: overflow handling
-                                registerA = MRubyValue.From(registerA.IntegerValue / rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue / rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.FloatValue / rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue / rhs.FloatValue);
-                                goto Next;
-                        }
-                        // Jump to send :/
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpDiv;
                         callInfo.ArgumentCount = 1;
                         callInfo.KeywordArgumentCount = 0;
                         goto case OpCode.SendInternal;
@@ -1736,7 +1697,7 @@ partial class MRubyState
                         EnsureNotFrozen(registerA);
 
                         var array = registerA.As<RArray>();
-                        array.PushRange(registers.Slice(bb.A+1, bb.B));
+                        array.PushRange(registers.Slice(bb.A + 1, bb.B));
                         goto Next;
                     }
                     case OpCode.ArySplat:
