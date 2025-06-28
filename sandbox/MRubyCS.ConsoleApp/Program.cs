@@ -48,9 +48,9 @@ if (lastJitPaths.Any())
         var dest = Path.Join(savePath, Path.GetFileName(jitPath));
         File.Move(last, dest);
     }
-    
+
 }
-var method = typeof(MRubyState).GetMethod("Exec", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(Irep), typeof(int), typeof(int)])!;
+var method = typeof(MRubyState).GetMethod("Execute", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(Irep), typeof(int), typeof(int)])!;
 using var disassembler = JitDisassembler.Create();
 var nextJitText = disassembler.Disassemble(method);
 File.WriteAllText(newJIitPath, nextJitText);
