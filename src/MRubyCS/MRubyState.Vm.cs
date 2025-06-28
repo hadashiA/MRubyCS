@@ -1300,14 +1300,6 @@ partial class MRubyState
                         Markers.Sub();
                         Markers.Mul();
                         Markers.Div();
-                        var arithId = opcode switch
-                        {
-                            OpCode.Add => 0,
-                            OpCode.Sub => 1,
-                            OpCode.Mul => 2,
-                            OpCode.Div => 3,
-                            _ => default
-                        };
                         a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
                         registerA = ref registers[a];
                         var rhs = Unsafe.Add(ref registerA, 1);
@@ -1319,23 +1311,23 @@ partial class MRubyState
                             var rightInt = rhs.IntegerValue;
                             try
                             {
-                                registerA = MRubyValue.From(arithId switch
+                                registerA = MRubyValue.From(opcode switch
                                 {
-                                    0 => checked(leftInt + rightInt),
-                                    1 => checked(leftInt - rightInt),
-                                    2 => checked(leftInt * rightInt),
-                                    3 => leftInt / rightInt,
+                                    OpCode.Add  => checked(leftInt + rightInt),
+                                    OpCode.Sub => checked(leftInt - rightInt),
+                                    OpCode.Mul => checked(leftInt * rightInt),
+                                    OpCode.Div => leftInt / rightInt,
                                     _ => 0
                                 });
                             }
                             catch (OverflowException)
                             {
-                                IntegerMembers.RaiseIntegerOverflowError(this, arithId switch
+                                IntegerMembers.RaiseIntegerOverflowError(this, opcode switch
                                 {
-                                    0 => "add"u8,
-                                    1 => "sub"u8,
-                                    2 => "mul"u8,
-                                    3 => "div"u8,
+                                    OpCode.Add => "add"u8,
+                                    OpCode.Sub => "sub"u8,
+                                    OpCode.Mul => "mul"u8,
+                                    OpCode.Div => "div"u8,
                                     _ => default
                                 });
                             }
@@ -1352,12 +1344,12 @@ partial class MRubyState
                             var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : registerA.FloatValue;
                             var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : rhs.FloatValue;
 
-                            registerA = MRubyValue.From(arithId switch
+                            registerA = MRubyValue.From(opcode switch
                             {
-                                0 => leftVal + rightVal,
-                                1 => leftVal - rightVal,
-                                2 => leftVal * rightVal,
-                                3 => leftVal / rightVal,
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
                                 _ => default
                             });
                             goto Next;
@@ -1375,12 +1367,12 @@ partial class MRubyState
                         callInfo = ref Context.PushCallStack();
                         callInfo.CallerType = CallerType.InVmLoop;
                         callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = arithId switch
+                        callInfo.MethodId = opcode switch
                         {
-                            0 => Names.OpAdd,
-                            1 => Names.OpSub,
-                            2 => Names.OpMul,
-                            3 => Names.OpDiv,
+                            OpCode.Add  => Names.OpAdd,
+                            OpCode.Sub => Names.OpSub,
+                            OpCode.Mul => Names.OpMul,
+                            OpCode.Div => Names.OpDiv,
                             _ => default
                         };
                         callInfo.ArgumentCount = 1;
