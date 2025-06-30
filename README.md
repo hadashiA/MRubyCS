@@ -24,7 +24,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - **Fiber and async/await integration**
   You can communicate between the Ruby world and the C# world like channels without blocking threads with `Fiber`. This enables integration such as suspending Ruby and then executing async methods in the C# world.
 
-## Limitations (Preview Release)
+## Limitations
 
 - `private` and `protected` visibitily is not yet implemented. (mruby got support for this in 3.4)
 - This project provides only the VM implementation; it does not include a compiler. To compile mruby scripts, you need the native mruby-compiler.
