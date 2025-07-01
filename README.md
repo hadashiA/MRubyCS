@@ -96,7 +96,7 @@ state.Exuecute(irep);
 This is a sample of executing bytecode.
 See the [How to compile .mrb ](#how-to-compile-mrb) section for information on how to convert Ruby source code to mruby bytecode.
 
-## Handling `MRubyValue`
+### Handling `MRubyValue`
 
 Above `result` is `MRubyValue`. This represents a Ruby value.
 
@@ -138,7 +138,7 @@ var floatValue = MRubyValue.From(1.234f); // create float value
 var objValue = MRubyValue.From(str); // create allocated ruby object value
 ```
 
-## Define ruby class/module/method by C#
+### Define ruby class/module/method by C#
 
 ``` cs
 // Create MRubyState object.
@@ -201,6 +201,8 @@ state.DefineMethod(moduleA, Intern("additional_method2"u8), (state, self) => MRu
 state.IncludeModule(classA, moduleA);
 ```
 
+As a result of the definition, the following Ruby code can now be executed.
+
 ```ruby
 a = A.new
 a.plus100(123) #=> 223
@@ -211,6 +213,47 @@ a.additionoa_method2 #=> 123
 
 A.classmethod1 #=> "hoge fuga"
 ```
+
+### Call ruby method from C# side
+
+```ruby
+class A
+  def self.foo = @@foo
+
+  def self.foo=(x)
+    @@foo = x
+  end
+end
+
+class B
+  attr_accessor :bar
+end
+@b = B.new
+
+module M
+  class C
+    def self.foo = 999
+  end
+end
+```
+
+```cs
+// get class instance
+var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
+
+// call class method
+mrb.Send(classA, mrb.Intern("foo="u8), MRubyValue.From(123)); 
+mrb.Send(classA, mrb.Intern("foo"u8)); //=> 123
+
+// get instance variable from top
+var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
+mrb.Send(instanceB, mrb.Intern("bar="u8), MRubyValue.From(456)); 
+mrb.Send(instanceB, mrb.Intern("bar"u8)); //=> 456
+
+// find class instance on the hierarchy
+var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"u8), mrb.NewString("M::C"u8));
+```
+
 
 ## Symbol/String
 
@@ -428,48 +471,6 @@ catch (MRubyRaiseException ex)
 {
     Console.WriteLine($"Async exception: {ex.Message}");
 }
-```
-
-## Examples
-
-### Call ruby method from C# side
-
-```ruby
-class A
-  def self.foo = @@foo
-
-  def self.foo=(x)
-    @@foo = x
-  end
-end
-
-class B
-  attr_accessor :bar
-end
-@b = B.new
-
-module M
-  class C
-    def self.foo = 999
-  end
-end
-```
-
-```cs
-// get class instance
-var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
-
-// call class method
-mrb.Send(classA, mrb.Intern("foo="u8), MRubyValue.From(123)); 
-mrb.Send(classA, mrb.Intern("foo"u8)); //=> 123
-
-// get instance variable from top
-var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
-mrb.Send(instanceB, mrb.Intern("bar="u8), MRubyValue.From(456)); 
-mrb.Send(instanceB, mrb.Intern("bar"u8)); //=> 456
-
-// find class instance on the hierarchy
-var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"u8), mrb.NewString("M::C"u8));
 ```
 
 ## How to compile .mrb ?
