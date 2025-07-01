@@ -8,6 +8,8 @@ public class RObject : RBasic
     {
     }
 
+    public static implicit operator MRubyValue(RObject obj) => MRubyValue.From(obj);
+
     /// <summary>
     /// Create a copy of the object (equivalent to `init_copy`)
     /// </summary>

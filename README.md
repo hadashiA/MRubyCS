@@ -52,8 +52,6 @@ dotnet add package MRubyCS
 
 ## Basic Usage
 
-### Execute byte-code
-
 ```ruby
 def fibonacci(n)
   return n if n <= 1
@@ -98,7 +96,7 @@ state.Exuecute(irep);
 This is a sample of executing bytecode.
 See the [How to compile .mrb ](#how-to-compile-mrb) section for information on how to convert Ruby source code to mruby bytecode.
 
-### Handling `MRubyValue`
+## Handling `MRubyValue`
 
 Above `result` is `MRubyValue`. This represents a Ruby value.
 
@@ -140,7 +138,7 @@ var floatValue = MRubyValue.From(1.234f); // create float value
 var objValue = MRubyValue.From(str); // create allocated ruby object value
 ```
 
-### Define ruby class/module/method by C#
+## Define ruby class/module/method by C#
 
 ``` cs
 // Create MRubyState object.
@@ -214,7 +212,7 @@ a.additionoa_method2 #=> 123
 A.classmethod1 #=> "hoge fuga"
 ```
 
-### Symbol/String
+## Symbol/String
 
 The string representation within mruby is utf8.
 Therefore, to generate a ruby string from C#, [Utf8StringInterpolation](https://github.com/Cysharp/Utf8StringInterpolation) is used internally.
@@ -240,20 +238,25 @@ To create a symbol from C#, use `Intern`.
 
 ```cs
 // symbol literal
-var sym1 = state.Intern("sym"u8)
+var sym1 = state.Intern("sym"u8);
+
+// create symbol from string interporation
+var x = 123;
+var sym2 = state.Intern($"sym{x}");
 
 // symbol to utf8 bytes
-var utf8 = state.NameOf(sym1); //=> "sym"u8
+state.NameOf(sym1); //=> "sym"u8
+state.NameOf(sym2); //=> "sym123"u8
 
-// symbol from string
-var sym2 = state.ToSymbol(state.NewString("sym2"u8));
+// create symbol from string
+var sym2 = state.ToSymbol(state.NewString("hoge"u8));
 ```
 
-### Fiber (Coroutine)
+## Fiber (Coroutine)
 
 MRubyCS supports Ruby Fibers, which are lightweight concurrency primitives that allow you to pause and resume code execution. In addition to standard Ruby Fiber features, MRubyCS provides seamless integration with C#'s async/await pattern.
 
-#### Basic Fiber Usage
+### Basic Fiber Usage
 
 ```cs
 using MRubyCS;
@@ -301,7 +304,7 @@ fiber.Resume(); //=> 600
 ```
 
 
-#### Async/Await Integration
+### Async/Await Integration
 
 MRubyCS provides unique C# async integration features for working with Fibers:
 
@@ -387,7 +390,7 @@ await Task.WhenAll(consumer1, consumer2);
 > However, MRubyState and mruby methods are not thread-safe.
 > Please note that when using mruby functions, you must always return to the original thread.
 
-#### Error Handling in Fibers
+### Error Handling in Fibers
 
 Exceptions raised within fibers are properly propagated:
 
@@ -427,9 +430,76 @@ catch (MRubyRaiseException ex)
 }
 ```
 
+## Examples
+
+### Call ruby method from C# side
+
+```ruby
+class A
+  def self.foo = @@foo
+
+  def self.foo=(x)
+    @@foo = x
+  end
+end
+
+class B
+  attr_accessor :bar
+end
+@b = B.new
+
+module M
+  class C
+    def self.foo = 999
+  end
+end
+```
+
+```cs
+// get class instance
+var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
+
+// call class method
+mrb.Send(classA, mrb.Intern("foo="u8), MRubyValue.From(123)); 
+mrb.Send(classA, mrb.Intern("foo"u8)); //=> 123
+
+// get instance variable from top
+var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
+mrb.Send(instanceB, mrb.Intern("bar="u8), MRubyValue.From(456)); 
+mrb.Send(instanceB, mrb.Intern("bar"u8)); //=> 456
+
+// find class instance on the hierarchy
+var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"u8), mrb.NewString("M::C"u8));
+```
+
 ## How to compile .mrb ?
 
-MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
+mruby has the following architecture, and allows the compiler and runtime to be separated.
+
+By distributing only precompiled bytecode, you can optimize the installation on the application.
+
+```mermaid
+graph TB
+    subgraph host["host machine"]
+        A[source code<br/>.rb files] 
+        B[mruby compiler<br/>mrbc]
+        C[byte-code<br/>.mrb files]
+        
+        A -->|compile| B
+        B -->|output| C
+    end
+    
+    subgraph application["application"]
+        D[mruby VM]
+        E[Execute byte-code]
+        
+        D --> E
+    end
+    
+    C -->|deploy/install| D
+```
+
+By the way, MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
 Basically, you need the native compiler provided by the [mruby](https://github.com/mruby/mruby) project.
 
 ```bash
