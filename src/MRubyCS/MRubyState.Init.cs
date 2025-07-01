@@ -1,8 +1,10 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
+using Utf8StringInterpolation;
 
 namespace MRubyCS;
 
@@ -79,6 +81,13 @@ public partial class MRubyState
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Symbol Intern(RString name) => symbolTable.Intern(name.AsSpan());
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Symbol Intern(ref Utf8StringWriter<ArrayBufferWriter<byte>> format)
+    {
+        format.Flush();
+        return symbolTable.Intern(format.GetBufferWriter().WrittenSpan);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Symbol InternLiteral(byte[] name) => symbolTable.InternLiteral(name);

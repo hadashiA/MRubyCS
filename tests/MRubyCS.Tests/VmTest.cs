@@ -273,6 +273,50 @@ public class VmTest
         }, "Integer overflow in mul (RangeError)");
     }
 
+    [Test]
+    public void GetInstances()
+    {
+        Exec("""
+             class A
+               def self.foo = @@foo
+
+               def self.foo=(x)
+                 @@foo = x
+               end
+             end
+
+             class B
+               attr_accessor :bar
+             end
+             @b = B.new
+
+             module M
+               class C
+                 def self.foo = 999
+               end
+             end
+             """u8);
+
+        // get class instance
+        var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
+
+        // call class method
+        mrb.Send(classA, mrb.Intern("foo="u8), MRubyValue.From(123));
+        var result1 = mrb.Send(classA, mrb.Intern("foo"u8));
+        Assert.That(result1, Is.EqualTo(MRubyValue.From(123)));
+
+        // root instance variable
+        var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
+        mrb.Send(instanceB, mrb.Intern("bar="u8), MRubyValue.From(123));
+
+        var result2 = mrb.Send(instanceB, mrb.Intern("bar"u8));
+        Assert.That(result2, Is.EqualTo(MRubyValue.From(123)));
+
+        // find class instance on the hierarchy
+        var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"u8), mrb.NewString("M::C"u8));
+        Assert.That(classC.IsObject, Is.True);
+    }
+
 
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {

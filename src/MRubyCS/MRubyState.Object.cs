@@ -259,30 +259,30 @@ partial class MRubyState
         return NewStringOwned(rawString);
     }
 
-    public MRubyValue GetInstanceVariable(MRubyValue obj, Symbol key)
+    public MRubyValue GetInstanceVariable(RObject obj, Symbol key)
     {
-        if (obj.Object is RClass c)
+        if (obj is RClass c)
         {
             return c.ClassInstanceVariables.Get(key);
         }
 
-        if (obj.Object is { } o)
+        if (obj is { } o)
         {
             return o.InstanceVariables.Get(key);
         }
         return MRubyValue.Nil;
     }
 
-    public void SetInstanceVariable(MRubyValue obj, Symbol key, MRubyValue value)
+    public void SetInstanceVariable(RObject obj, Symbol key, MRubyValue value)
     {
         EnsureNotFrozen(obj);
-        if (obj.Object is RClass c)
+        if (obj is RClass c)
         {
             c.ClassInstanceVariables.Set(key, value);
         }
         else
         {
-            obj.As<RObject>().InstanceVariables.Set(key, value);
+            obj.InstanceVariables.Set(key, value);
         }
     }
 
