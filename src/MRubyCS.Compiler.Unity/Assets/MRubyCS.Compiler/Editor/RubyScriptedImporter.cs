@@ -25,7 +25,7 @@ namespace MRubyCS.Compiler.Editor
                 compiler = MRubyCompiler.Create(state);
             }
 
-            using var bin = compiler.CompileToBinaryFormat(source);
+            using var bin = compiler.CompileToBytecode(source);
             var mrbAsset = new TextAsset(bin.GetNativeData())
             {
                 name = Path.GetFileNameWithoutExtension(ctx.assetPath) + ".mrb"

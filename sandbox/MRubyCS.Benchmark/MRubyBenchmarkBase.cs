@@ -3,14 +3,14 @@ using BenchmarkDotNet.Attributes;
 namespace MRubyCS.Benchmark;
 
 [Config(typeof(BenchmarkConfig))]
-public class FibBenchmark
+public abstract class MRubyBenchmarkBase(string filename)
 {
     readonly RubyScriptLoader scriptLoader = new();
 
     [GlobalSetup]
     public void LoadScript()
     {
-        scriptLoader.PreloadScriptFromFile("bm_fib.rb");
+        scriptLoader.PreloadScriptFromFile(filename);
     }
 
     [GlobalCleanup]

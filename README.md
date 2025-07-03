@@ -568,6 +568,12 @@ var compiler = MRubyCompiler.Create(state);
 var irep = compiler.Compile(source);
 var result = state.Execute(irep); // => 100
 
+// Compile to bytecode (mruby called this format is "Rite")
+using var bin = compiler.CompileToBytecode(source);
+File.WriteAllBytes("compiled.mrb", bin.AsSpan());
+
+state.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
+
 // Compile and evaluate:
 result = compiler.LoadSourceCode("f(100)"u8);
 result = compiler.LoadSourceCode("f(100)");

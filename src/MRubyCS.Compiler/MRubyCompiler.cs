@@ -75,7 +75,14 @@ public class MRubyCompiler : IDisposable
         return LoadSourceCodeAsFiber(utf8Source);
     }
 
-    public unsafe MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> utf8Source)
+    [Obsolete("Use CompileToBytecode instead")]
+    public MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> utf8Source) =>
+        CompileToBytecode(utf8Source);
+
+    public unsafe MrbNativeBytesHandle CompileToBytecode(string source) =>
+        CompileToBytecode(Encoding.UTF8.GetBytes(source));
+
+    public unsafe MrbNativeBytesHandle CompileToBytecode(ReadOnlySpan<byte> utf8Source)
     {
         var mrbPtr = compileStateHandle.DangerousGetPtr();
         byte* bin = null;
