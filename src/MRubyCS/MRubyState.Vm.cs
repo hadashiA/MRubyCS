@@ -158,6 +158,8 @@ partial class MRubyState
         };
     }
 
+    public Irep ParseBytecode(ReadOnlySpan<byte> bytecode) => RiteParser.Parse(bytecode);
+
     public MRubyValue LoadBytecode(ReadOnlySpan<byte> bytecode)
     {
         var irep = RiteParser.Parse(bytecode);

@@ -61,12 +61,6 @@ unsafe class RubyScriptLoader : IDisposable
         PreloadScript(source);
     }
 
-    public MrbNativeBytesHandle CompileToBinaryFormat(string fileName)
-    {
-        var source = ReadBytes(fileName);
-        return mrubyCSCompiler.CompileToBinaryFormat(source);
-    }
-
     public MRubyValue RunMRubyCS()
     {
         return mrubyCSState.Execute(currentMRubyCSIrep!);
