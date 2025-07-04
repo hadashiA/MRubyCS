@@ -87,7 +87,7 @@ The result of parsing bytecode is called `Irep` in mruby terminology.
 ``` cs
 Irep irep = state.RiteParser.Parse(bytecode);
 
-state.Exuecute(irep);
+state.Execute(irep);
 ```
 
 `Irep` can be executed as is, or converted to Fiber before use. For details on Fiber, refer to the [Fiber](#fiber-coroutine) section.
