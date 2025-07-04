@@ -27,7 +27,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 ## Limitations
 
 - `private` and `protected` visibitily is not yet implemented. (mruby got support for this in 3.4)
-- This project provides only the VM implementation; it does not include a compiler. To compile mruby scripts, you need the native mruby-compiler.
+- This project provides only the VM implementation; it does not include a compiler. To compile mruby scripts, see [Compiling Ruby source code](#compiling-ruby-source-code) section.
 
 ### Most recent roadmap
 
@@ -48,7 +48,7 @@ dotnet add package MRubyCS
 
 1. Install [NugetForUnity](https://github.com/GlitchEnzo/NuGetForUnity).
 2. Open the NuGet window by going to NuGet > Manage NuGet Packages, â€œShow Preleaseâ€toggled on, after search for the "MRubyCS" package, and install it.
-3. (Optional) To install utilities for generating mrb bytecode, refer to the [How to compile .mrb](#how-to-compile-mrb) section.
+3. (Optional) To install utilities for generating mrb bytecode, refer to the [Compiling Ruby source code](#compiling-ruby-source-code) section.
 
 ## Basic Usage
 
@@ -94,7 +94,7 @@ state.Exuecute(irep);
 
 
 This is a sample of executing bytecode.
-See the [How to compile .mrb ](#how-to-compile-mrb) section for information on how to convert Ruby source code to mruby bytecode.
+See the [Compiling Ruby source code](#compiling-ruby-source-code) section for information on how to convert Ruby source code to mruby bytecode.
 
 ### Handling `MRubyValue`
 
@@ -473,7 +473,7 @@ catch (MRubyRaiseException ex)
 }
 ```
 
-## How to compile .mrb ?
+## Compiling Ruby source code
 
 mruby has the following architecture, and allows the compiler and runtime to be separated.
 
