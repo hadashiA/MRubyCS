@@ -483,21 +483,19 @@ By distributing only precompiled bytecode, you can optimize the installation on 
 graph TB
     subgraph host["host machine"]
         A[source code<br/>.rb files] 
-        B[mruby compiler<br/>mrbc]
         C[byte-code<br/>.mrb files]
         
-        A -->|compile| B
-        B -->|output| C
+        A -->|compile| C
     end
+
+    C -->|deploy/install| E
     
     subgraph application["application"]
         D[mruby VM]
-        E[Execute byte-code]
+        E[byte-code<br>.mrb files]
         
-        D --> E
+        E -->|exucute byte-cose| D
     end
-    
-    C -->|deploy/install| D
 ```
 
 By the way, MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
