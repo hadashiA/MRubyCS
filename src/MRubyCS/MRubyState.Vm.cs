@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
+
 // ReSharper disable UnreachableSwitchArmDueToIntegerAnalysis
 
 namespace MRubyCS;
@@ -1313,7 +1314,7 @@ partial class MRubyState
                             {
                                 registerA = MRubyValue.From(opcode switch
                                 {
-                                    OpCode.Add  => checked(leftInt + rightInt),
+                                    OpCode.Add => checked(leftInt + rightInt),
                                     OpCode.Sub => checked(leftInt - rightInt),
                                     OpCode.Mul => checked(leftInt * rightInt),
                                     OpCode.Div => leftInt / rightInt,
@@ -1369,7 +1370,7 @@ partial class MRubyState
                         callInfo.StackPointer = nextStackPointer;
                         callInfo.MethodId = opcode switch
                         {
-                            OpCode.Add  => Names.OpAdd,
+                            OpCode.Add => Names.OpAdd,
                             OpCode.Sub => Names.OpSub,
                             OpCode.Mul => Names.OpMul,
                             OpCode.Div => Names.OpDiv,
@@ -1415,172 +1416,86 @@ partial class MRubyState
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.EQ:
-                    {
-                        Markers.EQ();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-                        if (registerA.Equals(rhs))
-                        {
-                            registerA = MRubyValue.True;
-                            goto Next;
-                        }
-                        if (registerA.IsSymbol)
-                        {
-                            registerA = MRubyValue.False;
-                            goto Next;
-                        }
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue == rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue == (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue == rhs.IntegerValue);
-                                goto Next;
-                            // ReSharper disable once CompareOfFloatsByEqualityOperator
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue == rhs.FloatValue);
-                                goto Next;
-                        }
-
-                        // Jump to send :==
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpEq;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.LT:
-                    {
-                        Markers.LT();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue < rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue < (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue < rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue < rhs.FloatValue);
-                                goto Next;
-                        }
-
-                        // Jump to send :==
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpLt;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.LE:
-                    {
-                        Markers.LE();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue <= rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue <= (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue <= rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue <= rhs.FloatValue);
-                                goto Next;
-                        }
-
-                        // Jump to send :<=
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpLe;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.GT:
-                    {
-                        Markers.GT();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue > rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue > (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue > rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue > rhs.FloatValue);
-                                goto Next;
-                        }
-                        // Jump to send :>
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpGt;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.GE:
-                    {
+                        Markers.EQ();
+                        Markers.LT();
+                        Markers.LE();
+                        Markers.GT();
                         Markers.GE();
                         a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
                         registerA = ref registers[a];
                         rhs = Unsafe.Add(ref registerA, 1);
-                        switch (registerA.VType, rhs.VType)
+
+                        if (opcode == OpCode.EQ)
                         {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue >= rhs.IntegerValue);
+                            if (registerA.Equals(rhs))
+                            {
+                                registerA = MRubyValue.True;
                                 goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue >= (long)rhs.FloatValue);
+                            }
+                            if (registerA.IsSymbol)
+                            {
+                                registerA = MRubyValue.False;
                                 goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue >= rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue >= rhs.FloatValue);
-                                goto Next;
+                            }
                         }
-                        // Jump to send :>=
+
+                        lhsVType = registerA.VType;
+                        rhsVType = rhs.VType;
+
+                        if (lhsVType == MRubyVType.Float && rhsVType == MRubyVType.Float)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = MRubyValue.From(opcode switch
+                            {
+                                // ReSharper disable once CompareOfFloatsByEqualityOperator
+                                OpCode.EQ => leftVal == rightVal,
+                                OpCode.LT => leftVal < rightVal,
+                                OpCode.LE => leftVal <= rightVal,
+                                OpCode.GT => leftVal > rightVal,
+                                OpCode.GE => leftVal >= rightVal,
+                                _ => false
+                            });
+                            goto Next;
+                        }
+
+                        if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
+                            rhsVType is MRubyVType.Integer or MRubyVType.Float)
+                        {
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : (long)registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : (long)rhs.FloatValue;
+                            {
+                                registerA = MRubyValue.From(opcode switch
+                                {
+                                    OpCode.EQ => leftVal == rightVal,
+                                    OpCode.LT => leftVal < rightVal,
+                                    OpCode.LE => leftVal <= rightVal,
+                                    OpCode.GT => leftVal > rightVal,
+                                    OpCode.GE => leftVal >= rightVal,
+                                    _ => false
+                                });
+                            }
+                            goto Next;
+                        }
+                    {
+                        // Jump to send method
                         var nextStackPointer = callInfo.StackPointer + a;
                         callInfo = ref Context.PushCallStack();
                         callInfo.CallerType = CallerType.InVmLoop;
                         callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpGe;
+                        callInfo.MethodId = opcode switch
+                        {
+                            OpCode.EQ => Names.OpEq,
+                            OpCode.LT => Names.OpLt,
+                            OpCode.LE => Names.OpLe,
+                            OpCode.GT => Names.OpGt,
+                            OpCode.GE => Names.OpGe,
+                            _ => default
+                        };
                         callInfo.ArgumentCount = 1;
                         callInfo.KeywordArgumentCount = 0;
                         goto case OpCode.SendInternal;
