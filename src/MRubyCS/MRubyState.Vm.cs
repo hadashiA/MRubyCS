@@ -951,7 +951,7 @@ partial class MRubyState
 
                         static void Super(MRubyState state, ref MRubyCallInfo callInfo, Span<MRubyValue> registers, ReadOnlySpan<byte> sequence)
                         {
-                            var  bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
+                            var bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
                             var targetClass = callInfo.Scope.TargetClass;
                             var methodId = callInfo.MethodId;
                             if (methodId == default || targetClass == null!)
@@ -962,7 +962,7 @@ partial class MRubyState
                             var receiver = registers[0];
                             if (targetClass!.HasFlag(MRubyObjectFlags.ClassPrepended) ||
                                 targetClass.VType == MRubyVType.Module ||
-                                ! state.KindOf(receiver, targetClass))
+                                !state.KindOf(receiver, targetClass))
                             {
                                 state.Raise(Names.TypeError, "self has wrong type to call super in this context"u8);
                             }
@@ -971,7 +971,7 @@ partial class MRubyState
 
                             // Jump to send
                             var nextStackPointer = callInfo.StackPointer + bb.A;
-                            callInfo = ref  state.Context.PushCallStack();
+                            callInfo = ref state.Context.PushCallStack();
                             callInfo.CallerType = CallerType.InVmLoop;
                             callInfo.Scope = targetClass.Super;
                             callInfo.StackPointer = nextStackPointer;
@@ -979,7 +979,6 @@ partial class MRubyState
                             callInfo.ArgumentCount = (byte)(bb.B & 0xf);
                             callInfo.KeywordArgumentCount = (byte)((bb.B >> 4) & 0xf);
                         }
-
                     }
                     case OpCode.Enter:
                     {
@@ -1607,28 +1606,38 @@ partial class MRubyState
                         int post = bbb.C;
                         if (array.Length > pre + post)
                         {
-                            var slice = array.AsSpan().Slice(bbb.B, array.Length - pre - post);
-                            registerA = MRubyValue.From(NewArray(slice));
-                            registerA = ref Unsafe.Add(ref registerA, 1);
-                            while (post-- > 0)
+                            APostShort(this, array, bbb, pre, post, ref registerA);
+
+                            static void APostShort(MRubyState state, RArray array, OperandBBB bbb, int pre, int post, ref MRubyValue registerA)
                             {
-                                registerA = array[array.Length - post - 1];
+                                var slice = array.AsSpan().Slice(bbb.B, array.Length - pre - post);
+                                registerA = MRubyValue.From(state.NewArray(slice));
                                 registerA = ref Unsafe.Add(ref registerA, 1);
+                                while (post-- > 0)
+                                {
+                                    registerA = array[array.Length - post - 1];
+                                    registerA = ref Unsafe.Add(ref registerA, 1);
+                                }
                             }
                         }
                         else
                         {
-                            registerA = MRubyValue.From(NewArray(0));
-                            registerA = ref Unsafe.Add(ref registerA, 1);
-                            int i;
-                            for (i = 0; i + pre < array.Length; i++)
+                            APostLong(this, array, pre, post, ref registerA);
+
+                            static void APostLong(MRubyState state, RArray array, int pre, int post, ref MRubyValue registerA)
                             {
-                                Unsafe.Add(ref registerA, i) = array[pre + i];
-                            }
-                            while (i < post)
-                            {
-                                Unsafe.Add(ref registerA, i) = default;
-                                i++;
+                                registerA = MRubyValue.From(state.NewArray(0));
+                                registerA = ref Unsafe.Add(ref registerA, 1);
+                                int i;
+                                for (i = 0; i + pre < array.Length; i++)
+                                {
+                                    Unsafe.Add(ref registerA, i) = array[pre + i];
+                                }
+                                while (i < post)
+                                {
+                                    Unsafe.Add(ref registerA, i) = default;
+                                    i++;
+                                }
                             }
                         }
                         goto Next;
@@ -2003,10 +2012,9 @@ partial class MRubyState
                     }
                 }
 
-            Next:
-                continue;
+                Next: continue;
 
-            JumpAndNext:
+                JumpAndNext:
                 callInfo = ref Context.CurrentCallInfo;
                 irep = callInfo.Proc!.Irep;
                 registers = Context.Stack.AsSpan(callInfo.StackPointer);
