@@ -565,13 +565,7 @@ partial class MRubyState
 
                         // Jump to send :[]
                         Unsafe.Add(ref registerA, 2) = MRubyValue.Nil; // push nil after arguments
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpAref;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.SetIdx:
@@ -1364,20 +1358,7 @@ partial class MRubyState
 
                     {
                         // Jump to send : + or :- or :* or :/
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = opcode switch
-                        {
-                            OpCode.Add => Names.OpAdd,
-                            OpCode.Sub => Names.OpSub,
-                            OpCode.Mul => Names.OpMul,
-                            OpCode.Div => Names.OpDiv,
-                            _ => default
-                        };
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.AddI:
@@ -1406,13 +1387,7 @@ partial class MRubyState
 
                         // Jump to send :+ or :-
                         Unsafe.Add(ref registerA, 1) = MRubyValue.From(rV);
-                        var nextStackPointer = callInfo.StackPointer + bb.A;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = opcode == OpCode.AddI ? Names.OpAdd : Names.OpSub;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + bb.A, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.EQ:
@@ -1483,21 +1458,7 @@ partial class MRubyState
                         }
                     {
                         // Jump to send method
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = opcode switch
-                        {
-                            OpCode.EQ => Names.OpEq,
-                            OpCode.LT => Names.OpLt,
-                            OpCode.LE => Names.OpLe,
-                            OpCode.GT => Names.OpGt,
-                            OpCode.GE => Names.OpGe,
-                            _ => default
-                        };
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.Array:
@@ -1958,6 +1919,18 @@ partial class MRubyState
                     throw;
                 }
             }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        ref MRubyCallInfo GetNextCallInfo(int nextStackPointer, OpCode code, byte argCount)
+        {
+            ref var callInfo = ref Context.PushCallStack();
+            callInfo.CallerType = CallerType.InVmLoop;
+            callInfo.StackPointer = nextStackPointer;
+            callInfo.MethodId = SymbolHelpers.GetOpCodeSymbol(code);
+            callInfo.ArgumentCount = argCount;
+            callInfo.KeywordArgumentCount = 0;
+            return ref callInfo;
         }
     }
 
