@@ -1142,19 +1142,25 @@ partial class MRubyState
                         var kargOffset = callInfo.KeywordArgumentOffset;
                         if (kargOffset < 0)
                         {
-                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(key)}");
+                            RaiseMissingKeywordError(key);
                         }
                         var kdict = registers[kargOffset];
                         var value = MRubyValue.Nil;
                         if (kdict.VType != MRubyVType.Hash ||
                             !registers[kargOffset].As<RHash>().TryGetValue(key, out value))
                         {
-                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(key)}");
+                            RaiseMissingKeywordError(key);
                         }
 
                         registers[bb.A] = value;
                         kdict.As<RHash>().TryDelete(key, out _);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        void RaiseMissingKeywordError(MRubyValue keyValue)
+                        {
+                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(keyValue)}");
+                        }
                     }
                     case OpCode.KeyP:
                     {
@@ -1174,7 +1180,13 @@ partial class MRubyState
                             registers[kargOffset].Object is RHash { Length: > 0 } hash)
                         {
                             var key1 = hash.Keys[0];
-                            Raise(Names.ArgumentError, $"unknown keyword: {Stringify(key1)}");
+                            RaiseUnknownKeyword(key1);
+
+                            [MethodImpl(MethodImplOptions.NoInlining)]
+                            void RaiseUnknownKeyword(MRubyValue keyValue)
+                            {
+                                Raise(Names.ArgumentError, $"unknown keyword: {Stringify(keyValue)}");
+                            }
                         }
                         goto Next;
                     }
@@ -1720,7 +1732,13 @@ partial class MRubyState
                             }
                             else
                             {
-                                Raise(Names.TypeError, $"superclass must be a Class ({Stringify(super)} given)");
+                                RaiseSuperClassMustBeClass(super);
+
+                                [MethodImpl(MethodImplOptions.NoInlining)]
+                                void RaiseSuperClassMustBeClass(MRubyValue superValue)
+                                {
+                                    Raise(Names.TypeError, $"superclass must be a Class ({Stringify(superValue)} given)");
+                                }
                             }
                         }
 
@@ -1729,7 +1747,13 @@ partial class MRubyState
                             var old = GetConst(id, outerClass);
                             if (!old.IsClass)
                             {
-                                Raise(Names.TypeError, $"{StringifyAny(old)} is not a class)");
+                                RaiseNotAClass(old);
+
+                                [MethodImpl(MethodImplOptions.NoInlining)]
+                                void RaiseNotAClass(MRubyValue oldValue)
+                                {
+                                    Raise(Names.TypeError, $"{StringifyAny(oldValue)} is not a class");
+                                }
                             }
 
                             definedClass = old.As<RClass>();
@@ -1738,7 +1762,13 @@ partial class MRubyState
                                 // check super class
                                 if (definedClass.Super.GetRealClass() != superClass)
                                 {
-                                    Raise(Names.TypeError, $"superclass mismatch for {Stringify(old)}");
+                                    RaiseSuperClassMismatch(old);
+
+                                    [MethodImpl(MethodImplOptions.NoInlining)]
+                                    void RaiseSuperClassMismatch(MRubyValue oldValue)
+                                    {
+                                        Raise(Names.TypeError, $"superclass mismatch for {StringifyAny(oldValue)}");
+                                    }
                                 }
                             }
                         }
@@ -1774,7 +1804,13 @@ partial class MRubyState
                             var old = GetConst(id, outerClass);
                             if (old.VType != MRubyVType.Module)
                             {
-                                Raise(Names.TypeError, $"{StringifyAny(old)} is not a module");
+                                RaiseNotAModule(old);
+
+                                [MethodImpl(MethodImplOptions.NoInlining)]
+                                void RaiseNotAModule(MRubyValue oldValue)
+                                {
+                                    Raise(Names.TypeError, $"{StringifyAny(oldValue)} is not a module");
+                                }
                             }
                             definedModule = old.As<RClass>();
                         }
@@ -1893,12 +1929,20 @@ partial class MRubyState
                         return registers[irep.LocalVariables.Length];
                     }
                     default:
-                        throw new NotSupportedException($"Unknown opcode {opcode}");
+                    {
+                        ThrowInvalidOpCode(opcode);
+                        return default;
+                        static void ThrowInvalidOpCode(OpCode opcode)
+                        {
+                            throw new NotSupportedException($"Invalid opcode {opcode}");
+                        }
+                    }
                 }
 
-                Next: continue;
+            Next:
+                continue;
 
-                JumpAndNext:
+            JumpAndNext:
                 callInfo = ref Context.CurrentCallInfo;
                 irep = callInfo.Proc!.Irep;
                 registers = Context.Stack.AsSpan(callInfo.StackPointer);
