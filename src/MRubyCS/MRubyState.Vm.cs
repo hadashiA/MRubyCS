@@ -78,7 +78,7 @@ partial class MRubyState
             nextCallInfo.MarkAsKeywordArgumentPacked();
         }
 
-        nextStack[stackSize - 1] = block != null ? MRubyValue.From(block) : MRubyValue.Nil;
+        nextStack[stackSize - 1] = block != null ? MRubyValue.From(block) : default;
 
         if (TryFindMethod(receiverClass, methodId, out var method, out _) &&
             method != MRubyMethod.Undef)
@@ -543,7 +543,7 @@ partial class MRubyState
                         switch (registerA.Object)
                         {
                             case RArray array when valueB.IsInteger:
-                                registerA = array[(int)valueB.IntegerValue];
+                                registerA = array[(int)valueB.bits];
                                 goto Next;
                             case RHash hash:
                                 registerA = hash.GetValueOrDefault(valueB, this);
@@ -557,14 +557,14 @@ partial class MRubyState
                                         var substr = str.GetPartial(this, valueB);
                                         registerA = substr != null
                                             ? MRubyValue.From(substr)
-                                            : MRubyValue.Nil;
+                                            : default;
                                         goto Next;
                                 }
                                 break;
                         }
 
                         // Jump to send :[]
-                        Unsafe.Add(ref registerA, 2) = MRubyValue.Nil; // push nil after arguments
+                        Unsafe.Add(ref registerA, 2) = default; // push nil after arguments
                         callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
@@ -572,7 +572,7 @@ partial class MRubyState
                     {
                         Markers.SetIdx();
                         a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registers[a + 3] = MRubyValue.Nil; // push nil after arguments
+                        registers[a + 3] = default; // push nil after arguments
 
                         // Jump to send :[]=
                         var nextStackPointer = callInfo.StackPointer + a;
@@ -596,7 +596,7 @@ partial class MRubyState
                         }
                         else
                         {
-                            registers[bbb.A] = MRubyValue.Nil;
+                            registers[bbb.A] = default;
                         }
                         goto Next;
                     }
@@ -667,7 +667,7 @@ partial class MRubyState
                         {
                             MRubyRaiseException x => MRubyValue.From(x.ExceptionObject),
                             MRubyBreakException x => MRubyValue.From(x.BreakObject),
-                            _ => MRubyValue.Nil
+                            _ => default
                         };
                         Exception = null;
                         goto Next;
@@ -718,7 +718,7 @@ partial class MRubyState
                                     }
                                     case BreakTag.Jump:
                                     {
-                                        var newProgramCounter = (int)breakObject.Value.IntegerValue;
+                                        var newProgramCounter = (int)breakObject.Value.bits;
                                         if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
                                         {
                                             // avoiding a jump from a catch handler into the same handler
@@ -803,7 +803,7 @@ partial class MRubyState
 
                         if (opcode is OpCode.Send or OpCode.SSend)
                         {
-                            nextRegisters[blockOffset] = MRubyValue.Nil;
+                            nextRegisters[blockOffset] = default;
                         }
                         else
                         {
@@ -981,11 +981,11 @@ partial class MRubyState
                         var r = aspec.TakeRestArguments ? 1 : 0;
                         var m2 = aspec.MandatoryArguments2Count;
                         // mrb_int kd = (MRB_ASPEC_KEY(a) > 0 || MRB_ASPEC_KDICT(a))? 1 : 0;
-                        var argv0 = argv.IsEmpty ? MRubyValue.Nil : argv[0];
+                        var argv0 = argv.IsEmpty ? default : argv[0];
 
                         var mandantryTotalRequired = m1 + o + r + m2;
                         var block = registers[callInfo.BlockArgumentOffset];
-                        var kdict = MRubyValue.Nil;
+                        var kdict = default(MRubyValue);
                         var hasAnyKeyword = aspec.KeywordArgumentsCount > 0 || aspec.TakeKeywordDict;
 
                         // keyword arguments
@@ -1019,7 +1019,7 @@ partial class MRubyState
                                         break;
                                 }
                             }
-                            kdict = MRubyValue.Nil;
+                            kdict = default;
                             callInfo.KeywordArgumentCount = 0;
                         }
                         else if (aspec.KeywordArgumentsCount > 0 && !kdict.IsNil)
@@ -1050,7 +1050,7 @@ partial class MRubyState
                         }
 
                         // rest arguments
-                        var rest = MRubyValue.Nil;
+                        var rest = default(MRubyValue);
                         if (argc < mandantryTotalRequired)
                         {
                             var mlen = (int)m2;
@@ -1145,7 +1145,7 @@ partial class MRubyState
                             RaiseMissingKeywordError(key);
                         }
                         var kdict = registers[kargOffset];
-                        var value = MRubyValue.Nil;
+                        var value = default(MRubyValue);
                         if (kdict.VType != MRubyVType.Hash ||
                             !registers[kargOffset].As<RHash>().TryGetValue(key, out value))
                         {
@@ -1314,8 +1314,8 @@ partial class MRubyState
                         var rhsVType = rhs.VType;
                         if (lhsVType == MRubyVType.Integer && rhsVType == MRubyVType.Integer)
                         {
-                            var leftInt = registerA.IntegerValue;
-                            var rightInt = rhs.IntegerValue;
+                            var leftInt = registerA.bits;
+                            var rightInt = rhs.bits;
                             try
                             {
                                 registerA = MRubyValue.From(opcode switch
@@ -1348,8 +1348,8 @@ partial class MRubyState
                         if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
                             rhsVType is MRubyVType.Integer or MRubyVType.Float)
                         {
-                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : registerA.FloatValue;
-                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : rhs.FloatValue;
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.bits : registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.bits : rhs.FloatValue;
 
                             registerA = MRubyValue.From(opcode switch
                             {
@@ -1385,7 +1385,7 @@ partial class MRubyState
                             case MRubyVType.Integer:
                                 try
                                 {
-                                    registerA = MRubyValue.From(checked(registerA.IntegerValue + rV));
+                                    registerA = MRubyValue.From(checked(registerA.bits + rV));
                                 }
                                 catch (OverflowException)
                                 {
@@ -1453,8 +1453,8 @@ partial class MRubyState
                         if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
                             rhsVType is MRubyVType.Integer or MRubyVType.Float)
                         {
-                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : (long)registerA.FloatValue;
-                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : (long)rhs.FloatValue;
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.bits : (long)registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.bits : (long)rhs.FloatValue;
                             {
                                 registerA = MRubyValue.From(opcode switch
                                 {
@@ -1525,7 +1525,7 @@ partial class MRubyState
                             }
                             else
                             {
-                                registerA = MRubyValue.Nil;
+                                registerA = default;
                             }
                         }
                         goto Next;
@@ -1571,7 +1571,7 @@ partial class MRubyState
                             }
                             while (i < post)
                             {
-                                Unsafe.Add(ref registerA, i) = MRubyValue.Nil;
+                                Unsafe.Add(ref registerA, i) = default;
                                 i++;
                             }
                         }
@@ -1919,7 +1919,7 @@ partial class MRubyState
                         {
                             MRubyRaiseException x => MRubyValue.From(x.ExceptionObject),
                             MRubyBreakException x => MRubyValue.From(x.BreakObject),
-                            _ => MRubyValue.Nil
+                            _ => default
                         };
                         if (TryUnwindEnsureJump(ref callInfo, Context.CallDepth, BreakTag.Stop, returnValue))
                         {
@@ -1932,6 +1932,7 @@ partial class MRubyState
                     {
                         ThrowInvalidOpCode(opcode);
                         return default;
+
                         static void ThrowInvalidOpCode(OpCode opcode)
                         {
                             throw new NotSupportedException($"Invalid opcode {opcode}");
