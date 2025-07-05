@@ -525,7 +525,7 @@ class MRubyContext
 
         static void ThrowStacTooDeep()
         {
-            throw new StackOverflowException("stack level too deep");
+            throw new InvalidOperationException("stack level too deep");
         }
     }
 }

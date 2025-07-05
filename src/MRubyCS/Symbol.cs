@@ -7,6 +7,7 @@ namespace MRubyCS;
 public readonly record struct Symbol(uint Value)
 {
     public static readonly Symbol Empty = new(0);
+    public readonly uint Value = Value;
 }
 
 class SymbolTable
