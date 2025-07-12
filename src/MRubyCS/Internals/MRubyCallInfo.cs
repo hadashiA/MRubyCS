@@ -185,7 +185,7 @@ class MRubyContext
     const int CallDepthMax = 512;
     static int LastId = -1;
 
-    public int CallDepth { get; private set; }
+    public int CallDepth;
     public int Id { get; }
 
     public RFiber? Fiber { get; internal set; }
@@ -515,9 +515,15 @@ class MRubyContext
         return CollectionsMarshal.AsSpan(list);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     void EnsureStackLevel()
     {
         if (CallDepth >= CallDepthMax)
+        {
+            ThrowStacTooDeep();
+        }
+
+        static void ThrowStacTooDeep()
         {
             throw new InvalidOperationException("stack level too deep");
         }

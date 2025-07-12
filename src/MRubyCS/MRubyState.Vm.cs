@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
+
 // ReSharper disable UnreachableSwitchArmDueToIntegerAnalysis
 
 namespace MRubyCS;
@@ -77,7 +78,7 @@ partial class MRubyState
             nextCallInfo.MarkAsKeywordArgumentPacked();
         }
 
-        nextStack[stackSize - 1] = block != null ? MRubyValue.From(block) : MRubyValue.Nil;
+        nextStack[stackSize - 1] = block != null ? MRubyValue.From(block) : default;
 
         if (TryFindMethod(receiverClass, methodId, out var method, out _) &&
             method != MRubyMethod.Undef)
@@ -478,33 +479,41 @@ partial class MRubyState
                             goto Next;
                         }
 
-                        var x = c;
-                        while (x is { VType: MRubyVType.SClass })
-                        {
-                            if (!x.ClassInstanceVariables.TryGet(id, out value))
-                            {
-                                x = null;
-                                break;
-                            }
-                            x = c.Class;
-                        }
-                        if (x is { VType: MRubyVType.Class or MRubyVType.Module })
-                        {
-                            c = x;
-                        }
-                        var proc = callInfo.Proc?.Upper;
-                        while (proc != null)
-                        {
-                            x = proc.Scope?.TargetClass ?? ObjectClass;
-                            if (x.ClassInstanceVariables.TryGet(id, out value))
-                            {
-                                registerA = value;
-                                goto Next;
-                            }
-                            proc = proc.Upper;
-                        }
-                        registerA = GetConst(id, c);
+                        GetConstSlowPath(
+                            this, ref registerA, ref callInfo, id, c);
+
                         goto Next;
+
+                        static void GetConstSlowPath(MRubyState state, ref MRubyValue registerA, ref MRubyCallInfo callInfo, Symbol id, RClass c)
+                        {
+                            var x = c;
+                            MRubyValue value;
+                            while (x is { VType: MRubyVType.SClass })
+                            {
+                                if (!x.ClassInstanceVariables.TryGet(id, out value))
+                                {
+                                    x = null;
+                                    break;
+                                }
+                                x = c.Class;
+                            }
+                            if (x is { VType: MRubyVType.Class or MRubyVType.Module })
+                            {
+                                c = x;
+                            }
+                            var proc = callInfo.Proc?.Upper;
+                            while (proc != null)
+                            {
+                                x = proc.Scope?.TargetClass ?? state.ObjectClass;
+                                if (x.ClassInstanceVariables.TryGet(id, out value))
+                                {
+                                    registerA = value;
+                                    return;
+                                }
+                                proc = proc.Upper;
+                            }
+                            registerA = state.GetConst(id, c);
+                        }
                     }
                     case OpCode.SetConst:
                     {
@@ -544,7 +553,7 @@ partial class MRubyState
                         switch (registerA.Object)
                         {
                             case RArray array when valueB.IsInteger:
-                                registerA = array[(int)valueB.IntegerValue];
+                                registerA = array[(int)valueB.bits];
                                 goto Next;
                             case RHash hash:
                                 registerA = hash.GetValueOrDefault(valueB, this);
@@ -558,28 +567,22 @@ partial class MRubyState
                                         var substr = str.GetPartial(this, valueB);
                                         registerA = substr != null
                                             ? MRubyValue.From(substr)
-                                            : MRubyValue.Nil;
+                                            : default;
                                         goto Next;
                                 }
                                 break;
                         }
 
                         // Jump to send :[]
-                        Unsafe.Add(ref registerA, 2) = MRubyValue.Nil; // push nil after arguments
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpAref;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+                        Unsafe.Add(ref registerA, 2) = default; // push nil after arguments
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.SetIdx:
                     {
                         Markers.SetIdx();
                         a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registers[a + 3] = MRubyValue.Nil; // push nil after arguments
+                        registers[a + 3] = default; // push nil after arguments
 
                         // Jump to send :[]=
                         var nextStackPointer = callInfo.StackPointer + a;
@@ -603,7 +606,7 @@ partial class MRubyState
                         }
                         else
                         {
-                            registers[bbb.A] = MRubyValue.Nil;
+                            registers[bbb.A] = default;
                         }
                         goto Next;
                     }
@@ -674,7 +677,7 @@ partial class MRubyState
                         {
                             MRubyRaiseException x => MRubyValue.From(x.ExceptionObject),
                             MRubyBreakException x => MRubyValue.From(x.BreakObject),
-                            _ => MRubyValue.Nil
+                            _ => default
                         };
                         Exception = null;
                         goto Next;
@@ -725,7 +728,7 @@ partial class MRubyState
                                     }
                                     case BreakTag.Jump:
                                     {
-                                        var newProgramCounter = (int)breakObject.Value.IntegerValue;
+                                        var newProgramCounter = (int)breakObject.Value.bits;
                                         if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
                                         {
                                             // avoiding a jump from a catch handler into the same handler
@@ -792,25 +795,30 @@ partial class MRubyState
                             }
                             else
                             {
-                                var hash = NewHash(callInfo.KeywordArgumentCount);
-                                for (var i = 0; i < callInfo.KeywordArgumentCount; i++)
-                                {
-                                    var k = nextRegisters[kargOffset + (i * 2)];
-                                    var v = nextRegisters[kargOffset + (i * 2) + 1];
-                                    hash.Add(k, v);
-                                }
-                                nextRegisters[kargOffset] = MRubyValue.From(hash);
+                                PackKeywordArguments(this, ref callInfo, ref nextRegisters, kargOffset, ref blockOffset);
 
-                                var block = nextRegisters[blockOffset];
-                                callInfo.MarkAsKeywordArgumentPacked();
-                                blockOffset = callInfo.BlockArgumentOffset;
-                                nextRegisters[blockOffset] = block;
+                                static void PackKeywordArguments(MRubyState state, ref MRubyCallInfo callInfo, ref Span<MRubyValue> nextRegisters, int kargOffset, ref int blockOffset)
+                                {
+                                    var hash = state.NewHash(callInfo.KeywordArgumentCount);
+                                    for (var i = 0; i < callInfo.KeywordArgumentCount; i++)
+                                    {
+                                        var k = nextRegisters[kargOffset + (i * 2)];
+                                        var v = nextRegisters[kargOffset + (i * 2) + 1];
+                                        hash.Add(k, v);
+                                    }
+                                    nextRegisters[kargOffset] = MRubyValue.From(hash);
+
+                                    var block = nextRegisters[blockOffset];
+                                    callInfo.MarkAsKeywordArgumentPacked();
+                                    blockOffset = callInfo.BlockArgumentOffset;
+                                    nextRegisters[blockOffset] = block;
+                                }
                             }
                         }
 
                         if (opcode is OpCode.Send or OpCode.SSend)
                         {
-                            nextRegisters[blockOffset] = MRubyValue.Nil;
+                            nextRegisters[blockOffset] = default;
                         }
                         else
                         {
@@ -850,30 +858,40 @@ partial class MRubyState
 
                         if (method.Kind == MRubyMethodKind.CSharpFunc)
                         {
-                            var result = method.Invoke(this, self);
-
-                            callInfo = ref Context.CurrentCallInfo;
-                            var keepContext = callInfo.KeepContext;
-                            var callerType = callInfo.CallerType;
-
-                            Context.Stack[callInfo.StackPointer] = result;
-
-                            // return from context modifying method (resume/yield)
-                            if (!keepContext)
+                            if (CallCSharpFunc(this, method, self, ref irep, ref sequence, ref registers, out var result))
                             {
-                                if (callerType == CallerType.Resumed)
-                                {
-                                    return result;
-                                }
+                                return result;
                             }
 
-                            Context.PopCallStack();
                             callInfo = ref Context.CurrentCallInfo;
-                            irep = callInfo.Proc!.Irep;
-                            registers = Context.Stack.AsSpan(callInfo.StackPointer);
-                            sequence = irep.Sequence.AsSpan();
-
                             goto Next;
+
+                            static bool CallCSharpFunc(MRubyState state, MRubyMethod method, MRubyValue self, ref Irep irep, ref ReadOnlySpan<byte> sequence, ref Span<MRubyValue> registers, out MRubyValue result)
+                            {
+                                result = method.Invoke(state, self);
+
+                                ref var callInfo = ref state.Context.CurrentCallInfo;
+                                var keepContext = callInfo.KeepContext;
+                                var callerType = callInfo.CallerType;
+
+                                state.Context.Stack[callInfo.StackPointer] = result;
+
+                                // return from context modifying method (resume/yield)
+                                if (!keepContext)
+                                {
+                                    if (callerType == CallerType.Resumed)
+                                    {
+                                        return true;
+                                    }
+                                }
+
+                                state.Context.PopCallStack();
+                                callInfo = ref state.Context.CurrentCallInfo;
+                                irep = callInfo.Proc!.Irep;
+                                registers = state.Context.Stack.AsSpan(callInfo.StackPointer);
+                                sequence = irep.Sequence.AsSpan();
+                                return false;
+                            }
                         }
 
                         var irepProc = callInfo.Proc;
@@ -889,71 +907,85 @@ partial class MRubyState
                     }
                     case OpCode.Call: // modify program counter
                     {
-                        callInfo.ProgramCounter += 1; // read opcode
+                        registers = Call(this, out irep, ref callInfo, registers, out sequence);
 
-                        var receiver = registers[0];
-                        var proc = receiver.As<RProc>();
-
-                        // replace callinfo
-                        callInfo.Scope = proc.Scope!.TargetClass;
-                        callInfo.Proc = proc;
-
-                        // setup environment for calling method
-                        irep = proc.Irep;
-                        sequence = irep.Sequence.AsSpan();
-                        callInfo.ProgramCounter = proc.ProgramCounter;
-
-                        var currentSize = callInfo.BlockArgumentOffset + 1;
-                        if (currentSize < irep.RegisterVariableCount)
-                        {
-                            Context.ExtendStack(callInfo.StackPointer + irep.RegisterVariableCount);
-                            Context.ClearStack(
-                                callInfo.StackPointer + currentSize,
-                                irep.RegisterVariableCount - currentSize);
-                        }
-                        registers = Context.Stack.AsSpan(callInfo.StackPointer);
-                        if (proc.Scope is REnv env)
-                        {
-                            callInfo.MethodId = env.MethodId;
-                            registers[0] = env.Stack[0];
-                        }
                         goto Next;
+
+                        static Span<MRubyValue> Call(MRubyState state, out Irep irep, ref MRubyCallInfo callInfo, Span<MRubyValue> registers, out ReadOnlySpan<byte> sequence)
+                        {
+                            callInfo.ProgramCounter += 1; // read opcode
+                            var receiver = registers[0];
+                            var proc = receiver.As<RProc>();
+
+                            // replace callinfo
+                            callInfo.Scope = proc.Scope!.TargetClass;
+                            callInfo.Proc = proc;
+
+                            // setup environment for calling method
+                            irep = proc.Irep;
+                            sequence = irep.Sequence.AsSpan();
+                            callInfo.ProgramCounter = proc.ProgramCounter;
+
+                            var currentSize = callInfo.BlockArgumentOffset + 1;
+                            if (currentSize < irep.RegisterVariableCount)
+                            {
+                                state.Context.ExtendStack(callInfo.StackPointer + irep.RegisterVariableCount);
+                                state.Context.ClearStack(
+                                    callInfo.StackPointer + currentSize,
+                                    irep.RegisterVariableCount - currentSize);
+                            }
+                            registers = state.Context.Stack.AsSpan(callInfo.StackPointer);
+                            if (proc.Scope is REnv env)
+                            {
+                                callInfo.MethodId = env.MethodId;
+                                registers[0] = env.Stack[0];
+                            }
+                            return registers;
+                        }
                     }
                     case OpCode.Super:
                     {
                         Markers.Super();
-                        bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
-                        var targetClass = callInfo.Scope.TargetClass;
-                        var methodId = callInfo.MethodId;
-                        if (methodId == default || targetClass == null!)
-                        {
-                            Raise(Names.NoMethodError, "super called outside of method"u8);
-                        }
 
-                        var receiver = registers[0];
-                        if (targetClass!.HasFlag(MRubyObjectFlags.ClassPrepended) ||
-                            targetClass.VType == MRubyVType.Module ||
-                            !KindOf(receiver, targetClass))
-                        {
-                            Raise(Names.TypeError, "self has wrong type to call super in this context"u8);
-                        }
-
-                        registers[bb.A] = receiver;
-
-                        // Jump to send
-                        var nextStackPointer = callInfo.StackPointer + bb.A;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.Scope = targetClass.Super;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = methodId;
-                        callInfo.ArgumentCount = (byte)(bb.B & 0xf);
-                        callInfo.KeywordArgumentCount = (byte)((bb.B >> 4) & 0xf);
+                        Super(this, ref callInfo, registers, sequence);
+                        callInfo = ref Context.CurrentCallInfo;
                         goto case OpCode.SendInternal;
+
+                        static void Super(MRubyState state, ref MRubyCallInfo callInfo, Span<MRubyValue> registers, ReadOnlySpan<byte> sequence)
+                        {
+                            var bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
+                            var targetClass = callInfo.Scope.TargetClass;
+                            var methodId = callInfo.MethodId;
+                            if (methodId == default || targetClass == null!)
+                            {
+                                state.Raise(Names.NoMethodError, "super called outside of method"u8);
+                            }
+
+                            var receiver = registers[0];
+                            if (targetClass!.HasFlag(MRubyObjectFlags.ClassPrepended) ||
+                                targetClass.VType == MRubyVType.Module ||
+                                !state.KindOf(receiver, targetClass))
+                            {
+                                state.Raise(Names.TypeError, "self has wrong type to call super in this context"u8);
+                            }
+
+                            registers[bb.A] = receiver;
+
+                            // Jump to send
+                            var nextStackPointer = callInfo.StackPointer + bb.A;
+                            callInfo = ref state.Context.PushCallStack();
+                            callInfo.CallerType = CallerType.InVmLoop;
+                            callInfo.Scope = targetClass.Super;
+                            callInfo.StackPointer = nextStackPointer;
+                            callInfo.MethodId = methodId;
+                            callInfo.ArgumentCount = (byte)(bb.B & 0xf);
+                            callInfo.KeywordArgumentCount = (byte)((bb.B >> 4) & 0xf);
+                        }
                     }
                     case OpCode.Enter:
                     {
                         Markers.Enter();
+
                         bbb = OperandBBB.Read(sequence, ref callInfo.ProgramCounter);
                         var bits = (uint)bbb.A << 16 | (uint)bbb.B << 8 | bbb.C;
                         var aspec = new ArgumentSpec(bits);
@@ -968,178 +1000,190 @@ partial class MRubyState
                             !callInfo.ArgumentPacked &&
                             callInfo.Proc?.HasFlag(MRubyObjectFlags.ProcStrict) == true)
                         {
-                            if (argc + (callInfo.KeywordArgumentPacked ? 1 : 0) != m1)
+                            FastPass(this, irep, ref callInfo, argc, m1);
+
+                            static void FastPass(MRubyState state, Irep irep, ref MRubyCallInfo callInfo, byte argc, byte m1)
                             {
-                                RaiseArgumentNumberError(argc + (callInfo.KeywordArgumentPacked ? 1 : 0), m1);
-                            }
-
-                            // clear local (but non-argument) variables
-                            var count = m1 + 2; // self + m1 + block
-                            if (irep.LocalVariables.Length - count > 0)
-                            {
-                                Context.ClearStack(
-                                    callInfo.StackPointer + count,
-                                    irep.LocalVariables.Length - count);
-                            }
-                            goto Next;
-                        }
-
-                        var o = aspec.OptionalArgumentsCount;
-                        var r = aspec.TakeRestArguments ? 1 : 0;
-                        var m2 = aspec.MandatoryArguments2Count;
-                        // mrb_int kd = (MRB_ASPEC_KEY(a) > 0 || MRB_ASPEC_KDICT(a))? 1 : 0;
-                        var argv0 = argv.IsEmpty ? MRubyValue.Nil : argv[0];
-
-                        var mandantryTotalRequired = m1 + o + r + m2;
-                        var block = registers[callInfo.BlockArgumentOffset];
-                        var kdict = MRubyValue.Nil;
-                        var hasAnyKeyword = aspec.KeywordArgumentsCount > 0 || aspec.TakeKeywordDict;
-
-                        // keyword arguments
-                        if (callInfo.KeywordArgumentPacked)
-                        {
-                            kdict = registers[callInfo.KeywordArgumentOffset];
-                        }
-
-                        if (!hasAnyKeyword)
-                        {
-                            if (kdict.Object is RHash { Length: > 0 })
-                            {
-                                switch (argc)
+                                if (argc + (callInfo.KeywordArgumentPacked ? 1 : 0) != m1)
                                 {
-                                    // packed
-                                    case MRubyCallInfo.CallMaxArgs:
-                                        // push kdict to packed arguments
-                                        registers[1].As<RArray>().Push(kdict);
-                                        break;
-                                    case MRubyCallInfo.CallMaxArgs - 1:
-                                    {
-                                        // pack arguments and kdict
-                                        var packed = NewArray(registers.Slice(1, argc + 1));
-                                        registers[1] = MRubyValue.From(packed);
-                                        argc = callInfo.ArgumentCount = MRubyCallInfo.CallMaxArgs;
-                                        break;
-                                    }
-                                    default:
-                                        callInfo.ArgumentCount++;
-                                        argc++; // include kdict in normal arguments
-                                        break;
+                                    state.RaiseArgumentNumberError(argc + (callInfo.KeywordArgumentPacked ? 1 : 0), m1);
+                                }
+
+                                // clear local (but non-argument) variables
+                                var count = m1 + 2; // self + m1 + block
+                                if (irep.LocalVariables.Length - count > 0)
+                                {
+                                    state.Context.ClearStack(
+                                        callInfo.StackPointer + count,
+                                        irep.LocalVariables.Length - count);
                                 }
                             }
-                            kdict = MRubyValue.Nil;
-                            callInfo.KeywordArgumentCount = 0;
+
+                            goto Next;
                         }
-                        else if (aspec.KeywordArgumentsCount > 0 && !kdict.IsNil)
-                        {
-                            kdict = MRubyValue.From(kdict.As<RHash>().Dup());
-                        }
+                        SlowPath(ref callInfo, argv, registers);
 
-                        // arguments is passed with Array
-                        if (callInfo.ArgumentPacked)
-                        {
-                            argv = argv0.As<RArray>().AsSpan();
-                            argc = (byte)argv.Length;
-                        }
-
-                        // strict argument check
-                        if (callInfo.Proc?.HasFlag(MRubyObjectFlags.ProcStrict) == true)
-                        {
-                            if (argc < m1 + m2 || (r == 0 && argc > mandantryTotalRequired))
-                            {
-                                RaiseArgumentNumberError(argc, m1 + m2);
-                            }
-                        }
-                        // extract first argument array to arguments
-                        else if (mandantryTotalRequired > 1 && argc == 1 && argv[0].Object is RArray array)
-                        {
-                            argc = (byte)array.Length;
-                            argv = array.AsSpan();
-                        }
-
-                        // rest arguments
-                        var rest = MRubyValue.Nil;
-                        if (argc < mandantryTotalRequired)
-                        {
-                            var mlen = (int)m2;
-                            if (argc < m1 + m2)
-                            {
-                                mlen = m1 < argc ? argc - m1 : 0;
-                            }
-
-                            if (!argv.IsEmpty && argv[0] != argv0)
-                            {
-                                argv[..(argc - mlen)].CopyTo(registers[1..]); // m1 + o
-                            }
-                            if (argc < m1)
-                            {
-                                registers.Slice(argc + 1, m1 - argc).Clear();
-                            }
-
-                            // copy post mandatory arguments
-                            if (mlen > 0)
-                            {
-                                argv.Slice(argc - mlen, mlen)
-                                    .CopyTo(registers[(mandantryTotalRequired - m2 + 1)..]);
-                            }
-                            if (mlen < m2)
-                            {
-                                registers.Slice(mandantryTotalRequired - m2 + mlen + 1, m2 - mlen).Clear();
-                            }
-
-                            // initialize rest arguments with empty Array
-                            if (r > 0)
-                            {
-                                rest = MRubyValue.From(NewArray(0));
-                                registers[m1 + o + 1] = rest;
-                            }
-
-                            // skip initializer of passed arguments
-                            if (o > 0 && argc > m1 + m2)
-                            {
-                                callInfo.ProgramCounter += (argc - m1 - m2) * 3;
-                            }
-                        }
-                        else
-                        {
-                            var restElementLength = 0;
-                            if (!argv.IsEmpty && argv0 != argv[0])
-                            {
-                                argv[..(m1 + o)].CopyTo(registers[1..]);
-                            }
-                            if (r > 0)
-                            {
-                                restElementLength = argc - m1 - o - m2;
-                                rest = MRubyValue.From(NewArray(argv.Slice(m1 + o, restElementLength)));
-                                registers[m1 + o + 1] = rest;
-                            }
-
-                            if (m2 > 0 && argc - m2 > m1)
-                            {
-                                argv[(m1 + o + restElementLength)..].CopyTo(registers[(m1 + o + r + 1)..]);
-                            }
-                            callInfo.ProgramCounter += o * 3;
-                        }
-
-                        // need to be update blk first to protect blk from GC
-                        var keywordPos = mandantryTotalRequired + (hasAnyKeyword ? 1 : 0);
-                        var blockPos = keywordPos + 1;
-                        registers[blockPos] = block;
-                        if (hasAnyKeyword)
-                        {
-                            if (kdict.IsNil) kdict = MRubyValue.From(NewHash(0));
-                            registers[keywordPos] = kdict;
-                            callInfo.MarkAsKeywordArgumentPacked();
-                        }
-
-                        // format arguments for generated code
-                        callInfo.ArgumentCount = (byte)mandantryTotalRequired;
-                        // clear local (but non-argument) variables
-                        if (irep.LocalVariables.Length - blockPos - 1 > 0)
-                        {
-                            registers.Slice(blockPos + 1, irep.LocalVariables.Length - blockPos - 1).Clear();
-                        }
                         goto Next;
+
+                        void SlowPath(ref MRubyCallInfo callInfo, Span<MRubyValue> argv, Span<MRubyValue> registers)
+                        {
+                            var o = aspec.OptionalArgumentsCount;
+                            var r = aspec.TakeRestArguments ? 1 : 0;
+                            var m2 = aspec.MandatoryArguments2Count;
+                            // mrb_int kd = (MRB_ASPEC_KEY(a) > 0 || MRB_ASPEC_KDICT(a))? 1 : 0;
+                            var argv0 = argv.IsEmpty ? default : argv[0];
+
+                            var mandantryTotalRequired = m1 + o + r + m2;
+                            var block = registers[callInfo.BlockArgumentOffset];
+                            var kdict = default(MRubyValue);
+                            var hasAnyKeyword = aspec.KeywordArgumentsCount > 0 || aspec.TakeKeywordDict;
+
+                            // keyword arguments
+                            if (callInfo.KeywordArgumentPacked)
+                            {
+                                kdict = registers[callInfo.KeywordArgumentOffset];
+                            }
+
+                            if (!hasAnyKeyword)
+                            {
+                                if (kdict.Object is RHash { Length: > 0 })
+                                {
+                                    switch (argc)
+                                    {
+                                        // packed
+                                        case MRubyCallInfo.CallMaxArgs:
+                                            // push kdict to packed arguments
+                                            registers[1].As<RArray>().Push(kdict);
+                                            break;
+                                        case MRubyCallInfo.CallMaxArgs - 1:
+                                        {
+                                            // pack arguments and kdict
+                                            var packed = NewArray(registers.Slice(1, argc + 1));
+                                            registers[1] = MRubyValue.From(packed);
+                                            argc = callInfo.ArgumentCount = MRubyCallInfo.CallMaxArgs;
+                                            break;
+                                        }
+                                        default:
+                                            callInfo.ArgumentCount++;
+                                            argc++; // include kdict in normal arguments
+                                            break;
+                                    }
+                                }
+                                kdict = default;
+                                callInfo.KeywordArgumentCount = 0;
+                            }
+                            else if (aspec.KeywordArgumentsCount > 0 && !kdict.IsNil)
+                            {
+                                kdict = MRubyValue.From(kdict.As<RHash>().Dup());
+                            }
+
+                            // arguments is passed with Array
+                            if (callInfo.ArgumentPacked)
+                            {
+                                argv = argv0.As<RArray>().AsSpan();
+                                argc = (byte)argv.Length;
+                            }
+
+                            // strict argument check
+                            if (callInfo.Proc?.HasFlag(MRubyObjectFlags.ProcStrict) == true)
+                            {
+                                if (argc < m1 + m2 || (r == 0 && argc > mandantryTotalRequired))
+                                {
+                                    RaiseArgumentNumberError(argc, m1 + m2);
+                                }
+                            }
+                            // extract first argument array to arguments
+                            else if (mandantryTotalRequired > 1 && argc == 1 && argv[0].Object is RArray array)
+                            {
+                                argc = (byte)array.Length;
+                                argv = array.AsSpan();
+                            }
+
+                            // rest arguments
+                            var rest = default(MRubyValue);
+                            if (argc < mandantryTotalRequired)
+                            {
+                                var mlen = (int)m2;
+                                if (argc < m1 + m2)
+                                {
+                                    mlen = m1 < argc ? argc - m1 : 0;
+                                }
+
+                                if (!argv.IsEmpty && argv[0] != argv0)
+                                {
+                                    argv[..(argc - mlen)].CopyTo(registers[1..]); // m1 + o
+                                }
+                                if (argc < m1)
+                                {
+                                    registers.Slice(argc + 1, m1 - argc).Clear();
+                                }
+
+                                // copy post mandatory arguments
+                                if (mlen > 0)
+                                {
+                                    argv.Slice(argc - mlen, mlen)
+                                        .CopyTo(registers[(mandantryTotalRequired - m2 + 1)..]);
+                                }
+                                if (mlen < m2)
+                                {
+                                    registers.Slice(mandantryTotalRequired - m2 + mlen + 1, m2 - mlen).Clear();
+                                }
+
+                                // initialize rest arguments with empty Array
+                                if (r > 0)
+                                {
+                                    rest = MRubyValue.From(NewArray(0));
+                                    registers[m1 + o + 1] = rest;
+                                }
+
+                                // skip initializer of passed arguments
+                                if (o > 0 && argc > m1 + m2)
+                                {
+                                    callInfo.ProgramCounter += (argc - m1 - m2) * 3;
+                                }
+                            }
+                            else
+                            {
+                                var restElementLength = 0;
+                                if (!argv.IsEmpty && argv0 != argv[0])
+                                {
+                                    argv[..(m1 + o)].CopyTo(registers[1..]);
+                                }
+                                if (r > 0)
+                                {
+                                    restElementLength = argc - m1 - o - m2;
+                                    rest = MRubyValue.From(NewArray(argv.Slice(m1 + o, restElementLength)));
+                                    registers[m1 + o + 1] = rest;
+                                }
+
+                                if (m2 > 0 && argc - m2 > m1)
+                                {
+                                    argv[(m1 + o + restElementLength)..].CopyTo(registers[(m1 + o + r + 1)..]);
+                                }
+                                callInfo.ProgramCounter += o * 3;
+                            }
+
+                            // need to be update blk first to protect blk from GC
+                            var keywordPos = mandantryTotalRequired + (hasAnyKeyword ? 1 : 0);
+                            var blockPos = keywordPos + 1;
+                            registers[blockPos] = block;
+                            if (hasAnyKeyword)
+                            {
+                                if (kdict.IsNil) kdict = MRubyValue.From(NewHash(0));
+                                registers[keywordPos] = kdict;
+                                callInfo.MarkAsKeywordArgumentPacked();
+                            }
+
+                            // format arguments for generated code
+                            callInfo.ArgumentCount = (byte)mandantryTotalRequired;
+                            // clear local (but non-argument) variables
+                            if (irep.LocalVariables.Length - blockPos - 1 > 0)
+                            {
+                                registers.Slice(blockPos + 1, irep.LocalVariables.Length - blockPos - 1).Clear();
+                            }
+                        }
                     }
+
                     case OpCode.KArg:
                     {
                         Markers.KArg();
@@ -1149,19 +1193,25 @@ partial class MRubyState
                         var kargOffset = callInfo.KeywordArgumentOffset;
                         if (kargOffset < 0)
                         {
-                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(key)}");
+                            RaiseMissingKeywordError(key);
                         }
                         var kdict = registers[kargOffset];
-                        var value = MRubyValue.Nil;
+                        var value = default(MRubyValue);
                         if (kdict.VType != MRubyVType.Hash ||
                             !registers[kargOffset].As<RHash>().TryGetValue(key, out value))
                         {
-                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(key)}");
+                            RaiseMissingKeywordError(key);
                         }
 
                         registers[bb.A] = value;
                         kdict.As<RHash>().TryDelete(key, out _);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        void RaiseMissingKeywordError(MRubyValue keyValue)
+                        {
+                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(keyValue)}");
+                        }
                     }
                     case OpCode.KeyP:
                     {
@@ -1181,7 +1231,13 @@ partial class MRubyState
                             registers[kargOffset].Object is RHash { Length: > 0 } hash)
                         {
                             var key1 = hash.Keys[0];
-                            Raise(Names.ArgumentError, $"unknown keyword: {Stringify(key1)}");
+                            RaiseUnknownKeyword(key1);
+
+                            [MethodImpl(MethodImplOptions.NoInlining)]
+                            void RaiseUnknownKeyword(MRubyValue keyValue)
+                            {
+                                Raise(Names.ArgumentError, $"unknown keyword: {Stringify(keyValue)}");
+                            }
                         }
                         goto Next;
                     }
@@ -1260,38 +1316,44 @@ partial class MRubyState
                     case OpCode.BlkPush:
                     {
                         Markers.BlkPush();
-                        bs = OperandBS.Read(sequence, ref callInfo.ProgramCounter);
-                        var b = bs.B;
-                        var m1 = (b >> 11) & 0x3f;
-                        var r = (b >> 10) & 0x1;
-                        var m2 = (b >> 5) & 0x1f;
-                        var kd = (b >> 4) & 0x1;
-                        var lv = (b >> 0) & 0xf;
-                        var offset = m1 + r + m2 + kd;
+                        BlkPush(this, ref callInfo, registers, sequence);
 
-                        ReadOnlySpan<MRubyValue> stack;
-                        if (lv == 0)
+                        static void BlkPush(MRubyState state, ref MRubyCallInfo callInfo, Span<MRubyValue> registers, ReadOnlySpan<byte> sequence)
                         {
-                            stack = registers[1..];
-                        }
-                        else
-                        {
-                            var env = callInfo.Proc?.FindUpperEnvTo(lv - 1);
-                            if (env == null ||
-                                (!env.OnStack && env.MethodId == default) ||
-                                env.Stack.Length <= offset + 1)
+                            var bs = OperandBS.Read(sequence, ref callInfo.ProgramCounter);
+                            var b = bs.B;
+                            var m1 = (b >> 11) & 0x3f;
+                            var r = (b >> 10) & 0x1;
+                            var m2 = (b >> 5) & 0x1f;
+                            var kd = (b >> 4) & 0x1;
+                            var lv = (b >> 0) & 0xf;
+                            var offset = m1 + r + m2 + kd;
+
+                            ReadOnlySpan<MRubyValue> stack;
+                            if (lv == 0)
                             {
-                                Raise(Names.LocalJumpError, "unexpected yield"u8);
+                                stack = registers[1..];
                             }
-                            stack = env!.Stack[1..];
+                            else
+                            {
+                                var env = callInfo.Proc?.FindUpperEnvTo(lv - 1);
+                                if (env == null ||
+                                    env is { OnStack: false, MethodId.Value: 0 } ||
+                                    env.Stack.Length <= offset + 1)
+                                {
+                                    state.Raise(Names.LocalJumpError, "unexpected yield"u8);
+                                }
+                                stack = env!.Stack[1..];
+                            }
+
+                            var block = stack[offset];
+                            if (block.IsNil)
+                            {
+                                state.Raise(Names.LocalJumpError, "unexpected yield"u8);
+                            }
+                            registers[bs.A] = block;
                         }
 
-                        var block = stack[offset];
-                        if (block.IsNil)
-                        {
-                            Raise(Names.LocalJumpError, "unexpected yield"u8);
-                        }
-                        registers[bs.A] = block;
                         goto Next;
                     }
                     case OpCode.Add:
@@ -1309,13 +1371,13 @@ partial class MRubyState
                         var rhsVType = rhs.VType;
                         if (lhsVType == MRubyVType.Integer && rhsVType == MRubyVType.Integer)
                         {
-                            var leftInt = registerA.IntegerValue;
-                            var rightInt = rhs.IntegerValue;
+                            var leftInt = registerA.bits;
+                            var rightInt = rhs.bits;
                             try
                             {
                                 registerA = MRubyValue.From(opcode switch
                                 {
-                                    OpCode.Add  => checked(leftInt + rightInt),
+                                    OpCode.Add => checked(leftInt + rightInt),
                                     OpCode.Sub => checked(leftInt - rightInt),
                                     OpCode.Mul => checked(leftInt * rightInt),
                                     OpCode.Div => leftInt / rightInt,
@@ -1343,8 +1405,8 @@ partial class MRubyState
                         if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
                             rhsVType is MRubyVType.Integer or MRubyVType.Float)
                         {
-                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : registerA.FloatValue;
-                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : rhs.FloatValue;
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.bits : registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.bits : rhs.FloatValue;
 
                             registerA = MRubyValue.From(opcode switch
                             {
@@ -1365,20 +1427,7 @@ partial class MRubyState
 
                     {
                         // Jump to send : + or :- or :* or :/
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = opcode switch
-                        {
-                            OpCode.Add  => Names.OpAdd,
-                            OpCode.Sub => Names.OpSub,
-                            OpCode.Mul => Names.OpMul,
-                            OpCode.Div => Names.OpDiv,
-                            _ => default
-                        };
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.AddI:
@@ -1393,7 +1442,7 @@ partial class MRubyState
                             case MRubyVType.Integer:
                                 try
                                 {
-                                    registerA = MRubyValue.From(checked(registerA.IntegerValue + rV));
+                                    registerA = MRubyValue.From(checked(registerA.bits + rV));
                                 }
                                 catch (OverflowException)
                                 {
@@ -1407,184 +1456,78 @@ partial class MRubyState
 
                         // Jump to send :+ or :-
                         Unsafe.Add(ref registerA, 1) = MRubyValue.From(rV);
-                        var nextStackPointer = callInfo.StackPointer + bb.A;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = opcode == OpCode.AddI ? Names.OpAdd : Names.OpSub;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + bb.A, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.EQ:
-                    {
-                        Markers.EQ();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-                        if (registerA.Equals(rhs))
-                        {
-                            registerA = MRubyValue.True;
-                            goto Next;
-                        }
-                        if (registerA.IsSymbol)
-                        {
-                            registerA = MRubyValue.False;
-                            goto Next;
-                        }
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue == rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue == (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue == rhs.IntegerValue);
-                                goto Next;
-                            // ReSharper disable once CompareOfFloatsByEqualityOperator
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue == rhs.FloatValue);
-                                goto Next;
-                        }
-
-                        // Jump to send :==
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpEq;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.LT:
-                    {
-                        Markers.LT();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue < rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue < (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue < rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue < rhs.FloatValue);
-                                goto Next;
-                        }
-
-                        // Jump to send :==
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpLt;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.LE:
-                    {
-                        Markers.LE();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue <= rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue <= (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue <= rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue <= rhs.FloatValue);
-                                goto Next;
-                        }
-
-                        // Jump to send :<=
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpLe;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.GT:
-                    {
-                        Markers.GT();
-                        a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
-                        registerA = ref registers[a];
-                        rhs = Unsafe.Add(ref registerA, 1);
-
-                        switch (registerA.VType, rhs.VType)
-                        {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue > rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue > (long)rhs.FloatValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue > rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue > rhs.FloatValue);
-                                goto Next;
-                        }
-                        // Jump to send :>
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpGt;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
-                        goto case OpCode.SendInternal;
-                    }
                     case OpCode.GE:
-                    {
+                        Markers.EQ();
+                        Markers.LT();
+                        Markers.LE();
+                        Markers.GT();
                         Markers.GE();
                         a = ReadOperandB(sequence, ref callInfo.ProgramCounter);
                         registerA = ref registers[a];
                         rhs = Unsafe.Add(ref registerA, 1);
-                        switch (registerA.VType, rhs.VType)
+
+                        if (opcode == OpCode.EQ)
                         {
-                            case (MRubyVType.Integer, MRubyVType.Integer):
-                                registerA = MRubyValue.From(registerA.IntegerValue >= rhs.IntegerValue);
+                            if (registerA.Equals(rhs))
+                            {
+                                registerA = MRubyValue.True;
                                 goto Next;
-                            case (MRubyVType.Integer, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.IntegerValue >= (long)rhs.FloatValue);
+                            }
+                            if (registerA.IsSymbol)
+                            {
+                                registerA = MRubyValue.False;
                                 goto Next;
-                            case (MRubyVType.Float, MRubyVType.Integer):
-                                registerA = MRubyValue.From((long)registerA.FloatValue >= rhs.IntegerValue);
-                                goto Next;
-                            case (MRubyVType.Float, MRubyVType.Float):
-                                registerA = MRubyValue.From(registerA.FloatValue >= rhs.FloatValue);
-                                goto Next;
+                            }
                         }
-                        // Jump to send :>=
-                        var nextStackPointer = callInfo.StackPointer + a;
-                        callInfo = ref Context.PushCallStack();
-                        callInfo.CallerType = CallerType.InVmLoop;
-                        callInfo.StackPointer = nextStackPointer;
-                        callInfo.MethodId = Names.OpGe;
-                        callInfo.ArgumentCount = 1;
-                        callInfo.KeywordArgumentCount = 0;
+
+                        lhsVType = registerA.VType;
+                        rhsVType = rhs.VType;
+
+                        if (lhsVType == MRubyVType.Float && rhsVType == MRubyVType.Float)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = MRubyValue.From(opcode switch
+                            {
+                                // ReSharper disable once CompareOfFloatsByEqualityOperator
+                                OpCode.EQ => leftVal == rightVal,
+                                OpCode.LT => leftVal < rightVal,
+                                OpCode.LE => leftVal <= rightVal,
+                                OpCode.GT => leftVal > rightVal,
+                                OpCode.GE => leftVal >= rightVal,
+                                _ => false
+                            });
+                            goto Next;
+                        }
+
+                        if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
+                            rhsVType is MRubyVType.Integer or MRubyVType.Float)
+                        {
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.bits : (long)registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.bits : (long)rhs.FloatValue;
+                            {
+                                registerA = MRubyValue.From(opcode switch
+                                {
+                                    OpCode.EQ => leftVal == rightVal,
+                                    OpCode.LT => leftVal < rightVal,
+                                    OpCode.LE => leftVal <= rightVal,
+                                    OpCode.GT => leftVal > rightVal,
+                                    OpCode.GE => leftVal >= rightVal,
+                                    _ => false
+                                });
+                            }
+                            goto Next;
+                        }
+                    {
+                        // Jump to send method
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
                     case OpCode.Array:
@@ -1639,7 +1582,7 @@ partial class MRubyState
                             }
                             else
                             {
-                                registerA = MRubyValue.Nil;
+                                registerA = default;
                             }
                         }
                         goto Next;
@@ -1665,28 +1608,38 @@ partial class MRubyState
                         int post = bbb.C;
                         if (array.Length > pre + post)
                         {
-                            var slice = array.AsSpan().Slice(bbb.B, array.Length - pre - post);
-                            registerA = MRubyValue.From(NewArray(slice));
-                            registerA = ref Unsafe.Add(ref registerA, 1);
-                            while (post-- > 0)
+                            APostShort(this, array, bbb, pre, post, ref registerA);
+
+                            static void APostShort(MRubyState state, RArray array, OperandBBB bbb, int pre, int post, ref MRubyValue registerA)
                             {
-                                registerA = array[array.Length - post - 1];
+                                var slice = array.AsSpan().Slice(bbb.B, array.Length - pre - post);
+                                registerA = MRubyValue.From(state.NewArray(slice));
                                 registerA = ref Unsafe.Add(ref registerA, 1);
+                                while (post-- > 0)
+                                {
+                                    registerA = array[array.Length - post - 1];
+                                    registerA = ref Unsafe.Add(ref registerA, 1);
+                                }
                             }
                         }
                         else
                         {
-                            registerA = MRubyValue.From(NewArray(0));
-                            registerA = ref Unsafe.Add(ref registerA, 1);
-                            int i;
-                            for (i = 0; i + pre < array.Length; i++)
+                            APostLong(this, array, pre, post, ref registerA);
+
+                            static void APostLong(MRubyState state, RArray array, int pre, int post, ref MRubyValue registerA)
                             {
-                                Unsafe.Add(ref registerA, i) = array[pre + i];
-                            }
-                            while (i < post)
-                            {
-                                Unsafe.Add(ref registerA, i) = MRubyValue.Nil;
-                                i++;
+                                registerA = MRubyValue.From(state.NewArray(0));
+                                registerA = ref Unsafe.Add(ref registerA, 1);
+                                int i;
+                                for (i = 0; i + pre < array.Length; i++)
+                                {
+                                    Unsafe.Add(ref registerA, i) = array[pre + i];
+                                }
+                                while (i < post)
+                                {
+                                    Unsafe.Add(ref registerA, i) = default;
+                                    i++;
+                                }
                             }
                         }
                         goto Next;
@@ -1819,64 +1772,89 @@ partial class MRubyState
                     case OpCode.Class:
                     {
                         Markers.Class();
-                        bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
-                        var id = irep.Symbols[bb.B];
-                        var outer = registers[bb.A];
-                        var super = registers[bb.A + 1];
+                        Class(this, irep, registers, sequence, ref callInfo);
 
-                        RClass outerClass;
-                        if (outer.IsNil)
-                        {
-                            outerClass = callInfo.Proc?.Scope?.TargetClass ?? ObjectClass;
-                        }
-                        else
-                        {
-                            EnsureClassOrModule(outer);
-                            outerClass = outer.As<RClass>();
-                        }
+                        goto Next;
 
-                        // mrb_vm_define_class
-                        RClass? superClass = null;
-                        RClass definedClass;
-                        if (!super.IsNil)
+                        static void Class(MRubyState state, Irep irep, Span<MRubyValue> registers, ReadOnlySpan<byte> sequence, ref MRubyCallInfo callInfo)
                         {
-                            if (super.Object is RClass sc)
+                            var bb = OperandBB.Read(sequence, ref callInfo.ProgramCounter);
+                            var id = irep.Symbols[bb.B];
+                            var outer = registers[bb.A];
+                            var super = registers[bb.A + 1];
+
+                            RClass outerClass;
+                            if (outer.IsNil)
                             {
-                                superClass = sc;
+                                outerClass = callInfo.Proc?.Scope?.TargetClass ?? state.ObjectClass;
                             }
                             else
                             {
-                                Raise(Names.TypeError, $"superclass must be a Class ({Stringify(super)} given)");
-                            }
-                        }
-
-                        if (ConstDefinedAt(id, outerClass))
-                        {
-                            var old = GetConst(id, outerClass);
-                            if (!old.IsClass)
-                            {
-                                Raise(Names.TypeError, $"{StringifyAny(old)} is not a class)");
+                                state.EnsureClassOrModule(outer);
+                                outerClass = outer.As<RClass>();
                             }
 
-                            definedClass = old.As<RClass>();
-                            if (superClass != null)
+                            // mrb_vm_define_class
+                            RClass? superClass = null;
+                            RClass definedClass;
+                            if (!super.IsNil)
                             {
-                                // check super class
-                                if (definedClass.Super.GetRealClass() != superClass)
+                                if (super.Object is RClass sc)
                                 {
-                                    Raise(Names.TypeError, $"superclass mismatch for {Stringify(old)}");
+                                    superClass = sc;
+                                }
+                                else
+                                {
+                                    RaiseSuperClassMustBeClass(super);
+
+                                    [MethodImpl(MethodImplOptions.NoInlining)]
+                                    void RaiseSuperClassMustBeClass(MRubyValue superValue)
+                                    {
+                                        state.Raise(Names.TypeError, $"superclass must be a Class ({state.Stringify(superValue)} given)");
+                                    }
                                 }
                             }
+
+                            if (state.ConstDefinedAt(id, outerClass))
+                            {
+                                var old = state.GetConst(id, outerClass);
+                                if (!old.IsClass)
+                                {
+                                    RaiseNotAClass(old);
+
+                                    [MethodImpl(MethodImplOptions.NoInlining)]
+                                    void RaiseNotAClass(MRubyValue oldValue)
+                                    {
+                                        state.Raise(Names.TypeError, $"{state.StringifyAny(oldValue)} is not a class");
+                                    }
+                                }
+
+                                definedClass = old.As<RClass>();
+                                if (superClass != null)
+                                {
+                                    // check super class
+                                    if (definedClass.Super.GetRealClass() != superClass)
+                                    {
+                                        RaiseSuperClassMismatch(old);
+
+                                        [MethodImpl(MethodImplOptions.NoInlining)]
+                                        void RaiseSuperClassMismatch(MRubyValue oldValue)
+                                        {
+                                            state.Raise(Names.TypeError, $"superclass mismatch for {state.StringifyAny(oldValue)}");
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                superClass ??= state.ObjectClass;
+                                definedClass = state.DefineClass(id, superClass, superClass.InstanceVType, outerClass);
+                                state.ClassInheritedHook(superClass.GetRealClass(), definedClass);
+                            }
+                            registers[bb.A] = MRubyValue.From(definedClass);
                         }
-                        else
-                        {
-                            superClass ??= ObjectClass;
-                            definedClass = DefineClass(id, superClass, superClass.InstanceVType, outerClass);
-                            ClassInheritedHook(superClass.GetRealClass(), definedClass);
-                        }
-                        registers[bb.A] = MRubyValue.From(definedClass);
-                        goto Next;
                     }
+
                     case OpCode.Module:
                     {
                         Markers.Module();
@@ -1900,7 +1878,13 @@ partial class MRubyState
                             var old = GetConst(id, outerClass);
                             if (old.VType != MRubyVType.Module)
                             {
-                                Raise(Names.TypeError, $"{StringifyAny(old)} is not a module");
+                                RaiseNotAModule(old);
+
+                                [MethodImpl(MethodImplOptions.NoInlining)]
+                                void RaiseNotAModule(MRubyValue oldValue)
+                                {
+                                    Raise(Names.TypeError, $"{StringifyAny(oldValue)} is not a module");
+                                }
                             }
                             definedModule = old.As<RClass>();
                         }
@@ -2009,7 +1993,7 @@ partial class MRubyState
                         {
                             MRubyRaiseException x => MRubyValue.From(x.ExceptionObject),
                             MRubyBreakException x => MRubyValue.From(x.BreakObject),
-                            _ => MRubyValue.Nil
+                            _ => default
                         };
                         if (TryUnwindEnsureJump(ref callInfo, Context.CallDepth, BreakTag.Stop, returnValue))
                         {
@@ -2019,7 +2003,15 @@ partial class MRubyState
                         return registers[irep.LocalVariables.Length];
                     }
                     default:
-                        throw new NotSupportedException($"Unknown opcode {opcode}");
+                    {
+                        ThrowInvalidOpCode(opcode);
+                        return default;
+
+                        static void ThrowInvalidOpCode(OpCode opcode)
+                        {
+                            throw new NotSupportedException($"Invalid opcode {opcode}");
+                        }
+                    }
                 }
 
                 Next: continue;
@@ -2045,6 +2037,18 @@ partial class MRubyState
                     throw;
                 }
             }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        ref MRubyCallInfo GetNextCallInfo(int nextStackPointer, OpCode code, byte argCount)
+        {
+            ref var callInfo = ref Context.PushCallStack();
+            callInfo.CallerType = CallerType.InVmLoop;
+            callInfo.StackPointer = nextStackPointer;
+            callInfo.MethodId = SymbolHelpers.GetOpCodeSymbol(code);
+            callInfo.ArgumentCount = argCount;
+            callInfo.KeywordArgumentCount = 0;
+            return ref callInfo;
         }
     }
 
