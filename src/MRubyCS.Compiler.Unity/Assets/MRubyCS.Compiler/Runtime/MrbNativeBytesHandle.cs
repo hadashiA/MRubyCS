@@ -6,7 +6,6 @@ namespace MRubyCS.Compiler
 public class MrbNativeBytesHandle : SafeHandle
 {
     readonly MrbStateHandle stateHandle1;
-    readonly int length1;
 
     internal MrbNativeBytesHandle(
         MrbStateHandle stateHandle,
@@ -14,13 +13,13 @@ public class MrbNativeBytesHandle : SafeHandle
         int length) : base(ptr, true)
     {
         stateHandle1 = stateHandle;
-        length1 = length;
+        Length = length;
     }
 
     public override bool IsInvalid => handle == IntPtr.Zero;
-    public int Length => length1;
+    public int Length { get; }
 
-    public unsafe ReadOnlySpan<byte> GetNativeData()
+    public unsafe ReadOnlySpan<byte> AsSpan()
     {
         return new ReadOnlySpan<byte>(DangerousGetHandle().ToPointer(), Length);
     }
