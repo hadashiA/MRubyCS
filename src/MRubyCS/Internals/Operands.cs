@@ -46,7 +46,7 @@ internal struct Operand
 [StructLayout(LayoutKind.Explicit)]
 internal struct OperandZ
 {
-    public static void Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static void Read(ref byte sequence, ref int pc)
     {
         pc += 1;
     }
@@ -58,10 +58,10 @@ internal struct OperandB
     [FieldOffset(0)]
     public byte A;
 
-    public static OperandB Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static OperandB Read(ref byte sequence, ref int pc)
     {
         pc += 2;
-        var result = Unsafe.ReadUnaligned<OperandB>(ref Unsafe.Add(ref MemoryMarshal.GetReference(sequence), (pc - 1)));
+        var result = Unsafe.ReadUnaligned<OperandB>(ref Unsafe.Add(ref sequence, (pc - 1)));
 
         return result;
     }
@@ -76,10 +76,10 @@ internal struct OperandBB
     [FieldOffset(1)]
     public byte B;
 
-    public static OperandBB Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static OperandBB Read(ref byte sequence, ref int pc)
     {
         pc += 3;
-        var result = Unsafe.ReadUnaligned<OperandBB>(ref Unsafe.Add(ref MemoryMarshal.GetReference(sequence), (pc - 2)));
+        var result = Unsafe.ReadUnaligned<OperandBB>(ref Unsafe.Add(ref sequence, (pc - 2)));
 
         return result;
     }
@@ -95,10 +95,10 @@ internal unsafe struct OperandS
     fixed byte bytesA[2];
 
 
-    public static OperandS Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static OperandS Read(ref byte sequence, ref int pc)
     {
         pc += 3;
-        var result = Unsafe.ReadUnaligned<OperandS>(ref Unsafe.Add(ref MemoryMarshal.GetReference(sequence), (pc - 2)));
+        var result = Unsafe.ReadUnaligned<OperandS>(ref Unsafe.Add(ref sequence, (pc - 2)));
         result.A = (short)((result.bytesA[0] << 8) | result.bytesA[1]);
         return result;
     }
@@ -117,10 +117,10 @@ internal unsafe struct OperandBS
     fixed byte bytesB[2];
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static OperandBS Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static OperandBS Read(ref byte sequence, ref int pc)
     {
         pc += 4;
-        var result = Unsafe.ReadUnaligned<OperandBS>(ref Unsafe.Add(ref MemoryMarshal.GetReference(sequence), (pc - 3)));
+        var result = Unsafe.ReadUnaligned<OperandBS>(ref Unsafe.Add(ref sequence, (pc - 3)));
         result.B = (short)((result.bytesB[0] << 8) | result.bytesB[1]);
         return result;
     }
@@ -138,10 +138,10 @@ internal struct OperandBBB
     [FieldOffset(2)]
     public byte C;
 
-    public static OperandBBB Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static OperandBBB Read(ref byte sequence, ref int pc)
     {
         pc += 4;
-        var result = Unsafe.ReadUnaligned<OperandBBB>(ref Unsafe.Add(ref MemoryMarshal.GetReference(sequence), (pc - 3)));
+        var result = Unsafe.ReadUnaligned<OperandBBB>(ref Unsafe.Add(ref sequence, (pc - 3)));
         return result;
     }
 }
@@ -165,10 +165,10 @@ internal unsafe struct OperandBSS
     fixed byte bytesC[2];
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static OperandBSS Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static OperandBSS Read(ref byte sequence, ref int pc)
     {
         pc += 6;
-        var result = Unsafe.ReadUnaligned<OperandBSS>(ref Unsafe.Add(ref MemoryMarshal.GetReference(sequence), (pc - 5)));
+        var result = Unsafe.ReadUnaligned<OperandBSS>(ref Unsafe.Add(ref sequence, (pc - 5)));
 
         result.B = (short)((result.bytesB[0] << 8) | result.bytesB[1]);
         result.C = (short)((result.bytesC[0] << 8) | result.bytesC[1]);
@@ -183,10 +183,10 @@ internal unsafe struct OperandW
     public int A => (Bytes[0] << 16) | (Bytes[1] << 8) | Bytes[2];
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static OperandW Read(ReadOnlySpan<byte> sequence, ref int pc)
+    public static OperandW Read(ref byte sequence, ref int pc)
     {
         pc += 4;
-        var result = Unsafe.ReadUnaligned<OperandW>(ref Unsafe.Add(ref MemoryMarshal.GetReference(sequence), (pc - 3)));
+        var result = Unsafe.ReadUnaligned<OperandW>(ref Unsafe.Add(ref sequence, (pc - 3)));
         return result;
     }
 }
