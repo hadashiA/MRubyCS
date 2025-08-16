@@ -224,7 +224,7 @@ partial class MRubyState
         }
     }
 
-    internal void EnsureFloatValue(double value)
+    internal void EnsureExactValue(double value)
     {
         if (double.IsNaN(value))
         {

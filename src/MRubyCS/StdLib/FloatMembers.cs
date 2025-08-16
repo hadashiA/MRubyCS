@@ -8,7 +8,7 @@ static class FloatMembers
     public static MRubyMethod ToI = new((state, self) =>
     {
         var f = self.FloatValue;
-        EnsureExactValue(state, f);
+        state.EnsureExactValue(f);
         if (!IsFixableFloatValue(f))
         {
             state.Raise(Names.RangeError, "integer overflow in to_i"u8);
@@ -372,7 +372,7 @@ static class FloatMembers
 
         if (ndigits == 0)
         {
-            EnsureExactValue(state, f);
+            state.EnsureExactValue(f);
             var result = Math.Round(f, MidpointRounding.AwayFromZero);
             if (IsFixableFloatValue(result))
             {
@@ -392,7 +392,7 @@ static class FloatMembers
         }
         else
         {
-            EnsureExactValue(state, f);
+            state.EnsureExactValue(f);
             var pow = Math.Pow(10, -ndigits);
             var result = Math.Round(f / pow, MidpointRounding.AwayFromZero) * pow;
             if (IsFixableFloatValue(result))
@@ -598,23 +598,7 @@ static class FloatMembers
         {
             return (long)result;
         }
-        return MRubyValue.From(result);
-    }
-
-    static void EnsureExactValue(MRubyState state, double value)
-    {
-        if (double.IsNegativeInfinity(value))
-        {
-            state.Raise(Names.FloatDomainError, "-Infinity"u8);
-        }
-        if (double.IsPositiveInfinity(value))
-        {
-            state.Raise(Names.FloatDomainError, "Infinity"u8);
-        }
-        if (double.IsNaN(value))
-        {
-            state.Raise(Names.FloatDomainError, "NaN"u8);
-        }
+        return result;
     }
 
     static MRubyValue FloatRounding(MRubyState state, MRubyValue num, Func<double, double> func)
@@ -636,7 +620,7 @@ static class FloatMembers
         {
             if (double.IsInfinity(f) || double.IsNaN(f))
             {
-                EnsureExactValue(state, f);
+                state.EnsureExactValue(f);
             }
             var result = func(f);
             if (IsFixableFloatValue(result))
@@ -659,7 +643,7 @@ static class FloatMembers
         {
             if (double.IsInfinity(f) || double.IsNaN(f))
             {
-                EnsureExactValue(state, f);
+                state.EnsureExactValue(f);
             }
             if (ndigits < -fprec) ndigits = -fprec;
             var pow = Math.Pow(10, -ndigits);

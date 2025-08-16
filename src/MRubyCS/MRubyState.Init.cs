@@ -7,6 +7,11 @@ using Utf8StringInterpolation;
 
 namespace MRubyCS;
 
+public class MRubyStateOptions
+{
+    public bool UseTimeClass { get; private set; } = true;
+}
+
 public partial class MRubyState
 {
     public static MRubyState Create(Action<MRubyState> configure)
@@ -585,6 +590,62 @@ public partial class MRubyState
     {
         var enumerableModule = DefineModule(Intern("Enumerable"u8), ObjectClass);
         DefineMethod(enumerableModule, Intern("__update_hash"u8), EnumerableMembers.InternalUpdateHash);
+    }
+
+    public void DefineTime()
+    {
+        var timeClass = DefineClass(Intern("Time"u8), ObjectClass);
+
+        var comparableModule = GetConst(Intern("Comparable"u8), ObjectClass);
+        IncludeModule(timeClass, comparableModule.As<RClass>());
+
+        DefineClassMethod(timeClass, Intern("at"u8), TimeMembers.CreateAt);
+        DefineClassMethod(timeClass, Intern("gm"u8), TimeMembers.CreateUtc);
+        DefineClassMethod(timeClass, Intern("utc"u8), TimeMembers.CreateUtc);
+        DefineClassMethod(timeClass, Intern("local"u8), TimeMembers.CreateLocal);
+        DefineClassMethod(timeClass, Intern("mktime"u8), TimeMembers.CreateLocal);
+        DefineClassMethod(timeClass, Intern("now"u8), TimeMembers.Now);
+
+        DefineMethod(timeClass, Names.Initialize, TimeMembers.Initialize);
+        DefineMethod(timeClass, Names.InitializeCopy, TimeMembers.InitializeCopy);
+
+        DefineMethod(timeClass, Names.QEql, TimeMembers.OpEq);
+        DefineMethod(timeClass, Names.OpEq, TimeMembers.OpEq);
+        DefineMethod(timeClass, Names.OpCmp, TimeMembers.OpCmp);
+        DefineMethod(timeClass, Names.OpAdd, TimeMembers.OpAdd);
+        DefineMethod(timeClass, Names.OpSub, TimeMembers.OpSub);
+
+        DefineMethod(timeClass, Names.Hash, TimeMembers.Hash);
+        DefineMethod(timeClass, Names.ToI, TimeMembers.ToI);
+        DefineMethod(timeClass, Names.ToF, TimeMembers.ToF);
+        DefineMethod(timeClass, Names.ToS, TimeMembers.ToS);
+        DefineMethod(timeClass, Names.Inspect, TimeMembers.ToS);
+        DefineMethod(timeClass, Intern("asctime"u8), TimeMembers.Asctime);
+        DefineMethod(timeClass, Intern("ctime"u8), TimeMembers.Asctime);
+
+        DefineMethod(timeClass, Intern("dst?"u8), TimeMembers.QDaylightSavintTime);
+        DefineMethod(timeClass, Intern("gmt?"u8), TimeMembers.QUtc);
+        DefineMethod(timeClass, Intern("utc?"u8), TimeMembers.QUtc);
+        DefineMethod(timeClass, Intern("sunday?"u8), TimeMembers.QSunday);
+        DefineMethod(timeClass, Intern("monday?"u8), TimeMembers.QMonday);
+        DefineMethod(timeClass, Intern("tuesday?"u8), TimeMembers.QTuesday);
+        DefineMethod(timeClass, Intern("wednesday?"u8), TimeMembers.QWednesday);
+        DefineMethod(timeClass, Intern("thursday?"u8), TimeMembers.QThursday);
+        DefineMethod(timeClass, Intern("fryday?"u8), TimeMembers.QFriday);
+        DefineMethod(timeClass, Intern("saturday?"u8), TimeMembers.QSaturday);
+
+        DefineMethod(timeClass, Intern("getgm"u8), TimeMembers.GetUtc);
+        DefineMethod(timeClass, Intern("getutc"u8), TimeMembers.GetUtc);
+        DefineMethod(timeClass, Intern("getlocal"u8), TimeMembers.GetLocal);
+
+        DefineMethod(timeClass, Intern("year"u8), TimeMembers.Year);
+        DefineMethod(timeClass, Intern("mon"u8), TimeMembers.Month);
+        DefineMethod(timeClass, Intern("month"u8), TimeMembers.Month);
+        DefineMethod(timeClass, Intern("day"u8), TimeMembers.Day);
+        DefineMethod(timeClass, Intern("mday"u8), TimeMembers.Day);
+        DefineMethod(timeClass, Intern("hour"u8), TimeMembers.Hour);
+        DefineMethod(timeClass, Intern("min"u8), TimeMembers.Minute);
+        DefineMethod(timeClass, Intern("second"u8), TimeMembers.Second);
     }
 
     void InitMrbLib()

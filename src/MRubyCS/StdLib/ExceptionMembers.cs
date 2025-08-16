@@ -10,7 +10,7 @@ static class ExceptionMembers
 
         var c = self.As<RClass>();
         var o = new RException(null, c);
-        var value = MRubyValue.From(o);
+        var value = new MRubyValue(o);
         if (state.TryFindMethod(c, Names.Initialize, out var method, out _) &&
             method != MRubyMethod.Nop)
         {
@@ -47,9 +47,9 @@ static class ExceptionMembers
     {
         if (self.As<RException>().Message is { } message)
         {
-            return MRubyValue.From(message);
+            return message;
         }
-        return MRubyValue.From(state.NameOf(state.ClassOf(self)));
+        return state.NameOf(state.ClassOf(self));
     });
 
     [MRubyMethod]
@@ -59,9 +59,9 @@ static class ExceptionMembers
         var message = self.As<RException>().Message;
         if (message is { Length: > 0 })
         {
-            return MRubyValue.From(state.NewString($"{message} ({className})"));
+            return state.NewString($"{message} ({className})");
         }
-        return MRubyValue.From(className);
+        return className;
     });
 
     [MRubyMethod]
@@ -72,6 +72,6 @@ static class ExceptionMembers
         {
             return MRubyValue.Nil;
         }
-        return MRubyValue.From(backtrace.ToRArray(state));
+        return backtrace.ToRArray(state);
     });
 }

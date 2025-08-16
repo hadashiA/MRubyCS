@@ -21,7 +21,11 @@ public class SpecTest
     [SetUp]
     public void Before()
     {
-        mrb = MRubyState.Create();
+        mrb = MRubyState.Create(x =>
+        {
+            x.DefineTime();
+        });
+
         compiler = MRubyCompiler.Create(mrb);
 
         mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("__report_result"u8), (state, _) =>
@@ -66,10 +70,10 @@ public class SpecTest
 
             var regexStr = $"^{Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".")}$";
             var regex = new Regex(regexStr, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            return MRubyValue.From(regex.Match(str).Success);
+            return regex.Match(str).Success;
         });
 
-        mrb.DefineConst(mrb.ObjectClass, mrb.Intern("FLOAT_TOLERANCE"u8), MRubyValue.From(1e-10));
+        mrb.DefineConst(mrb.ObjectClass, mrb.Intern("FLOAT_TOLERANCE"u8), 1e-10);
         compiler.LoadSourceCodeFile(Path.Join(rubyDir, "assert.rb"));
     }
 
@@ -113,6 +117,7 @@ public class SpecTest
     [TestCase("typeerror.rb")]
     [TestCase("localjumperror.rb")]
     // [TestCase("namerror.rb")]
+    [TestCase("time.rb")]
     public void RubyScript(string fileName)
     {
         Assert.Multiple(() =>
