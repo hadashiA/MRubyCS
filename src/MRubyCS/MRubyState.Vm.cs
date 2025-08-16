@@ -863,15 +863,16 @@ partial class MRubyState
 
                         if (method.Kind == MRubyMethodKind.CSharpFunc)
                         {
-                            if (CallCSharpFunc(this, method, self, ref irep, ref sequence, ref registers, out var result))
+                            if (CallCSharpFunc(this, method, self, ref irep, ref registers, out var result))
                             {
                                 return result;
                             }
 
+                            sequence = ref GetArrayDataReference(irep.Sequence);
                             callInfo = ref Context.CurrentCallInfo;
                             goto Next;
 
-                            static bool CallCSharpFunc(MRubyState state, MRubyMethod method, MRubyValue self, ref Irep irep, ref byte sequence, ref Span<MRubyValue> registers, out MRubyValue result)
+                            static bool CallCSharpFunc(MRubyState state, MRubyMethod method, MRubyValue self, ref Irep irep, ref Span<MRubyValue> registers, out MRubyValue result)
                             {
                                 result = method.Invoke(state, self);
 
@@ -894,7 +895,6 @@ partial class MRubyState
                                 callInfo = ref state.Context.CurrentCallInfo;
                                 irep = callInfo.Proc!.Irep;
                                 registers = state.Context.Stack.AsSpan(callInfo.StackPointer);
-                                sequence = ref GetArrayDataReference(irep.Sequence);
                                 return false;
                             }
                         }
@@ -912,11 +912,11 @@ partial class MRubyState
                     }
                     case OpCode.Call: // modify program counter
                     {
-                        registers = Call(this, out irep, ref callInfo, registers, ref sequence);
-
+                        registers = Call(this, out irep, ref callInfo, registers);
+                        sequence = ref GetArrayDataReference(irep.Sequence);
                         goto Next;
 
-                        static Span<MRubyValue> Call(MRubyState state, out Irep irep, ref MRubyCallInfo callInfo, Span<MRubyValue> registers, ref byte sequence)
+                        static Span<MRubyValue> Call(MRubyState state, out Irep irep, ref MRubyCallInfo callInfo, Span<MRubyValue> registers)
                         {
                             callInfo.ProgramCounter += 1; // read opcode
                             var receiver = registers[0];
@@ -928,7 +928,6 @@ partial class MRubyState
 
                             // setup environment for calling method
                             irep = proc.Irep;
-                            sequence = ref GetArrayDataReference(irep.Sequence);
                             callInfo.ProgramCounter = proc.ProgramCounter;
 
                             var currentSize = callInfo.BlockArgumentOffset + 1;
