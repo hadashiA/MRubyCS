@@ -79,6 +79,9 @@ public class MRubyCompiler : IDisposable
     public MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> utf8Source) =>
         CompileToBytecode(utf8Source);
 
+    public unsafe MrbNativeBytesHandle CompileToBytecode(string source) =>
+        CompileToBytecode(Encoding.UTF8.GetBytes(source));
+
     public unsafe MrbNativeBytesHandle CompileToBytecode(ReadOnlySpan<byte> utf8Source)
     {
         var mrbPtr = compileStateHandle.DangerousGetPtr();
