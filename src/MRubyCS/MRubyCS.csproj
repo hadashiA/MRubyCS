@@ -9,6 +9,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="MRubyCS.Tests" />
+        <InternalsVisibleTo Include="MRubyCS.Serializer" />
         <InternalsVisibleTo Include="MRubyCS.ConsoleApp" />
     </ItemGroup>
 

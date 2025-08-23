@@ -8,7 +8,7 @@ namespace MRubyCS;
 
 public enum MRubyVType
 {
-    Nil=0,
+    Nil = 0,
     False,
     True,
     Symbol,
@@ -59,15 +59,15 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     public static MRubyValue From(bool value) => new(value ? MRubyVType.True : MRubyVType.False, 0);
 
     public static MRubyValue From(RObject obj) => new(obj);
-    internal static MRubyValue From(RString obj) => new(obj, MRubyVType.String);
-    internal static MRubyValue From(RArray obj) => new(obj, MRubyVType.Array);
-    internal static MRubyValue From(RHash obj) => new(obj, MRubyVType.Hash);
-    internal static MRubyValue From(RRange obj) => new(obj, MRubyVType.Range);
-    internal static MRubyValue From(RClass obj) => new(obj);
-    internal static MRubyValue From(RProc obj) => new(obj, MRubyVType.Proc);
-    internal static MRubyValue From(RBreak obj) => new(obj, MRubyVType.Break);
-    internal static MRubyValue From(long value) => new(MRubyVType.Integer, value);
-    internal static MRubyValue From(Symbol symbol) => new(MRubyVType.Symbol, symbol.Value);
+    public static MRubyValue From(RString obj) => new(obj, MRubyVType.String);
+    public static MRubyValue From(RArray obj) => new(obj, MRubyVType.Array);
+    public static MRubyValue From(RHash obj) => new(obj, MRubyVType.Hash);
+    public static MRubyValue From(RRange obj) => new(obj, MRubyVType.Range);
+    public static MRubyValue From(RClass obj) => new(obj);
+    public static MRubyValue From(RProc obj) => new(obj, MRubyVType.Proc);
+    public static MRubyValue From(RBreak obj) => new(obj, MRubyVType.Break);
+    public static MRubyValue From(long value) => new(MRubyVType.Integer, value);
+    public static MRubyValue From(Symbol symbol) => new(MRubyVType.Symbol, symbol.Value);
 
     public static MRubyValue From(double value)
     {

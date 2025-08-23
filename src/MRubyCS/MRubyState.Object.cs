@@ -28,7 +28,7 @@ partial class MRubyState
 
     public RArray NewArray(params ReadOnlySpan<MRubyValue> values) => new(values, ArrayClass);
 
-    public RHash NewHash(int capacity) => new(
+    public RHash NewHash(int capacity = 4) => new(
         capacity,
         HashKeyEqualityComparer,
         ValueEqualityComparer,
