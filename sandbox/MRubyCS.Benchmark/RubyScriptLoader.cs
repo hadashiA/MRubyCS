@@ -25,6 +25,15 @@ unsafe class RubyScriptLoader : IDisposable
         mrbStateNative = NativeMethods.MrbOpen();
     }
 
+    public void IncludeMathModule()
+    {
+        var mathModule = mrubyCSState.DefineModule(mrubyCSState.Intern("Math"u8), mrubyCSState.ObjectClass);
+        mrubyCSState.DefineMethod(mathModule, mrubyCSState.Intern("sqrt"u8), MathMembers.Sqrt);
+        mrubyCSState.DefineMethod(mathModule, mrubyCSState.Intern("sin"u8), MathMembers.Sin);
+        mrubyCSState.DefineMethod(mathModule, mrubyCSState.Intern("cos"u8), MathMembers.Cos);
+        mrubyCSState.IncludeModule(mrubyCSState.ObjectClass, mathModule);
+    }
+
     public void PreloadScript(ReadOnlySpan<byte> source)
     {
         currentMRubyCSIrep = mrubyCSCompiler.Compile(source);
