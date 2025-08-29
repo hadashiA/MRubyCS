@@ -87,26 +87,7 @@ public sealed class RFiber : RObject
         return MoveNext(args, true, false);
     }
 
-    internal void Reset(RProc proc)
-    {
-        Proc = proc;
-
-        context.UnwindStack();
-
-        // copy receiver from a block
-        context.Stack[0] = state.Context.Stack[state.Context.CurrentCallInfo.StackPointer];
-
-        // adjust return callinfo
-        ref var callInfo = ref context.CurrentCallInfo;
-        callInfo.Scope = proc.Scope!.TargetClass;
-        callInfo.Proc = proc;
-
-        // push dummy callinfo
-        context.CallStack[1] = context.CallStack[0];
-        context.PushCallStack();
-    }
-
-    internal void Yield()
+    public void Yield()
     {
         if (context.Previous is null)
         {
@@ -137,6 +118,25 @@ public sealed class RFiber : RObject
             currentCallInfo.CallerType = CallerType.Resumed;
         }
         currentCallInfo.MarkContextModify();
+    }
+
+    internal void Reset(RProc proc)
+    {
+        Proc = proc;
+
+        context.UnwindStack();
+
+        // copy receiver from a block
+        context.Stack[0] = state.Context.Stack[state.Context.CurrentCallInfo.StackPointer];
+
+        // adjust return callinfo
+        ref var callInfo = ref context.CurrentCallInfo;
+        callInfo.Scope = proc.Scope!.TargetClass;
+        callInfo.Proc = proc;
+
+        // push dummy callinfo
+        context.CallStack[1] = context.CallStack[0];
+        context.PushCallStack();
     }
 
     internal void Terminate(ref MRubyCallInfo callInfo)

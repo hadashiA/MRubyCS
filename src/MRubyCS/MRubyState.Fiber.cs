@@ -7,6 +7,18 @@ partial class MRubyState
 {
     public RFiber CurrentFiber => Context.Fiber ??= new RFiber(Context, this, FiberClass);
 
+    public RProc ParseBytecodeAsProc(ReadOnlySpan<byte> bytecode)
+    {
+        var irep = ParseBytecode(bytecode);
+        return NewProc(irep);
+    }
+
+    public RFiber ParseBytecodeAsFiber(ReadOnlySpan<byte> bytecode)
+    {
+        var proc = ParseBytecodeAsProc(bytecode);
+        return CreateFiber(proc);
+    }
+
     public RFiber CreateFiber(RProc proc)
     {
         var fiber = new RFiber(this, FiberClass);

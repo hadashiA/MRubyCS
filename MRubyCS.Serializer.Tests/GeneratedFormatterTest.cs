@@ -16,30 +16,30 @@ public class GeneratedFormatterTest
     {
         var result = MRubyValueSerializer.Serialize(new NestedFieldObject
         {
-            X = 123,
+            IntField = 123,
             Y = 456,
-            Array = ["a", "bbb", "ccc"],
-            Dict = new Dictionary<string, Struct1>
+            ArrayField = ["a", "bbb", "ccc"],
+            DictField = new Dictionary<string, Struct1>
             {
                 ["AAA"] = new() { Id = 99999 }
             }
         }, state);
 
         var props = result.As<RHash>();
-        Assert.That(props[MRubyValue.From(state.Intern("X"u8))], Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(props[MRubyValue.From(state.Intern("int_field"u8))], Is.EqualTo(MRubyValue.From(123)));
         Assert.That(props[MRubyValue.From(state.Intern("alias_of_y"u8))], Is.EqualTo(MRubyValue.From(456)));
 
-        var arrayField = props[MRubyValue.From(state.Intern("Array"u8))].As<RArray>();
+        var arrayField = props[MRubyValue.From(state.Intern("array_field"u8))].As<RArray>();
         Assert.That(arrayField.Length, Is.EqualTo(3));
         Assert.That(state.ValueEquals(arrayField[0], MRubyValue.From(state.NewString("a"u8))), Is.True);
         Assert.That(state.ValueEquals(arrayField[1], MRubyValue.From(state.NewString("bbb"u8))), Is.True);
         Assert.That(state.ValueEquals(arrayField[2], MRubyValue.From(state.NewString("ccc"u8))), Is.True);
 
-        var dictField = props[MRubyValue.From(state.Intern("Dict"u8))].As<RHash>();
+        var dictField = props[MRubyValue.From(state.Intern("dict_field"u8))].As<RHash>();
         Assert.That(dictField.Length, Is.EqualTo(1));
 
         var nestedProps = dictField[MRubyValue.From(state.NewString("AAA"u8))].As<RHash>();
-        Assert.That(nestedProps[MRubyValue.From(state.Intern("Id"u8))],  Is.EqualTo(MRubyValue.From(99999)));
+        Assert.That(nestedProps[MRubyValue.From(state.Intern("id"u8))],  Is.EqualTo(MRubyValue.From(99999)));
     }
 
     [Test]
@@ -48,7 +48,7 @@ public class GeneratedFormatterTest
         var props = state.NewHash();
 
         props.Add(
-            MRubyValue.From(state.Intern("X"u8)),
+            MRubyValue.From(state.Intern("int_field"u8)),
             MRubyValue.From(12345));
 
         var array = state.NewArray();
@@ -57,14 +57,14 @@ public class GeneratedFormatterTest
         array.Push(MRubyValue.From(state.NewString("ccc"u8)));
 
         props.Add(
-            MRubyValue.From(state.Intern("Array"u8)),
+            MRubyValue.From(state.Intern("array_field"u8)),
             MRubyValue.From(array));
 
         var hash = state.NewHash();
 
         var nestedProps = state.NewHash();
         nestedProps.Add(
-            MRubyValue.From(state.Intern("Id"u8)),
+            MRubyValue.From(state.Intern("id"u8)),
             MRubyValue.From(99999));
 
         hash.Add(
@@ -72,7 +72,7 @@ public class GeneratedFormatterTest
             MRubyValue.From(nestedProps));
 
         props.Add(
-            MRubyValue.From(state.Intern("Dict"u8)),
+            MRubyValue.From(state.Intern("dict_field"u8)),
             MRubyValue.From(hash));
 
 
@@ -80,13 +80,13 @@ public class GeneratedFormatterTest
             MRubyValue.From(props),
             state)!;
 
-        Assert.That(result.X, Is.EqualTo(12345));
-        Assert.That(result.Array.Length, Is.EqualTo(3));
-        Assert.That(result.Array[0], Is.EqualTo("aaa"));
-        Assert.That(result.Array[1], Is.EqualTo("bbb"));
-        Assert.That(result.Array[2], Is.EqualTo("ccc"));
-        Assert.That(result.Dict.Count, Is.EqualTo(1));
-        Assert.That(result.Dict["Hoge"].Id, Is.EqualTo(99999));
+        Assert.That(result.IntField, Is.EqualTo(12345));
+        Assert.That(result.ArrayField.Length, Is.EqualTo(3));
+        Assert.That(result.ArrayField[0], Is.EqualTo("aaa"));
+        Assert.That(result.ArrayField[1], Is.EqualTo("bbb"));
+        Assert.That(result.ArrayField[2], Is.EqualTo("ccc"));
+        Assert.That(result.DictField.Count, Is.EqualTo(1));
+        Assert.That(result.DictField["Hoge"].Id, Is.EqualTo(99999));
     }
 
     [Test]

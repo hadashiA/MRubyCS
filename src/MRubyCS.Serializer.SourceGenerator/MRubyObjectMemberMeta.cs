@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using MRubyCS.SourceGenerator;
 
 namespace MRubyCS.Serializer.SourceGenerator;
 
@@ -28,7 +29,7 @@ class MRubyObjectMemberMeta
     {
         Symbol = symbol;
         Name = symbol.Name;
-        KeyName = Name;
+        KeyName = NamingConventionMutator.Mutate(Name, NamingConvention.SnakeCase);
 
         var memberAttribute = symbol.GetAttribute(references.MRubyMemberAttribute);
         if (memberAttribute != null)
