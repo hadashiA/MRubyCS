@@ -93,9 +93,9 @@ public class GeneratedFormatterTest
     public void DeserializeWithCtor()
     {
         var props = state.NewHash();
-        props.Add(MRubyValue.From(state.Intern("X"u8)), MRubyValue.From(123));
-        props.Add(MRubyValue.From(state.Intern("Y"u8)), MRubyValue.From(456));
-        props.Add(MRubyValue.From(state.Intern("Hoge"u8)), MRubyValue.From(state.NewString("hello hello"u8)));
+        props.Add(MRubyValue.From(state.Intern("x"u8)), MRubyValue.From(123));
+        props.Add(MRubyValue.From(state.Intern("y"u8)), MRubyValue.From(456));
+        props.Add(MRubyValue.From(state.Intern("hoge"u8)), MRubyValue.From(state.NewString("hello hello"u8)));
 
         var result = MRubyValueSerializer.Deserialize<MRubyConstructorClass>(MRubyValue.From(props), state)!;
         Assert.That(result.X, Is.EqualTo(123));
