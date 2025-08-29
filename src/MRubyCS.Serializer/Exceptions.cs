@@ -4,7 +4,7 @@ namespace MRubyCS.Serializer;
 
 public class MRubySerializationException(string message) : Exception(message)
 {
-    internal static void ThrowIfTypeMismatch(
+    public static void ThrowIfTypeMismatch(
         MRubyValue value,
         MRubyVType expectedType,
         string? csharpTypeName = null,
@@ -19,7 +19,7 @@ public class MRubySerializationException(string message) : Exception(message)
         }
     }
 
-    internal static void ThrowIfNotEnoughArrayLength(
+    public static void ThrowIfNotEnoughArrayLength(
         MRubyValue value,
         int expectedLength,
         string? expectedTypeName = null,
