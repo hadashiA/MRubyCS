@@ -257,7 +257,7 @@ partial {{typeDeclarationKeyword}} {{typeMeta.TypeName}}
         {
             stringBuilder.AppendLine($$"""
 
-            var key{{memberMeta.Name}} = MRubyValue.From(state.Intern({{memberMeta.Name}}KeyUtf8));
+            var key{{memberMeta.Name}} = new MRubyValue(state.Intern({{memberMeta.Name}}KeyUtf8));
             var value{{memberMeta.Name}} = options.Resolver.GetFormatterWithVerify<{{memberMeta.FullTypeName}}>()
                 .Serialize(value.{{memberMeta.Name}}, state, options);
             props.Add(key{{memberMeta.Name}}, value{{memberMeta.Name}});
@@ -266,7 +266,7 @@ partial {{typeDeclarationKeyword}} {{typeMeta.TypeName}}
 
         stringBuilder.AppendLine($$"""
 
-            return MRubyValue.From(props);
+            return new MRubyValue(props);
         }
 
 """);

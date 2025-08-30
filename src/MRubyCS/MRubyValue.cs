@@ -56,31 +56,77 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     public static MRubyValue True => new(MRubyVType.True, 0);
     public static MRubyValue Undef => new(MRubyVType.Undef, 0);
 
-    public static MRubyValue From(bool value) => new(value ? MRubyVType.True : MRubyVType.False, 0);
-
-    public static MRubyValue From(RObject obj) => new(obj);
-    public static MRubyValue From(RString obj) => new(obj, MRubyVType.String);
-    public static MRubyValue From(RArray obj) => new(obj, MRubyVType.Array);
-    public static MRubyValue From(RHash obj) => new(obj, MRubyVType.Hash);
-    public static MRubyValue From(RRange obj) => new(obj, MRubyVType.Range);
-    public static MRubyValue From(RClass obj) => new(obj);
-    public static MRubyValue From(RProc obj) => new(obj, MRubyVType.Proc);
-    public static MRubyValue From(RBreak obj) => new(obj, MRubyVType.Break);
-    public static MRubyValue From(long value) => new(MRubyVType.Integer, value);
-    public static MRubyValue From(Symbol symbol) => new(MRubyVType.Symbol, symbol.Value);
-
-    public static MRubyValue From(double value)
-    {
-        // Assume that MRB_USE_FLOAT32 is not defined
-        // Assume that MRB_WORDBOX_NO_FLOAT_TRUNCATE is not defined
-        return new MRubyValue(MRubyVType.Float,
+    // New constructors
+    public MRubyValue(bool value) : this(value ? MRubyVType.True : MRubyVType.False, 0) { }
+    public MRubyValue(RString obj) : this(obj, MRubyVType.String) { }
+    public MRubyValue(RArray obj) : this(obj, MRubyVType.Array) { }
+    public MRubyValue(RHash obj) : this(obj, MRubyVType.Hash) { }
+    public MRubyValue(RRange obj) : this(obj, MRubyVType.Range) { }
+    public MRubyValue(RClass obj) : this(obj as RObject) { }
+    public MRubyValue(RProc obj) : this(obj, MRubyVType.Proc) { }
+    public MRubyValue(RBreak obj) : this(obj, MRubyVType.Break) { }
+    public MRubyValue(long value) : this(MRubyVType.Integer, value) { }
+    public MRubyValue(Symbol symbol) : this(MRubyVType.Symbol, symbol.Value) { }
+    public MRubyValue(double value) : this(MRubyVType.Float,
 #if NET6_0_OR_GREATER
-            Unsafe.BitCast<double, long>(value)
+        Unsafe.BitCast<double, long>(value)
 #else
-            Unsafe.As<double, long>(ref value)
+        Unsafe.As<double, long>(ref value)
 #endif
-);
-    }
+    ) { }
+    
+    // Implicit conversion operators
+    public static implicit operator MRubyValue(bool value) => new(value);
+    public static implicit operator MRubyValue(RObject obj) => new(obj);
+    public static implicit operator MRubyValue(RString obj) => new(obj);
+    public static implicit operator MRubyValue(RArray obj) => new(obj);
+    public static implicit operator MRubyValue(RHash obj) => new(obj);
+    public static implicit operator MRubyValue(RRange obj) => new(obj);
+    public static implicit operator MRubyValue(RClass obj) => new(obj);
+    public static implicit operator MRubyValue(RProc obj) => new(obj);
+    public static implicit operator MRubyValue(RBreak obj) => new(obj);
+    public static implicit operator MRubyValue(long value) => new(value);
+    public static implicit operator MRubyValue(int value) => new((long)value);
+    public static implicit operator MRubyValue(Symbol symbol) => new(symbol);
+    public static implicit operator MRubyValue(double value) => new(value);
+    public static implicit operator MRubyValue(float value) => new((double)value);
+
+    // Obsolete factory methods (kept for backward compatibility)
+    [Obsolete("Use constructor instead: new MRubyValue(value)")]
+    public static MRubyValue From(bool value) => new(value);
+
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RObject obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RString obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RArray obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RHash obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RRange obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RClass obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RProc obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
+    public static MRubyValue From(RBreak obj) => new(obj);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(value)")]
+    public static MRubyValue From(long value) => new(value);
+    
+    [Obsolete("Use constructor instead: new MRubyValue(symbol)")]
+    public static MRubyValue From(Symbol symbol) => new(symbol);
+
+    [Obsolete("Use constructor instead: new MRubyValue(value)")]
+    public static MRubyValue From(double value) => new(value);
 
     public RObject? Object
     {
@@ -144,7 +190,7 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     readonly TypeObjectUnion union;
     internal readonly long bits;
 
-    MRubyValue(RObject obj)
+    public MRubyValue(RObject obj)
     {
         union = new(obj);
         bits = (long)obj.VType;
