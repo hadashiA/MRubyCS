@@ -45,7 +45,7 @@ static class KernelMembers
     [MRubyMethod]
     public static MRubyMethod InternalToInt = new((state, self) =>
     {
-        return MRubyValue.From(state.ToInteger(self));
+        return state.ToInteger(self);
     });
 
     public static MRubyMethod BlockGiven = new((state, self) =>
@@ -98,7 +98,7 @@ static class KernelMembers
     public static MRubyMethod OpEqq = new((state, self) =>
     {
         var arg = state.GetArgumentAt(0);
-        return MRubyValue.From(state.ValueEquals(self, arg));
+        return state.ValueEquals(self, arg);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -111,14 +111,14 @@ static class KernelMembers
         }
         if (self == other)
         {
-            return MRubyValue.From(0);
+            return 0;
         }
         return MRubyValue.Nil;
     });
 
     public static MRubyMethod Class = new((state, self) =>
     {
-        return MRubyValue.From(state.ClassOf(self).GetRealClass());
+        return state.ClassOf(self).GetRealClass();
     });
 
     public static MRubyMethod Clone = new((state, self) =>
@@ -134,7 +134,7 @@ static class KernelMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Eql = new((state, self) =>
     {
-        return MRubyValue.From(self == state.GetArgumentAt(0));
+        return self == state.GetArgumentAt(0);
     });
 
     public static MRubyMethod Freeze = new((state, self) =>
@@ -157,14 +157,14 @@ static class KernelMembers
     {
         if (self.Object is { } obj)
         {
-            return MRubyValue.From(obj.IsFrozen);
+            return obj.IsFrozen;
         }
         return MRubyValue.True;
     });
 
     public static MRubyMethod Hash = new((state, self) =>
     {
-        return MRubyValue.From(self.ObjectId);
+        return self.ObjectId;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -182,26 +182,26 @@ static class KernelMembers
 
     public static MRubyMethod Inspect = new((state, self) =>
     {
-        return MRubyValue.From(state.InspectObject(self));
+        return state.InspectObject(self);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod InstanceOf = new((state, self) =>
     {
         var c= state.GetArgumentAsClassAt(0);
-        return MRubyValue.From(state.InstanceOf(self, c));
+        return state.InstanceOf(self, c);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod KindOf = new((state, self) =>
     {
         var c= state.GetArgumentAsClassAt(0);
-        return MRubyValue.From(state.KindOf(self, c));
+        return state.KindOf(self, c);
     });
 
     public static MRubyMethod ObjectId = new((state, self) =>
     {
-        return MRubyValue.From(self.ObjectId);
+        return self.ObjectId;
     });
 
     [MRubyMethod(RestArguments = true)]
@@ -230,7 +230,7 @@ static class KernelMembers
         {
             return args[0];
         }
-        return MRubyValue.From(state.NewArray(args));
+        return state.NewArray(args);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -257,15 +257,15 @@ static class KernelMembers
         {
             if (state.RespondTo(state.ClassOf(self), methodId))
             {
-                return state.Send(self, methodId, MRubyValue.From(methodId), MRubyValue.From(includesPrivate));
+                return state.Send(self, methodId, methodId, includesPrivate);
             }
         }
-        return MRubyValue.From(result);
+        return result;
     });
 
     public static MRubyMethod ToS = new((state, self) =>
     {
-        return MRubyValue.From(state.StringifyAny(self));
+        return state.StringifyAny(self);
     });
 
     public static MRubyMethod Lambda = new((state, self) =>
@@ -280,8 +280,8 @@ static class KernelMembers
         {
             var dup = block.Dup();
             dup.SetFlag(MRubyObjectFlags.ProcStrict);
-            return MRubyValue.From(dup);
+            return dup;
         }
-        return MRubyValue.From(block);
+        return block;
     });
 }

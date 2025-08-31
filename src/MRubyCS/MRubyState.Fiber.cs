@@ -32,7 +32,7 @@ partial class MRubyState
         {
             0 => MRubyValue.Nil,
             1 => args[0],
-            _ => MRubyValue.From(NewArray(args))
+            _ => NewArray(args)
         };
     }
 

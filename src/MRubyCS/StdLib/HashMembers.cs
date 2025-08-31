@@ -83,7 +83,7 @@ static class HashMembers
             result.Concat("}"u8);
         }
 
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -121,7 +121,7 @@ static class HashMembers
     public static MRubyMethod Size = new((state, self) =>
     {
         var h = self.As<RHash>();
-        return MRubyValue.From(h.Length);
+        return h.Length;
     });
 
     [MRubyMethod]
@@ -134,7 +134,7 @@ static class HashMembers
             result.Push(key);
         }
 
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
@@ -147,7 +147,7 @@ static class HashMembers
             result.Push(value);
         }
 
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -155,7 +155,7 @@ static class HashMembers
     {
         var h = self.As<RHash>();
         var key = state.GetArgumentAt(0);
-        return MRubyValue.From(h.ContainsKey(key));
+        return h.ContainsKey(key);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -163,14 +163,14 @@ static class HashMembers
     {
         var h = self.As<RHash>();
         var value = state.GetArgumentAt(0);
-        return MRubyValue.From(h.ContainsValue(value));
+        return h.ContainsValue(value);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Empty = new((state, self) =>
     {
         var h = self.As<RHash>();
-        return MRubyValue.From(h.Length <= 0);
+        return h.Length <= 0;
     });
 
     [MRubyMethod(OptionalArguments = 1)]
@@ -181,7 +181,7 @@ static class HashMembers
 
         if (h.DefaultProc is { } proc && state.TryGetArgumentAt(0, out var key))
         {
-            return state.Send(MRubyValue.From(proc), Names.Call, self, key);
+            return state.Send(proc, Names.Call, self, key);
         }
 
         if (h.DefaultValue.HasValue)
@@ -198,7 +198,7 @@ static class HashMembers
         var h = self.As<RHash>();
         if (h.DefaultProc is { } proc)
         {
-            return MRubyValue.From(proc);
+            return proc;
         }
 
         return MRubyValue.Nil;
@@ -235,7 +235,7 @@ static class HashMembers
             var result = state.NewArray(2);
             result.Push(headKey);
             result.Push(headValue);
-            return MRubyValue.From(result);
+            return result;
         }
 
         return MRubyValue.Nil;
@@ -253,7 +253,7 @@ static class HashMembers
                 var result = state.NewArray(2);
                 result.Push(x.Key);
                 result.Push(x.Value);
-                return MRubyValue.From(result);
+                return result;
             }
         }
         return MRubyValue.Nil;
@@ -272,7 +272,7 @@ static class HashMembers
                 var result = state.NewArray(2);
                 result.Push(x.Key);
                 result.Push(x.Value);
-                return MRubyValue.From(result);
+                return result;
             }
         }
         return MRubyValue.Nil;

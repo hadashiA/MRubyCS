@@ -317,7 +317,6 @@ public class VmTest
         Assert.That(classC.IsObject, Is.True);
     }
 
-
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
         var irep = compiler.Compile(code);

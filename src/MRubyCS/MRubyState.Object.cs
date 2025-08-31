@@ -101,11 +101,11 @@ partial class MRubyState
                     if (path.Length <= 1)
                     {
                         var name = NameOf(className.SymbolValue);
-                        c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(name));
+                        c.InstanceVariables.Set(Names.ClassNameKey, name);
                         return name.AsSpan();
                     }
                     var pathName = path.ToRString(this);
-                    c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(pathName));
+                    c.InstanceVariables.Set(Names.ClassNameKey, pathName);
                     return pathName.AsSpan();
                 }
                 // already cached
@@ -142,7 +142,7 @@ partial class MRubyState
             : "Class"u8;
         var h = RuntimeHelpers.GetHashCode(c);
         var instantName = NewString($"#<{prefix}:0x{h:x}>");
-        c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(instantName));
+        c.InstanceVariables.Set(Names.ClassNameKey, instantName);
         return instantName;
     }
 
@@ -316,7 +316,7 @@ partial class MRubyState
                 clone.MarkAsFrozen();
             }
 
-            var cloneValue = MRubyValue.From(clone);
+            var cloneValue = clone;
             if (TryFindMethod(clone.Class, Names.InitializeCopy, out var method, out _) &&
                 method != KernelMembers.InitializeCopy)
             {
@@ -337,7 +337,7 @@ partial class MRubyState
             }
 
             var clone = src.Clone();
-            var cloneValue = MRubyValue.From(clone);
+            var cloneValue = clone;
 
             if (TryFindMethod(clone.Class, Names.InitializeCopy, out var method, out _) &&
                 method != KernelMembers.InitializeCopy)
@@ -393,21 +393,21 @@ partial class MRubyState
     {
         if (value.Object is RArray array)
         {
-            return MRubyValue.From(array.Dup());
+            return array.Dup();
         }
 
         var methodId = Names.ToA;
         if (!RespondTo(value, methodId))
         {
-            return MRubyValue.From(NewArray(value));
+            return NewArray(value);
         }
         var convertedValue = Send(value, methodId);
         if (convertedValue.IsNil)
         {
-            return MRubyValue.From(NewArray(value));
+            return NewArray(value);
         }
         EnsureValueType(convertedValue, MRubyVType.Array);
-        return MRubyValue.From(convertedValue.As<RArray>().Dup());
+        return convertedValue.As<RArray>().Dup();
     }
 
     internal void SpliceArray(RArray array, int start, int length, MRubyValue args)
@@ -534,7 +534,7 @@ partial class MRubyState
         }
 
         targetClass = ObjectClass;
-        return MRubyValue.From(TopSelf);
+        return TopSelf;
     }
 
     internal unsafe RString StringifyInteger(MRubyValue value, int bases)

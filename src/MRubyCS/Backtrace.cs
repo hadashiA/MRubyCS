@@ -31,7 +31,7 @@ public class Backtrace
             if (entry.MethodId == default) continue;
             var methodName = state.NameOf(entry.MethodId);
             var line = state.NewString($"{methodName} in byte sequence: {entry.Index}");
-            array.Push(MRubyValue.From(line));
+            array.Push(line);
         }
         return array;
     }

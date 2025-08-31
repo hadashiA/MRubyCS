@@ -231,7 +231,7 @@ public sealed class RFiber : RObject
                 }
                 else
                 {
-                    result = MRubyValue.From(state.TopSelf);
+                    result = state.TopSelf;
                 }
 
                 context.Stack[0] = result;

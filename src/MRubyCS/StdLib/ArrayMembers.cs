@@ -10,7 +10,7 @@ static class ArrayMembers
         var args = state.GetRestArgumentsAfter(0);
         var array = state.NewArray(args);
         array.Class = self.As<RClass>();
-        return MRubyValue.From(array);
+        return array;
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
@@ -33,7 +33,7 @@ static class ArrayMembers
                                 out var calculatedIndex,
                                 out var calculatedLength) == RangeCalculateResult.Ok)
                         {
-                            return MRubyValue.From(array.SubSequence(calculatedIndex, calculatedLength));
+                            return array.SubSequence(calculatedIndex, calculatedLength);
                         }
                         return MRubyValue.Nil;
                     case MRubyVType.Float:
@@ -47,9 +47,9 @@ static class ArrayMembers
                 if (i < 0) i += array.Length;
                 if (i < 0 || array.Length < i) return MRubyValue.Nil;
                 if (length < 0) return MRubyValue.Nil;
-                if (array.Length == i) return MRubyValue.From(state.NewArray(0));
+                if (array.Length == i) return state.NewArray(0);
                 if (length > array.Length - i) length = array.Length - i;
-                return MRubyValue.From(array.SubSequence(i, (int)length));
+                return array.SubSequence(i, (int)length);
             default:
                 state.RaiseArgumentNumberError(argc, 1, 2);
                 return default;
@@ -149,21 +149,21 @@ static class ArrayMembers
 
         a1.AsSpan().CopyTo(result.AsSpan());
         a2.AsSpan().CopyTo(result.AsSpan(a1.Length));
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
     public static MRubyMethod Size = new((state, self) =>
     {
         var array = self.As<RArray>();
-        return MRubyValue.From(array.Length);
+        return array.Length;
     });
 
     [MRubyMethod]
     public static MRubyMethod Empty = new((state, self) =>
     {
         var array = self.As<RArray>();
-        return MRubyValue.From(array.Length <= 0);
+        return array.Length <= 0;
     });
 
     [MRubyMethod(OptionalArguments = 1)]
@@ -187,7 +187,7 @@ static class ArrayMembers
         }
 
         var subSequence = array.SubSequence(0, (int)size);
-        return MRubyValue.From(subSequence);
+        return subSequence;
     });
 
     [MRubyMethod(OptionalArguments = 1)]
@@ -210,7 +210,7 @@ static class ArrayMembers
             state.Raise(Names.ArgumentError, "nagative array size"u8);
         }
         var subSequence = array.SubSequence(array.Length - (int)size, (int)size);
-        return MRubyValue.From(subSequence);
+        return subSequence;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -287,7 +287,7 @@ static class ArrayMembers
         var span = newArray.AsSpan();
         array.AsSpan().CopyTo(span);
         otherArray.AsSpan().CopyTo(span[array.Length..]);
-        return MRubyValue.From(newArray);
+        return newArray;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -298,13 +298,13 @@ static class ArrayMembers
 
         if (arg.Object is RString separator)
         {
-            return MRubyValue.From(JoinArray(state, array, separator, new Stack<RArray>()));
+            return JoinArray(state, array, separator, new Stack<RArray>());
         }
 
         var times = state.ToInteger(arg);
         if (times == 0)
         {
-            return MRubyValue.From(state.NewArray());
+            return state.NewArray();
         }
         if (times < 0)
         {
@@ -323,7 +323,7 @@ static class ArrayMembers
         {
             source.CopyTo(result.AsSpan(array.Length * i));
         }
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
@@ -333,7 +333,7 @@ static class ArrayMembers
         var result = state.NewArray(array.Length);
         array.CopyTo(result);
         result.AsSpan().Reverse();
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
@@ -385,7 +385,7 @@ static class ArrayMembers
             }
             result.Concat("]"u8);
         }
-        return MRubyValue.From(result);
+        return result;
     });
 
 
@@ -413,7 +413,7 @@ static class ArrayMembers
             }
             result.Concat("]"u8);
         }
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -426,7 +426,7 @@ static class ArrayMembers
         {
             if (state.ValueEquals(span[i], arg))
             {
-                return MRubyValue.From(i);
+                return i;
             }
         }
         return MRubyValue.Nil;
@@ -442,7 +442,7 @@ static class ArrayMembers
         {
             if (state.ValueEquals(span[i], arg))
             {
-                return MRubyValue.From(i);
+                return i;
             }
         }
         return MRubyValue.Nil;
@@ -460,7 +460,7 @@ static class ArrayMembers
 
         var array = self.As<RArray>();
         var result = JoinArray(state, array, separator, new Stack<RArray>());
-        return MRubyValue.From(result);
+        return result;
     });
 
     public static MRubyMethod Clear = new((state, self) =>
@@ -493,7 +493,7 @@ static class ArrayMembers
         if (state.TryGetArgumentAt(0, out var arg0))
         {
             var result = array.Shift((int)state.ToInteger(arg0));
-            return MRubyValue.From(result);
+            return result;
         }
         return array.Shift();
     });
@@ -588,7 +588,7 @@ static class ArrayMembers
     public static MRubyMethod InternalCmp = new((state, self) =>
     {
         var arg = state.GetArgumentAt(0);
-        if (self == arg) return MRubyValue.From(0);
+        if (self == arg) return 0;
         if (arg.VType != MRubyVType.Array)
         {
             return MRubyValue.Nil;

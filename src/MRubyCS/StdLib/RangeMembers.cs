@@ -52,7 +52,7 @@ static class RangeMembers
 
     public static MRubyMethod ExcludeEnd = new((state, self) =>
     {
-        return MRubyValue.From(self.As<RRange>().Exclusive);
+        return self.As<RRange>().Exclusive;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -66,10 +66,9 @@ static class RangeMembers
         {
             return MRubyValue.False;
         }
-        return MRubyValue.From(
-            state.ValueEquals(range.Begin, rangeOther.Begin) &&
+        return state.ValueEquals(range.Begin, rangeOther.Begin) &&
             state.ValueEquals(range.End, rangeOther.End) &&
-            range.Exclusive == rangeOther.Exclusive);
+            range.Exclusive == rangeOther.Exclusive;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -85,7 +84,7 @@ static class RangeMembers
                 ? state.ValueCompare(range.End, value) == 1
                 // end >= value
                 : state.ValueCompare(range.End, value) is 0 or 1;
-            return MRubyValue.From(result);
+            return result;
         }
 
         // begin <= value
@@ -101,7 +100,7 @@ static class RangeMembers
                 ? state.ValueCompare(range.End, value) == 1
                 // end >= value
                 : state.ValueCompare(range.End, value) is 0 or 1;
-            return MRubyValue.From(result);
+            return result;
         }
         return MRubyValue.False;
     });
@@ -149,7 +148,7 @@ static class RangeMembers
         // Use eql? instead of == for stricter equality
         var beginEql = state.Send(range.Begin, Names.QEql, rangeOther.Begin);
         var endEql = state.Send(range.End, Names.QEql, rangeOther.End);
-        return MRubyValue.From(beginEql.Truthy && endEql.Truthy && range.Exclusive == rangeOther.Exclusive);
+        return beginEql.Truthy && endEql.Truthy && range.Exclusive == rangeOther.Exclusive;
     });
 
     public static MRubyMethod First = new((state, self) =>
@@ -183,10 +182,10 @@ static class RangeMembers
                 array.MakeModifiable((int)len, true);
                 for (var i = 0; i < len; i++)
                 {
-                    array[i] = MRubyValue.From(a + i);
+                    array[i] = a + i;
                 }
 
-                return MRubyValue.From(array);
+                return array;
             }
 
             if (range.End.IsFloat)
@@ -195,7 +194,7 @@ static class RangeMembers
                 var b = range.End.FloatValue;
                 if (a > b)
                 {
-                    return MRubyValue.From(state.NewArray(0));
+                    return state.NewArray(0);
                 }
 
                 var array = state.NewArray((int)(b - a) + 1);
@@ -204,7 +203,7 @@ static class RangeMembers
                 {
                     while (a < b)
                     {
-                        array[i++] = MRubyValue.From((int)a);
+                        array[i++] = (int)a;
                         a += 1f;
                     }
                 }
@@ -212,11 +211,11 @@ static class RangeMembers
                 {
                     while (a <= b)
                     {
-                        array[i++] = MRubyValue.From((int)a);
+                        array[i++] = (int)a;
                         a += 1f;
                     }
                 }
-                return MRubyValue.From(array);
+                return array;
             }
         }
         return MRubyValue.Nil;

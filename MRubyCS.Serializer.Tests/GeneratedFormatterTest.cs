@@ -26,20 +26,20 @@ public class GeneratedFormatterTest
         }, state);
 
         var props = result.As<RHash>();
-        Assert.That(props[MRubyValue.From(state.Intern("int_field"u8))], Is.EqualTo(MRubyValue.From(123)));
-        Assert.That(props[MRubyValue.From(state.Intern("alias_of_y"u8))], Is.EqualTo(MRubyValue.From(456)));
+        Assert.That(props[state.Intern("int_field"u8)], Is.EqualTo(new MRubyValue(123)));
+        Assert.That(props[state.Intern("alias_of_y"u8)], Is.EqualTo(new MRubyValue(456)));
 
-        var arrayField = props[MRubyValue.From(state.Intern("array_field"u8))].As<RArray>();
+        var arrayField = props[state.Intern("array_field"u8)].As<RArray>();
         Assert.That(arrayField.Length, Is.EqualTo(3));
-        Assert.That(state.ValueEquals(arrayField[0], MRubyValue.From(state.NewString("a"u8))), Is.True);
-        Assert.That(state.ValueEquals(arrayField[1], MRubyValue.From(state.NewString("bbb"u8))), Is.True);
-        Assert.That(state.ValueEquals(arrayField[2], MRubyValue.From(state.NewString("ccc"u8))), Is.True);
+        Assert.That(state.ValueEquals(arrayField[0], state.NewString("a"u8)), Is.True);
+        Assert.That(state.ValueEquals(arrayField[1], state.NewString("bbb"u8)), Is.True);
+        Assert.That(state.ValueEquals(arrayField[2], state.NewString("ccc"u8)), Is.True);
 
-        var dictField = props[MRubyValue.From(state.Intern("dict_field"u8))].As<RHash>();
+        var dictField = props[state.Intern("dict_field"u8)].As<RHash>();
         Assert.That(dictField.Length, Is.EqualTo(1));
 
-        var nestedProps = dictField[MRubyValue.From(state.NewString("AAA"u8))].As<RHash>();
-        Assert.That(nestedProps[MRubyValue.From(state.Intern("id"u8))],  Is.EqualTo(MRubyValue.From(99999)));
+        var nestedProps = dictField[state.NewString("AAA"u8)].As<RHash>();
+        Assert.That(nestedProps[state.Intern("id"u8)],  Is.EqualTo(new MRubyValue(99999)));
     }
 
     [Test]
@@ -47,38 +47,25 @@ public class GeneratedFormatterTest
     {
         var props = state.NewHash();
 
-        props.Add(
-            MRubyValue.From(state.Intern("int_field"u8)),
-            MRubyValue.From(12345));
+        props.Add(state.Intern("int_field"u8), new MRubyValue(12345));
 
         var array = state.NewArray();
-        array.Push(MRubyValue.From(state.NewString("aaa"u8)));
-        array.Push(MRubyValue.From(state.NewString("bbb"u8)));
-        array.Push(MRubyValue.From(state.NewString("ccc"u8)));
+        array.Push(state.NewString("aaa"u8));
+        array.Push(state.NewString("bbb"u8));
+        array.Push(state.NewString("ccc"u8));
 
-        props.Add(
-            MRubyValue.From(state.Intern("array_field"u8)),
-            MRubyValue.From(array));
+        props.Add(state.Intern("array_field"u8), array);
 
         var hash = state.NewHash();
 
         var nestedProps = state.NewHash();
-        nestedProps.Add(
-            MRubyValue.From(state.Intern("id"u8)),
-            MRubyValue.From(99999));
+        nestedProps.Add(state.Intern("id"u8), 99999);
 
-        hash.Add(
-            MRubyValue.From(state.Intern("Hoge"u8)),
-            MRubyValue.From(nestedProps));
+        hash.Add(state.Intern("Hoge"u8), nestedProps);
 
-        props.Add(
-            MRubyValue.From(state.Intern("dict_field"u8)),
-            MRubyValue.From(hash));
+        props.Add(state.Intern("dict_field"u8), hash);
 
-
-        var result = MRubyValueSerializer.Deserialize<NestedFieldObject>(
-            MRubyValue.From(props),
-            state)!;
+        var result = MRubyValueSerializer.Deserialize<NestedFieldObject>(props, state)!;
 
         Assert.That(result.IntField, Is.EqualTo(12345));
         Assert.That(result.ArrayField.Length, Is.EqualTo(3));
@@ -93,11 +80,11 @@ public class GeneratedFormatterTest
     public void DeserializeWithCtor()
     {
         var props = state.NewHash();
-        props.Add(MRubyValue.From(state.Intern("x"u8)), MRubyValue.From(123));
-        props.Add(MRubyValue.From(state.Intern("y"u8)), MRubyValue.From(456));
-        props.Add(MRubyValue.From(state.Intern("hoge"u8)), MRubyValue.From(state.NewString("hello hello"u8)));
+        props.Add(state.Intern("x"u8), 123);
+        props.Add(state.Intern("y"u8), 456);
+        props.Add(state.Intern("hoge"u8), state.NewString("hello hello"u8));
 
-        var result = MRubyValueSerializer.Deserialize<MRubyConstructorClass>(MRubyValue.From(props), state)!;
+        var result = MRubyValueSerializer.Deserialize<MRubyConstructorClass>(props, state)!;
         Assert.That(result.X, Is.EqualTo(123));
         Assert.That(result.Y, Is.EqualTo(456));
         Assert.That(result.Hoge, Is.EqualTo("hello hello"));

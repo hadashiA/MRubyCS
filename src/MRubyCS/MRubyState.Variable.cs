@@ -56,7 +56,7 @@ partial class MRubyState
         if (TryFindMethod(module.Class, Intern("const_missing"u8), out var method, out _) &&
             method != ModuleMembers.ConstMissing)
         {
-            return Send(MRubyValue.From(module), Intern("const_missing"u8), MRubyValue.From(name));
+            return Send(module, Intern("const_missing"u8), name);
         }
         RaiseConstMissing(module, name);
         return default; // not reached

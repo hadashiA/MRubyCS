@@ -12,11 +12,11 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
   Utilizes the robust capabilities of C# to ensure seamless integration with C#-based game engines.
 
 - **High Performance**
-  Takes advantage of modern C# language featuresâ€”such as managed pointers, `Span`, and the performance benefits of the .NET runtimes GC and JIT compiler to deliver superior speed and efficiency.
+  Takes advantage of modern C# language features such as managed pointers, `Span`, and the performance benefits of the .NET runtimes GC and JIT compiler to deliver superior speed and efficiency.
 
 - **High compatibility with Ruby-level APIs**
-  It is intended for use in software with a certain amount of resources, such as games. For this reason, we are focusing on Ruby API compatibility.
-  At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) and built-in libs tests from the mruby repository.
+  It is intended for use in software with a certain amount of resources, such as games/gui-apps. For this reason, we are focusing on Ruby API compatibility.
+  At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) and built-in libs tests from the original mruby repository.
 
 - **Portability & Extensibility**
   Compared to the original C implementation, calling C# extensive libraries from Ruby is straightforward, making the VM highly extensible.
@@ -32,6 +32,18 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 ### Most recent roadmap
 
 - [ ] [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) for the new version.
+
+## Table of Contents
+
+- [Installation](#installation)
+    - [NuGet](#nuget)
+    - [Unity](#unity)
+- Usages
+    - [Basic Usage](#basic-usage)
+    - [Symbol/String](#symbol-string)
+    - [Fiber (Coroutine)](#fiber-coroutine)
+- [Compiling Ruby source code](#compiling-ruby-source-code)
+    - [MRubyCS.Compiler](#mrubycs-compiler)
 
 ## Installation
 
@@ -85,13 +97,12 @@ You can also parse bytecode in advance.
 The result of parsing bytecode is called `Irep` in mruby terminology.
 
 ``` cs
-Irep irep = state.RiteParser.Parse(bytecode);
+Irep irep = state.ParseBytecode(bytecode);
 
 state.Execute(irep);
 ```
 
-`Irep` can be executed as is, or converted to Fiber before use. For details on Fiber, refer to the [Fiber](#fiber-coroutine) section.
-
+`Irep` can be executed as is, or converted to `Proc`, `Fiber` before use. For details on Fiber, refer to the [Fiber](#fiber-coroutine) section.
 
 This is a sample of executing bytecode.
 See the [Compiling Ruby source code](#compiling-ruby-source-code) section for information on how to convert Ruby source code to mruby bytecode.
@@ -133,9 +144,12 @@ swtich (value)
         break;
 }
 
-var intValue = MRubyValue.From(100); // create int value
-var floatValue = MRubyValue.From(1.234f); // create float value
-var objValue = MRubyValue.From(str); // create allocated ruby object value
+var intValue = new MRubyValue(100); // create int value
+var floatValue = new MRubyValue(1.234f); // create float value
+var objValue = new MRubyValue(str); // create allocated ruby object value
+
+// Or, we can cast implicitly and target-typed new
+MRubyValue intValue = new(100);
 ```
 
 ### Define ruby class/module/method by C#
@@ -151,7 +165,7 @@ var classA = state.DefineClass(Intern("A"u8), c =>
     c.DefineMethod(Intern("plus100"u8), (state, self) =>
     {
         var arg0 = state.GetArgumentAsIntegerAt(0); // get first argument (index:0)
-        return MRubyValue.From(arg0 + 100);
+        return arg0 + 100;
     });
 
     // Method definition that takes a block argument.
@@ -185,8 +199,7 @@ var classA = state.DefineClass(Intern("A"u8), c =>
     // class method
     c.DefineClassMethod(Intern("classmethod1"), (state, self) =>
     {
-        var str = state.NewString($"hoge fuga");
-        return MRubyValue.From(str);
+        return state.NewString($"hoge fuga");
     });
 
 });
@@ -196,7 +209,7 @@ classA.DefineMethod(Intern("additional_method1"u8), (state, self) => { /* ... */
 
 // Define module
 var moduleA = state.DefineModule(Intern("ModuleA");)
-state.DefineMethod(moduleA, Intern("additional_method2"u8), (state, self) => MRubyValue.From(123));
+state.DefineMethod(moduleA, Intern("additional_method2"u8), (state, self) => new MRubyValue(123));
 
 state.IncludeModule(classA, moduleA);
 ```
@@ -242,12 +255,12 @@ end
 var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
 
 // call class method
-mrb.Send(classA, mrb.Intern("foo="u8), MRubyValue.From(123)); 
+mrb.Send(classA, mrb.Intern("foo="u8), new MRubyValue(123));
 mrb.Send(classA, mrb.Intern("foo"u8)); //=> 123
 
 // get instance variable from top
 var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
-mrb.Send(instanceB, mrb.Intern("bar="u8), MRubyValue.From(456)); 
+mrb.Send(instanceB, mrb.Intern("bar="u8), new MRubyValue(456));
 mrb.Send(instanceB, mrb.Intern("bar"u8)); //=> 456
 
 // find class instance on the hierarchy
@@ -270,7 +283,7 @@ var x = 123;
 var str2 = state.NewString($"x={x}");
 
 // wrap MRubyValue..
-var strValue = MRubyValue.From(str1);
+var strValue = new MRubyValue(str1);
 ```
 
 There is a concept in mruby similar to String called `Symbol`.
@@ -322,11 +335,11 @@ var code = """
 var fiber = compiler.LoadSourceCode(code).As<RFiber>();
 
 // Resume the fiber with initial value
-var result1 = fiber.Resume(MRubyValue.From(10));  // => 20
+var result1 = fiber.Resume(new MRubyValue(10));  // => 20
 
-var result2 = fiber.Resume(MRubyValue.From(10));  // => 30
+var result2 = fiber.Resume(new MRubyValue(10));  // => 30
 
-var result3 = fiber.Resume(MRubyValue.From(10));  // => 40 (final return value)
+var result3 = fiber.Resume(new MRubyValue(10));  // => 40 (final return value)
 
 // Check if fiber is still alive
 fiber.IsAlive  // => false
@@ -421,9 +434,9 @@ var consumer2 = Task.Run(async () =>
 });
 
 // Resume fiber and both consumers will receive the results
-fiber.Resume(MRubyValue.From(10));
-fiber.Resume(MRubyValue.From(20));
-fiber.Resume(MRubyValue.From(30));
+fiber.Resume(new MRubyValue(10));
+fiber.Resume(new MRubyValue(20));
+fiber.Resume(new MRubyValue(30));
 
 await Task.WhenAll(consumer1, consumer2);
 ```
@@ -448,7 +461,7 @@ var code = """
 var fiber = compiler.LoadSourceCode(code).As<RFiber>();
 
 // First resume succeeds
-var result1 = fiber.Resume(MRubyValue.From(10));  // => 10
+var result1 = fiber.Resume(new MRubyValue(10));  // => 10
 
 // Second resume will throw
 try
@@ -482,18 +495,18 @@ By distributing only precompiled bytecode, you can optimize the installation on 
 ```mermaid
 graph TB
     subgraph host["host machine"]
-        A[source code<br/>.rb files] 
+        A[source code<br/>.rb files]
         C[byte-code<br/>.mrb files]
-        
+
         A -->|compile| C
     end
 
     C -->|deploy/install| E
-    
+
     subgraph application["application"]
         D[mruby VM]
         E[byte-code<br>.mrb files]
-        
+
         E -->|exucute byte-cose| D
     end
 ```
