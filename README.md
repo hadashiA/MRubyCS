@@ -38,7 +38,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - [Installation](#installation)
     - [NuGet](#nuget)
     - [Unity](#unity)
-- [Usages](#basic-usage)
+- [Basic Usage](#basic-usage)
     - [MRubyValue](#mrubyvalue)
     - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
