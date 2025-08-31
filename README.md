@@ -38,12 +38,14 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - [Installation](#installation)
     - [NuGet](#nuget)
     - [Unity](#unity)
-- Usages
-    - [Basic Usage](#basic-usage)
-    - [Symbol/String](#symbol-string)
-    - [Fiber (Coroutine)](#fiber-coroutine)
+- [Usages](#basic-usage)
+    - [MRubyValue](#mrubyvalue)
+    - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
+    - [Call ruby method from C# side](#call-ruby-method-from-c-side)
+- [Symbol/String](#symbol-string)
+- [Fiber (Coroutine)](#fiber-coroutine)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
-    - [MRubyCS.Compiler](#mrubycs-compiler)
+    - [MRubyCS.Compiler](#mrubycscompiler)
 
 ## Installation
 
@@ -107,7 +109,7 @@ state.Execute(irep);
 This is a sample of executing bytecode.
 See the [Compiling Ruby source code](#compiling-ruby-source-code) section for information on how to convert Ruby source code to mruby bytecode.
 
-### Handling `MRubyValue`
+### `MRubyValue`
 
 Above `result` is `MRubyValue`. This represents a Ruby value.
 
