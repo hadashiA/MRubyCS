@@ -42,7 +42,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
     - [MRubyValue](#mrubyvalue)
     - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
-- [Symbol/String](#symbol-string)
+- [Symbol/String](#symbolstring)
 - [Fiber (Coroutine)](#fiber-coroutine)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
     - [MRubyCS.Compiler](#mrubycscompiler)
