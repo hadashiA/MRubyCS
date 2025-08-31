@@ -104,7 +104,7 @@ static class StringMembers
         }
 
         var result = str.GetPartial(state, indexValue, rangeLength);
-        return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
+        return result != null ? new MRubyValue(result) : MRubyValue.Nil;
     });
 
     [MRubyMethod(RequiredArguments = 2, OptionalArguments = 1)]

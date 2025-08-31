@@ -127,15 +127,15 @@ public partial class MRubyState
         PrepareSingletonClass(ClassClass);
 
         // name basic classes
-        DefineConst(ObjectClass, Names.BasicObjectClass, MRubyValue.From(BasicObjectClass));
-        DefineConst(ObjectClass, Names.ObjectClass, MRubyValue.From(ObjectClass));
-        DefineConst(ObjectClass, Names.ModuleClass, MRubyValue.From(ModuleClass));
-        DefineConst(ObjectClass, Names.ClassClass, MRubyValue.From(ClassClass));
+        DefineConst(ObjectClass, Names.BasicObjectClass, BasicObjectClass);
+        DefineConst(ObjectClass, Names.ObjectClass, ObjectClass);
+        DefineConst(ObjectClass, Names.ModuleClass, ModuleClass);
+        DefineConst(ObjectClass, Names.ClassClass, ClassClass);
 
-        BasicObjectClass.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(NewString("BasicObject"u8)));
-        ObjectClass.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(NewString("Object"u8)));
-        ModuleClass.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(NewString("Module"u8)));
-        ClassClass.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(NewString("Class"u8)));
+        BasicObjectClass.InstanceVariables.Set(Names.ClassNameKey, NewString("BasicObject"u8));
+        ObjectClass.InstanceVariables.Set(Names.ClassNameKey, NewString("Object"u8));
+        ModuleClass.InstanceVariables.Set(Names.ClassNameKey, NewString("Module"u8));
+        ClassClass.InstanceVariables.Set(Names.ClassNameKey, NewString("Class"u8));
 
         DefineMethod(BasicObjectClass, Names.Initialize, MRubyMethod.Nop);
         DefineMethod(BasicObjectClass, Names.OpNot, BasicObjectMembers.Not);
@@ -417,14 +417,14 @@ public partial class MRubyState
         DefineMethod(FloatClass, Names.QEql, FloatMembers.QEql);
         DefineMethod(FloatClass, Intern("quo"u8), FloatMembers.Quo);
         DefineMethod(FloatClass, Intern("div"u8), FloatMembers.Div);
-        DefineConst(FloatClass, Intern("INFINITY"u8), MRubyValue.From(double.PositiveInfinity));
-        DefineConst(FloatClass, Intern("NAN"u8), MRubyValue.From(double.NaN));
+        DefineConst(FloatClass, Intern("INFINITY"u8), double.PositiveInfinity);
+        DefineConst(FloatClass, Intern("NAN"u8), double.NaN);
     }
 
     void InitString()
     {
         DefineMethod(KernelModule, Intern("__ENCODING__"u8), (state, _) =>
-            MRubyValue.From(state.NewString("UTF-8"u8)));
+            state.NewString("UTF-8"u8));
 
         StringClass = DefineClass(Intern("String"u8), ObjectClass, MRubyVType.String);
         DefineMethod(StringClass, Names.Initialize, StringMembers.Initialize);
@@ -609,12 +609,12 @@ public partial class MRubyState
     {
         if (c.InstanceVariables.TryGet(Names.OuterKey, out _)) return false;
 
-        c.InstanceVariables.Set(Names.OuterKey, MRubyValue.From(outer));
-        outer.InstanceVariables.Set(name, MRubyValue.From(c));
+        c.InstanceVariables.Set(Names.OuterKey, outer);
+        outer.InstanceVariables.Set(name, c);
 
         if (!c.InstanceVariables.TryGet(Names.ClassNameKey, out _))
         {
-            c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(name));
+            c.InstanceVariables.Set(Names.ClassNameKey, name);
         }
         return true;
     }

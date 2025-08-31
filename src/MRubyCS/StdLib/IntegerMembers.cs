@@ -34,12 +34,12 @@ static class IntegerMembers
         var other = state.GetArgumentAt(0);
         if (other.IsFloat)
         {
-            return MRubyValue.From(Math.Pow(a, other.FloatValue));
+            return Math.Pow(a, other.FloatValue);
         }
         var exp = state.ToInteger(other);
         if (exp < 0)
         {
-            return MRubyValue.From(Math.Pow(a, other.FloatValue));
+            return Math.Pow(a, other.FloatValue);
         }
         try
         {
@@ -54,7 +54,7 @@ static class IntegerMembers
                 if (exp == 0) break;
                 a = checked(a * a);
             }
-            return MRubyValue.From(result);
+            return result;
         }
         catch (OverflowException)
         {
@@ -75,7 +75,7 @@ static class IntegerMembers
         {
             try
             {
-                return MRubyValue.From(checked(a + other.IntegerValue));
+                return checked(a + other.IntegerValue);
             }
             catch (OverflowException)
             {
@@ -85,7 +85,7 @@ static class IntegerMembers
         }
         if (other.IsFloat)
         {
-            return MRubyValue.From(a + other.FloatValue);
+            return a + other.FloatValue;
         }
         state.Raise(Names.TypeError, "non integer addition"u8);
         return default;
@@ -100,7 +100,7 @@ static class IntegerMembers
         {
             try
             {
-                return MRubyValue.From(checked(a - other.IntegerValue));
+                return checked(a - other.IntegerValue);
             }
             catch (OverflowException)
             {
@@ -110,7 +110,7 @@ static class IntegerMembers
         }
         if (other.IsFloat)
         {
-            return MRubyValue.From(a - other.FloatValue);
+            return a - other.FloatValue;
         }
         state.Raise(Names.TypeError, "non integer subtraction"u8);
         return default;
@@ -125,7 +125,7 @@ static class IntegerMembers
         {
             try
             {
-                return MRubyValue.From(checked(a * other.IntegerValue));
+                return checked(a * other.IntegerValue);
             }
             catch (OverflowException)
             {
@@ -135,7 +135,7 @@ static class IntegerMembers
         }
         if (other.IsFloat)
         {
-            return MRubyValue.From(a - other.FloatValue);
+            return a - other.FloatValue;
         }
         state.Raise(Names.TypeError, Utf8String.Format($"can't convert {state.TypeNameOf(other)} into Integer"));
         return default;
@@ -153,7 +153,7 @@ static class IntegerMembers
                 RaiseDivideByZeroError(state);
                 return default;
             }
-            return MRubyValue.From((a / other.IntegerValue));
+            return a / other.IntegerValue;
         }
         if (other.IsFloat)
         {
@@ -162,7 +162,7 @@ static class IntegerMembers
                 RaiseDivideByZeroError(state);
                 return default;
             }
-            return MRubyValue.From(a / other.FloatValue);
+            return a / other.FloatValue;
         }
         RaiseIntegerNoConversionError(state, other);
         return default;
@@ -178,7 +178,7 @@ static class IntegerMembers
             RaiseDivideByZeroError(state);
             return default;
         }
-        return MRubyValue.From((state.ToInteger(self) / f));
+        return state.ToInteger(self) / f;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -192,7 +192,7 @@ static class IntegerMembers
             RaiseDivideByZeroError(state);
             return default;
         }
-        return MRubyValue.From(a / b);
+        return a / b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -206,7 +206,7 @@ static class IntegerMembers
             RaiseDivideByZeroError(state);
             return default;
         }
-        return MRubyValue.From(a / b);
+        return a / b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -215,7 +215,7 @@ static class IntegerMembers
         var a = state.ToInteger(self);
         var other = state.GetArgumentAt(0);
         var b = state.ToInteger(other);
-        return MRubyValue.From(a & b);
+        return a & b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -224,7 +224,7 @@ static class IntegerMembers
         var a = state.ToInteger(self);
         var other = state.GetArgumentAt(0);
         var b = state.ToInteger(other);
-        return MRubyValue.From(a | b);
+        return a | b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -233,7 +233,7 @@ static class IntegerMembers
         var a = state.ToInteger(self);
         var other = state.GetArgumentAt(0);
         var b = state.ToInteger(other);
-        return MRubyValue.From(a ^ b);
+        return a ^ b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -245,7 +245,7 @@ static class IntegerMembers
         if (a == 0 || width == 0) return self;
         if (NumShift(state, a, width, out var num))
         {
-            return MRubyValue.From(num);
+            return num;
         }
         RaiseIntegerOverflowError(state, "bit  shift"u8);
         return default;
@@ -260,7 +260,7 @@ static class IntegerMembers
         if (a == 0 || width == 0) return self;
         if (NumShift(state, a, -width, out var num))
         {
-            return MRubyValue.From(num);
+            return num;
         }
         RaiseIntegerOverflowError(state, "bit  shift"u8);
         return default;
@@ -275,14 +275,14 @@ static class IntegerMembers
             basis = (int)state.GetArgumentAsIntegerAt(0);
         }
 
-        return MRubyValue.From(state.StringifyInteger(self, basis));
+        return state.StringifyInteger(self, basis);
     });
 
-    public static MRubyMethod OpPlus = new((state, self) => { return MRubyValue.From(+self.IntegerValue); });
+    public static MRubyMethod OpPlus = new((state, self) => { return +self.IntegerValue; });
 
-    public static MRubyMethod OpMinus = new((state, self) => { return MRubyValue.From(-self.IntegerValue); });
+    public static MRubyMethod OpMinus = new((state, self) => { return -self.IntegerValue; });
 
-    public static MRubyMethod Abs = new((state, self) => { return MRubyValue.From(Math.Abs(self.IntegerValue)); });
+    public static MRubyMethod Abs = new((state, self) => { return Math.Abs(self.IntegerValue); });
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Mod = new((state, self) =>
@@ -304,7 +304,7 @@ static class IntegerMembers
             {
                 mod += b;
             }
-            return MRubyValue.From(mod);
+            return mod;
         }
         return FloatMembers.Mod.Invoke(state, self);
     });
@@ -314,11 +314,11 @@ static class IntegerMembers
         var f = PrepareIntRounding(state, self);
         if (f.IsUndef)
         {
-            return MRubyValue.From(0);
+            return 0;
         }
         if (f.IsNil)
         {
-            return MRubyValue.From((self.IntegerValue));
+            return self.IntegerValue;
         }
         var a = state.ToInteger(self);
         var b = state.ToInteger(f);
@@ -337,7 +337,7 @@ static class IntegerMembers
                 return default;
             }
         }
-        return MRubyValue.From(a);
+        return a;
     });
 
     public static MRubyMethod Floor = new((state, self) =>
@@ -345,11 +345,11 @@ static class IntegerMembers
         var f = PrepareIntRounding(state, self);
         if (f.IsUndef)
         {
-            return MRubyValue.From(0);
+            return 0;
         }
         if (f.IsNil)
         {
-            return MRubyValue.From((self.IntegerValue));
+            return self.IntegerValue;
         }
         var a = state.ToInteger(self);
         var b = state.ToInteger(f);
@@ -368,7 +368,7 @@ static class IntegerMembers
                 return default;
             }
         }
-        return MRubyValue.From(a);
+        return a;
     });
 
     public static MRubyMethod Round = new((state, self) =>
@@ -376,11 +376,11 @@ static class IntegerMembers
         var f = PrepareIntRounding(state, self);
         if (f.IsUndef)
         {
-            return MRubyValue.From(0);
+            return 0;
         }
         if (f.IsNil)
         {
-            return MRubyValue.From((self.IntegerValue));
+            return self.IntegerValue;
         }
         var a = state.ToInteger(self);
         var b = state.ToInteger(f);
@@ -407,7 +407,7 @@ static class IntegerMembers
                 a = c;
             }
 
-            return MRubyValue.From(a);
+            return a;
         }
         catch (OverflowException)
         {
@@ -421,7 +421,7 @@ static class IntegerMembers
     {
         try
         {
-            return MRubyValue.From(checked(self.IntegerValue + 1));
+            return checked(self.IntegerValue + 1);
         }
         catch (OverflowException)
         {
@@ -435,21 +435,21 @@ static class IntegerMembers
         var f = PrepareIntRounding(state, self);
         if (f.IsUndef)
         {
-            return MRubyValue.From(0);
+            return 0;
         }
         if (f.IsNil)
         {
-            return MRubyValue.From((self.IntegerValue));
+            return self.IntegerValue;
         }
         var a = state.ToInteger(self);
         var b = state.ToInteger(f);
-        return MRubyValue.From(a - (a % b));
+        return a - (a % b);
     });
 
     public static MRubyMethod Hash = new((state, self) =>
     {
         var n = state.ToInteger(self);
-        return MRubyValue.From(RString.GetHashCode(MemoryMarshal.CreateSpan(ref Unsafe.As<long, byte>(ref n), sizeof(long))));
+        return RString.GetHashCode(MemoryMarshal.CreateSpan(ref Unsafe.As<long, byte>(ref n), sizeof(long)));
     });
 
     public static MRubyMethod DivMod = new((state, self) =>
@@ -459,12 +459,12 @@ static class IntegerMembers
         if (other.IsInteger)
         {
             IntDivMod(state, n, other.IntegerValue, out var div, out var mod);
-            return MRubyValue.From(state.NewArray(MRubyValue.From(div), MRubyValue.From(mod)));
+            return state.NewArray(div, mod);
         }
         return FloatMembers.DivMod.Invoke(state, self);
     });
 
-    public static MRubyMethod ToF = new((state, self) => MRubyValue.From((double)(state.ToInteger(self))));
+    public static MRubyMethod ToF = new((state, self) => (double)(state.ToInteger(self)));
     public static MRubyMethod ToI = new((state, self) => self);
 
     internal static bool NumShift(MRubyState state, long val, long width, out long num)
@@ -531,7 +531,7 @@ static class IntegerMembers
         {
             return MRubyValue.Undef;
         }
-        return IntPow(state, MRubyValue.From(10), MRubyValue.From(-other));
+        return IntPow(state, 10, -other);
     }
 
     internal static void IntDivMod(MRubyState state, long x, long y, out long divp, out long modp)

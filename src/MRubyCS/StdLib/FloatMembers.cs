@@ -14,15 +14,15 @@ static class FloatMembers
             state.Raise(Names.RangeError, "integer overflow in to_i"u8);
         }
 
-        if (f > 0.0) return MRubyValue.From((long)Math.Floor(f));
-        if (f < 0.0) return MRubyValue.From((long)Math.Ceiling(f));
-        return MRubyValue.From((long)f);
+        if (f > 0.0) return (long)Math.Floor(f);
+        if (f < 0.0) return (long)Math.Ceiling(f);
+        return (long)f;
     });
 
     public static MRubyMethod ToS = new((state, self) =>
     {
         var f = self.FloatValue;
-        return MRubyValue.From(Format(state, f));
+        return Format(state, f);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -33,7 +33,7 @@ static class FloatMembers
 
         if (double.IsNaN(y))
         {
-            return MRubyValue.From(double.NaN);
+            return double.NaN;
         }
 
         if (y == 0.0)
@@ -43,9 +43,9 @@ static class FloatMembers
 
         if (double.IsInfinity(y) && !double.IsInfinity(x))
         {
-            return MRubyValue.From(x);
+            return x;
         }
-        return MRubyValue.From(x % y);
+        return x % y;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -57,13 +57,13 @@ static class FloatMembers
         if (y.IsInteger)
         {
             // ReSharper disable once CompareOfFloatsByEqualityOperator
-            return MRubyValue.From(x == (double)y.IntegerValue);
+            return x == (double)y.IntegerValue;
         }
         ;
         if (y.IsFloat)
         {
             // ReSharper disable once CompareOfFloatsByEqualityOperator
-            return MRubyValue.From(x == y.FloatValue);
+            return x == y.FloatValue;
         }
         return MRubyValue.False;
     });
@@ -78,7 +78,7 @@ static class FloatMembers
             MRubyVType.Float => arg.FloatValue,
             _ => state.ToFloat(arg)
         };
-        return MRubyValue.From(a + b);
+        return a + b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -91,7 +91,7 @@ static class FloatMembers
             MRubyVType.Float => arg.FloatValue,
             _ => state.ToFloat(arg)
         };
-        return MRubyValue.From(a - b);
+        return a - b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -104,7 +104,7 @@ static class FloatMembers
             MRubyVType.Float => arg.FloatValue,
             _ => state.ToFloat(arg)
         };
-        return MRubyValue.From(a * b);
+        return a * b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -117,7 +117,7 @@ static class FloatMembers
             MRubyVType.Float => arg.FloatValue,
             _ => state.ToFloat(arg)
         };
-        return MRubyValue.From(a / b);
+        return a / b;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -125,12 +125,12 @@ static class FloatMembers
     {
         var a = self.FloatValue;
         var b = state.ToFloat(state.GetArgumentAt(0));
-        return MRubyValue.From(Math.Pow(a, b));
+        return Math.Pow(a, b);
     });
 
     public static MRubyMethod OpNeg = new((state, self) =>
     {
-        return MRubyValue.From(-self.FloatValue);
+        return -self.FloatValue;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -153,7 +153,7 @@ static class FloatMembers
             return MRubyValue.False;
         }
 
-        return MRubyValue.From(x < y);
+        return x < y;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -176,7 +176,7 @@ static class FloatMembers
             return MRubyValue.False;
         }
 
-        return MRubyValue.From(x <= y);
+        return x <= y;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -199,7 +199,7 @@ static class FloatMembers
             return MRubyValue.False;
         }
 
-        return MRubyValue.From(x > y);
+        return x > y;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -222,7 +222,7 @@ static class FloatMembers
             return MRubyValue.False;
         }
 
-        return MRubyValue.From(x >= y);
+        return x >= y;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -272,15 +272,15 @@ static class FloatMembers
         FloatDivMod(state, x, state.ToFloat(y), out var div, out var mod);
         if (!IsFixableFloatValue(div))
         {
-            a = MRubyValue.From(div);
+            a = div;
         }
         else
         {
-            a = MRubyValue.From((long)div);
+            a = (long)div;
         }
 
-        b = MRubyValue.From(mod);
-        return MRubyValue.From(state.NewArray(a, b));
+        b = mod;
+        return state.NewArray(a, b);
     });
 
     public static MRubyMethod Abs = new((state, self) =>
@@ -288,14 +288,14 @@ static class FloatMembers
         var f = self.FloatValue;
         if (f < 0.0f)
         {
-            return MRubyValue.From(-f);
+            return -f;
         }
         return self;
     });
 
     public static MRubyMethod QNan = new((state, self) =>
     {
-        return MRubyValue.From(double.IsNaN(self.FloatValue));
+        return double.IsNaN(self.FloatValue);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -308,22 +308,22 @@ static class FloatMembers
         }
         var x = self.FloatValue;
         var y = arg.FloatValue;
-        return MRubyValue.From(x.Equals(y));
+        return x.Equals(y);
     });
 
     public static MRubyMethod QFinite = new((state, self) =>
     {
         var f = self.FloatValue;
-        return MRubyValue.From(!double.IsInfinity(f) && !double.IsNaN(f));
+        return !double.IsInfinity(f) && !double.IsNaN(f);
     });
 
     public static MRubyMethod QInfinite = new((state, self) =>
     {
         var f = self.FloatValue;
         if (double.IsPositiveInfinity(f))
-            return MRubyValue.From(1);
+            return 1;
         if (double.IsNegativeInfinity(f))
-            return MRubyValue.From(-1);
+            return -1;
         return MRubyValue.Nil;
     });
 
@@ -347,7 +347,7 @@ static class FloatMembers
     public static MRubyMethod Hash = new((state, self) =>
     {
         var f = self.FloatValue;
-        return MRubyValue.From(f.GetHashCode());
+        return f.GetHashCode();
     });
     //
     [MRubyMethod(OptionalArguments = 1)]
@@ -376,9 +376,9 @@ static class FloatMembers
             var result = Math.Round(f, MidpointRounding.AwayFromZero);
             if (IsFixableFloatValue(result))
             {
-                return MRubyValue.From((long)result);
+                return (long)result;
             }
-            return MRubyValue.From(result);
+            return result;
         }
         else if (ndigits > 0)
         {
@@ -388,7 +388,7 @@ static class FloatMembers
             }
             if (ndigits > 15) ndigits = 15;
             var result = Math.Round(f, ndigits, MidpointRounding.AwayFromZero);
-            return MRubyValue.From(result);
+            return result;
         }
         else
         {
@@ -397,9 +397,9 @@ static class FloatMembers
             var result = Math.Round(f / pow, MidpointRounding.AwayFromZero) * pow;
             if (IsFixableFloatValue(result))
             {
-                return MRubyValue.From((long)result);
+                return (long)result;
             }
-            return MRubyValue.From(result);
+            return result;
         }
     });
     //
@@ -414,7 +414,7 @@ static class FloatMembers
     {
         var x = self.FloatValue;
         var y = state.ToFloat(state.GetArgumentAt(0));
-        return MRubyValue.From(x / y);
+        return x / y;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -429,7 +429,7 @@ static class FloatMembers
         var result = Math.Floor(x / y);
         if (IsFixableFloatValue(result))
         {
-            return MRubyValue.From((long)result);
+            return (long)result;
         }
         return MRubyValue.From(result);
     });
@@ -437,7 +437,7 @@ static class FloatMembers
     public static MRubyMethod Inspect = new((state, self) =>
     {
         var f = self.FloatValue;
-        return MRubyValue.From(Format(state, f));
+        return Format(state, f);
     });
 
     public static MRubyMethod OpRev = new((state, self) =>
@@ -471,9 +471,9 @@ static class FloatMembers
             return MRubyValue.Nil;
         }
 
-        if (x < y) return MRubyValue.From(-1);
-        if (x > y) return MRubyValue.From(1);
-        return MRubyValue.From(0);
+        if (x < y) return -1;
+        if (x > y) return 1;
+        return 0;
     });
 
     static void FloatDivMod(MRubyState state, double x, double y, out double divp, out double modp)
@@ -567,7 +567,7 @@ static class FloatMembers
     {
         if (v >= int.MinValue && v <= int.MaxValue)
         {
-            return MRubyValue.From(v);
+            return v;
         }
         state.Raise(Names.RangeError, "bit operation"u8);
         return MRubyValue.Nil;
@@ -596,7 +596,7 @@ static class FloatMembers
 
         if (IsFixableFloatValue(result))
         {
-            return MRubyValue.From((long)result);
+            return (long)result;
         }
         return MRubyValue.From(result);
     }
@@ -641,9 +641,9 @@ static class FloatMembers
             var result = func(f);
             if (IsFixableFloatValue(result))
             {
-                return MRubyValue.From((long)result);
+                return (long)result;
             }
-            return MRubyValue.From(result);
+            return result;
         }
         else if (ndigits > 0)
         {
@@ -653,7 +653,7 @@ static class FloatMembers
             }
             if (ndigits > fprec) ndigits = fprec;
             var pow = Math.Pow(10, ndigits);
-            return MRubyValue.From(func(f * pow) / pow);
+            return func(f * pow) / pow;
         }
         else
         {
@@ -666,9 +666,9 @@ static class FloatMembers
             var result = func(f / pow) * pow;
             if (IsFixableFloatValue(result))
             {
-                return MRubyValue.From((long)result);
+                return (long)result;
             }
-            return MRubyValue.From(result);
+            return result;
         }
     }
 }
