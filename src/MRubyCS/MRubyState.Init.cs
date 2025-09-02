@@ -579,13 +579,7 @@ public partial class MRubyState
 
     void InitMrbLib()
     {
-        var executingDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-        foreach (var path in Directory.EnumerateFiles(executingDir!, "*.mrb", SearchOption.AllDirectories))
-        {
-            var bytes = File.ReadAllBytes(path);
-            var irep = RiteParser.Parse(bytes);
-            Execute(irep);
-        }
+        LoadBytecode(LibEmbedded.Bytes);
     }
 
     void InitFiber()
