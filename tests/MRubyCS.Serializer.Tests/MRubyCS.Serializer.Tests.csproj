@@ -21,9 +21,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\src\MRubyCS\MRubyCS.csproj" />
-      <ProjectReference Include="..\src\MRubyCS.Serializer\MRubyCS.Serializer.csproj" />
-      <ProjectReference Include="..\src\MRubyCS.Serializer.SourceGenerator\MRubyCS.Serializer.SourceGenerator.csproj">
+      <ProjectReference Include="..\..\src\MRubyCS\MRubyCS.csproj" />
+      <ProjectReference Include="..\..\src\MRubyCS.Serializer\MRubyCS.Serializer.csproj" />
+      <ProjectReference Include="..\..\src\MRubyCS.Serializer.SourceGenerator\MRubyCS.Serializer.SourceGenerator.csproj">
         <OutputItemType>Analyzer</OutputItemType>
         <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       </ProjectReference>
