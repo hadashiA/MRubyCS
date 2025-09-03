@@ -276,7 +276,7 @@ static class ModuleMembers
     {
         var n = state.GetArgumentAt(0).SymbolValue;
         state.EnsureConstName(n);
-        var removed = state.RemoveInstanceVariable(self, n);
+        var removed = state.RemoveInstanceVariable(self.As<RObject>(), n);
         if (removed.IsUndef)
         {
             state.RaiseNameError(n, state.NewString($"constant {n} is not defined"));

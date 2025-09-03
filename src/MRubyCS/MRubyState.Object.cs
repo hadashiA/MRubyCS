@@ -286,10 +286,10 @@ partial class MRubyState
         }
     }
 
-    public MRubyValue RemoveInstanceVariable(MRubyValue obj, Symbol key)
+    public MRubyValue RemoveInstanceVariable(RObject obj, Symbol key)
     {
         EnsureNotFrozen(obj);
-        if (obj.As<RObject>().InstanceVariables.Remove(key, out var removedValue))
+        if (obj.InstanceVariables.Remove(key, out var removedValue))
         {
             return removedValue;
         }

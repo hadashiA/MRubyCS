@@ -4,11 +4,26 @@ namespace MRubyCS;
 
 public sealed class ClassDefineOptions(MRubyState state, RClass c)
 {
-    public void DefineMethod(Symbol id, MRubyMethod method) => state.DefineMethod(c, id, method);
-    public void DefineMethod(Symbol id, MRubyFunc func) => state.DefineMethod(c, id, func);
+    public void DefineConst(Symbol name, MRubyValue value) => state.DefineConst(c, name, value);
 
-    public void DefineClassMethod(Symbol id, MRubyMethod method) => state.DefineClassMethod(c, id, method);
-    public void DefineClassMethod(Symbol id, MRubyFunc func) => state.DefineClassMethod(c, id, func);
+    public void GetInstanceVariable(Symbol name) => state.GetInstanceVariable(c, name);
+    public void SetInstanceVariable(Symbol name, MRubyValue value) => state.SetInstanceVariable(c, name, value);
+    public void RemoveInstanceVariable(Symbol name) => state.RemoveInstanceVariable(c, name);
+
+    public void GetClassVariable(Symbol name) => state.GetClassVariable(c, name);
+    public void SetClassVariable(Symbol name, MRubyValue value) => state.SetClassVariable(c, name, value);
+
+    public void DefineClass(Symbol name, RClass super) => state.DefineClass(name, c);
+    public void DefineClass(Symbol name, Action<ClassDefineOptions> configure) => state.DefineClass(name, c, configure);
+
+    public void DefineModule(Symbol name) => state.DefineModule(name, c);
+    public void DefineModule(Symbol name, Action<ClassDefineOptions> configure) => state.DefineModule(name, c, configure);
+
+    public void DefineMethod(Symbol name, MRubyMethod method) => state.DefineMethod(c, name, method);
+    public void DefineMethod(Symbol name, MRubyFunc func) => state.DefineMethod(c, name, func);
+
+    public void DefineClassMethod(Symbol name, MRubyMethod method) => state.DefineClassMethod(c, name, method);
+    public void DefineClassMethod(Symbol name, MRubyFunc func) => state.DefineClassMethod(c, name, func);
 }
 
 partial class MRubyState
@@ -81,6 +96,8 @@ partial class MRubyState
         ClearMethodCache();
     }
 
+    public void DefineConst(Symbol name, MRubyValue value) => DefineConst(ObjectClass, name, value);
+
     public void DefineConst(RClass c, Symbol name, MRubyValue value)
     {
         EnsureNotFrozen(c);
@@ -135,6 +152,20 @@ partial class MRubyState
         var c = DefineClass(name, super, outer: outer);
         configure(new ClassDefineOptions(this, c));
         return c;
+    }
+
+    public RClass DefineModule(Symbol name, RClass outer, Action<ClassDefineOptions> configure)
+    {
+        var module = DefineModule(name, outer);
+        configure(new ClassDefineOptions(this, module));
+        return module;
+    }
+
+    public RClass DefineModule(Symbol name, Action<ClassDefineOptions> configure)
+    {
+        var module = DefineModule(name, ObjectClass);
+        configure(new ClassDefineOptions(this, module));
+        return module;
     }
 
     public RClass DefineModule(Symbol name, RClass outer)

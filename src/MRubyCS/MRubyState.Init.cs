@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.IO;
 using System.Runtime.CompilerServices;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
@@ -127,10 +126,10 @@ public partial class MRubyState
         PrepareSingletonClass(ClassClass);
 
         // name basic classes
-        DefineConst(ObjectClass, Names.BasicObjectClass, BasicObjectClass);
-        DefineConst(ObjectClass, Names.ObjectClass, ObjectClass);
-        DefineConst(ObjectClass, Names.ModuleClass, ModuleClass);
-        DefineConst(ObjectClass, Names.ClassClass, ClassClass);
+        DefineConst(Names.BasicObjectClass, BasicObjectClass);
+        DefineConst(Names.ObjectClass, ObjectClass);
+        DefineConst(Names.ModuleClass, ModuleClass);
+        DefineConst(Names.ClassClass, ClassClass);
 
         BasicObjectClass.InstanceVariables.Set(Names.ClassNameKey, NewString("BasicObject"u8));
         ObjectClass.InstanceVariables.Set(Names.ClassNameKey, NewString("Object"u8));
