@@ -1,10 +1,6 @@
 namespace MRubyCS;
 
-public class RData : RObject
+public class RData(object data) : RObject(MRubyVType.CSharpData, null!)
 {
-    public object? Data { get; set; }
-
-    internal RData() : base(MRubyVType.CSharpData, null!)
-    {
-    }
+    public object Data => data;
 }

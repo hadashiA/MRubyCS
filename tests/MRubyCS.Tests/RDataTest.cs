@@ -12,11 +12,7 @@ public class RDataTest
             { "fuga", 456 }
         };
 
-        var data = new RData
-        {
-            Data = userdata
-        };
-
+        var data = new RData(userdata);
         var state = MRubyState.Create();
 
         state.SetConst(state.Intern("MYDATA"u8), state.ObjectClass, data);
