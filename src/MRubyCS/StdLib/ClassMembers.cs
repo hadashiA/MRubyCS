@@ -19,7 +19,7 @@ static class ClassMembers
 
         superClass.SetFlag(MRubyObjectFlags.ClassInherited);
 
-        var newClassValue = MRubyValue.From(newClass);
+        var newClassValue = new MRubyValue(newClass);
         if (state.TryFindMethod(newClass.Class, Names.Initialize, out var method, out _) &&
             method == Initialize)
         {
@@ -29,7 +29,7 @@ static class ClassMembers
         {
             var block = state.GetBlockArgument();
             state.Send(newClassValue, Names.Initialize,
-                [MRubyValue.From(superClass)],
+                [superClass],
                 default,
                 block);
         }
@@ -70,7 +70,7 @@ static class ClassMembers
             MRubyVType.Fiber => new RFiber(state, c),
             _ => throw new InvalidOperationException()
         };
-        var instanceValue = MRubyValue.From(instance);
+        var instanceValue = new MRubyValue(instance);
         state.Send(instanceValue, Names.Initialize, args, kargs, block);
         return instanceValue;
     });
@@ -83,7 +83,7 @@ static class ClassMembers
         {
             c = c.AsOrigin().Super;
         }
-        return c == null ? MRubyValue.Nil : MRubyValue.From(c);
+        return c == null ? MRubyValue.Nil : new MRubyValue(c);
     });
 
 

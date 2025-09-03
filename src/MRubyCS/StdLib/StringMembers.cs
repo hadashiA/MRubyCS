@@ -39,7 +39,7 @@ static class StringMembers
     public static MRubyMethod Intern = new((state, self) =>
     {
         var str = self.As<RString>();
-        return MRubyValue.From(state.Intern(str));
+        return state.Intern(str);
     });
 
     [MRubyMethod]
@@ -65,7 +65,7 @@ static class StringMembers
         }
         ArrayPool<byte>.Shared.Return(output);
 
-        return MRubyValue.From(state.NewString(output.AsSpan(0, written)));
+        return state.NewString(output.AsSpan(0, written));
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -74,7 +74,7 @@ static class StringMembers
         var other = state.GetArgumentAt(0);
         if (other.Object is RString otherString)
         {
-            return MRubyValue.From(self.As<RString>().Equals(otherString));
+            return self.As<RString>().Equals(otherString);
         }
         return MRubyValue.False;
     });
@@ -86,7 +86,7 @@ static class StringMembers
         if (other.Object is RString otherStr)
         {
             var str = self.As<RString>();
-            return MRubyValue.From(str.CompareTo(otherStr));
+            return str.CompareTo(otherStr);
         }
         return MRubyValue.Nil;
     });
@@ -139,8 +139,7 @@ static class StringMembers
     public static MRubyMethod ToSym = new((state, self) =>
     {
         var str = self.As<RString>();
-        var sym = state.Intern(str.AsSpan());
-        return MRubyValue.From(sym);
+        return state.Intern(str.AsSpan());
     });
 
     [MRubyMethod]
@@ -148,7 +147,7 @@ static class StringMembers
     {
         if (state.ClassOf(self) == state.StringClass)
         {
-            return MRubyValue.From(self.As<RString>().Dup());
+            return self.As<RString>().Dup();
         }
         return self;
     });
@@ -202,7 +201,7 @@ static class StringMembers
                 ? AsciiCode.TryParseBinary(buffer, out value)
                 : Utf8Parser.TryParse(buffer, out value, out var consumed, format);
         }
-        return result ? MRubyValue.From(value) : MRubyValue.From(0);
+        return result ? value : 0;
     });
 
     [MRubyMethod]
@@ -225,21 +224,21 @@ static class StringMembers
             AsciiCode.PrepareNumber(source, buffer);
             result = Utf8Parser.TryParse(buffer, out value, out var consumed, 'g');
         }
-        return result ? MRubyValue.From(value) : MRubyValue.From(0f);
+
+        return result ? value : 0;
     });
 
     [MRubyMethod]
     public static MRubyMethod Size = new((state, self) =>
     {
         var str = self.As<RString>();
-        var charCount = Encoding.UTF8.GetCharCount(str.AsSpan());
-        return MRubyValue.From(charCount);
+        return Encoding.UTF8.GetCharCount(str.AsSpan());
     });
 
     [MRubyMethod]
     public static MRubyMethod Empty = new((state, self) =>
     {
-        return MRubyValue.From(self.As<RString>().Length <= 0);
+        return self.As<RString>().Length <= 0;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -248,7 +247,7 @@ static class StringMembers
         var str = self.As<RString>();
         var v = state.GetArgumentAsStringAt(0);
         var i = str.AsSpan().IndexOf(v.AsSpan());
-        return MRubyValue.From(i >= 0);
+        return i >= 0;
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
@@ -273,7 +272,7 @@ static class StringMembers
                 break;
         }
         var result = str.IndexOf(target, pos);
-        return result < 0 ? MRubyValue.Nil : MRubyValue.From(result);
+        return result < 0 ? MRubyValue.Nil : new MRubyValue(result);
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
@@ -298,7 +297,7 @@ static class StringMembers
                 break;
         }
         var result = str.LstIndexOf(target, pos);
-        return result < 0 ? MRubyValue.Nil : MRubyValue.From(result);
+        return result < 0 ? MRubyValue.Nil : result;
     });
 
     public static MRubyMethod Times = new((state, self) =>
@@ -321,7 +320,7 @@ static class StringMembers
             src.CopyTo(dst);
             dst = dst[src.Length..];
         }
-        return MRubyValue.From(result);
+        return result;
     });
 
     public static MRubyMethod Capitalize = new((state, self) =>
@@ -329,7 +328,7 @@ static class StringMembers
         var str = self.As<RString>();
         var result = str.Dup();
         result.Capitalize();
-        return MRubyValue.From(result);
+        return result;
     });
 
     public static MRubyMethod CapitalizeBang = new((state, self) =>
@@ -356,7 +355,7 @@ static class StringMembers
         {
             result.Chomp();
         }
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod(OptionalArguments = 1)]
@@ -384,7 +383,7 @@ static class StringMembers
         var str = self.As<RString>();
         var result = str.Dup();
         result.Chop();
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
@@ -402,7 +401,7 @@ static class StringMembers
         var str = self.As<RString>();
         var result = str.Dup();
         result.Downcase();
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
@@ -420,7 +419,7 @@ static class StringMembers
         var str = self.As<RString>();
         var result = str.Dup();
         result.Upcase();
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
@@ -437,7 +436,7 @@ static class StringMembers
     {
         var str = self.As<RString>();
         var buf = Utf8Helper.Reverse(str.AsSpan());
-        return MRubyValue.From(state.NewStringOwned(buf));
+        return state.NewStringOwned(buf);
     });
 
     [MRubyMethod]
@@ -512,14 +511,14 @@ static class StringMembers
                 break;
             }
         }
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod]
     public static MRubyMethod ByteCount = new((state, self) =>
     {
         var str = self.As<RString>();
-        return MRubyValue.From(str.AsSpan().Length);
+        return str.AsSpan().Length;
     });
 
     [MRubyMethod]
@@ -529,9 +528,9 @@ static class StringMembers
         var array = state.NewArray(span.Length);
         foreach (var x in span)
         {
-            array.Push(MRubyValue.From(x));
+            array.Push(x);
         }
-        return MRubyValue.From(array);
+        return array;
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
@@ -547,7 +546,7 @@ static class StringMembers
         }
 
         var index = str.ByteIndexOf(target, pos);
-        return index < 0 ? MRubyValue.Nil : MRubyValue.From(index);
+        return index < 0 ? MRubyValue.Nil : index;
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
@@ -593,7 +592,7 @@ static class StringMembers
         {
             return MRubyValue.Nil;
         }
-        return result != null ? MRubyValue.From(result) : MRubyValue.Nil;
+        return result != null ? result : MRubyValue.Nil;
     });
 
     [MRubyMethod(RequiredArguments = 2, OptionalArguments = 3)]
@@ -733,7 +732,7 @@ static class StringMembers
             return MRubyValue.Nil;
         }
 
-        return MRubyValue.From(str.AsSpan()[pos]);
+        return str.AsSpan()[pos];
     });
 
     [MRubyMethod(RequiredArguments = 2)]
@@ -805,6 +804,6 @@ static class StringMembers
                     break;
             }
         }
-        return MRubyValue.From(result);
+        return result;
     });
 }
