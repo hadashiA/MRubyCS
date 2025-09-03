@@ -29,7 +29,7 @@ public enum MRubyVType
     Range,
     Exception,
     Env,
-    CData,
+    CSharpData,
     Fiber,
     Struct,
     Istruct,
