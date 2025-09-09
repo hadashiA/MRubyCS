@@ -123,6 +123,8 @@ public class MRubyCompiler : IDisposable
         return Compile(bytes);
     }
 
+    public Irep Compile(string sourceCode) => Compile(Encoding.UTF8.GetBytes(sourceCode));
+
     public unsafe Irep Compile(ReadOnlySpan<byte> utf8Source)
     {
         var mrbPtr = compileStateHandle.DangerousGetPtr();
