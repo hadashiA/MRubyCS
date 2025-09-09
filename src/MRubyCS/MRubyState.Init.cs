@@ -33,6 +33,7 @@ public partial class MRubyState
         state.InitEnumerable();
         state.InitFiber();
         state.InitMrbLib();
+        state.InitObjectExt();
         return state;
     }
 
@@ -606,6 +607,18 @@ public partial class MRubyState
         DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
 
         DefineClass(Intern("FiberError"u8), StandardErrorClass);
+    }
+
+    void InitObjectExt()
+    {
+        DefineMethod(NilClass, Names.ToA, (state, _) => state.NewArray(0));
+        DefineMethod(NilClass, Names.ToI, (state, _) => 0);
+        DefineMethod(NilClass, Names.ToF, (state, _) => 0.0);
+        DefineMethod(NilClass, Intern("to_h"u8), (state, self) => state.NewHash(0));
+
+        DefineMethod(KernelModule, Intern("itself"u8), MRubyMethod.Identity);
+
+        // TODO: impl `instance_exec`
     }
 
     bool TrySetClassPathLink(RClass outer, RClass c, Symbol name)

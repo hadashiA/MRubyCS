@@ -274,6 +274,15 @@ public class VmTest
     }
 
     [Test]
+    public void NilExt()
+    {
+        var result = Exec("""
+                          nil.to_i
+                          """u8);
+        Assert.That(result, Is.EqualTo(new MRubyValue(0)));
+    }
+
+    [Test]
     public void GetInstances()
     {
         Exec("""

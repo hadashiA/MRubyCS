@@ -45,13 +45,6 @@ module Kernel
     end
     self
   end
-end
-
-##
-# Kernel
-#
-# ISO 15.3.1
-module Kernel
 
   # 15.3.1.2.1 Kernel.`
   # provided by Kernel#`
@@ -90,6 +83,38 @@ module Kernel
 
   def to_enum(*a)
     raise NotImplementedError.new("fiber required for enumerator")
+  end
+
+  # call-seq:
+  #   obj.yield_self {|_obj|...} -> an_object
+  #   obj.then {|_obj|...}       -> an_object
+  #
+  # Yields *obj* and returns the result.
+  #
+  #   'my string'.yield_self {|s|s.upcase} #=> "MY STRING"
+  #
+  def yield_self(&block)
+    return to_enum :yield_self unless block
+    block.call(self)
+  end
+  alias then yield_self
+
+  ##
+  #  call-seq:
+  #     obj.tap{|x|...}    -> obj
+  #
+  #  Yields `x` to the block, and then returns `x`.
+  #  The primary purpose of this method is to "tap into" a method chain,
+  #  in order to perform operations on intermediate results within the chain.
+  #
+  #  (1..10)                .tap {|x| puts "original: #{x.inspect}"}
+  #    .to_a                .tap {|x| puts "array: #{x.inspect}"}
+  #    .select {|x| x%2==0} .tap {|x| puts "evens: #{x.inspect}"}
+  #    .map { |x| x*x }     .tap {|x| puts "squares: #{x.inspect}"}
+  #
+  def tap
+    yield self
+    self
   end
 end
 
