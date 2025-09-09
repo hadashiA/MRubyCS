@@ -9,24 +9,31 @@ namespace MRubyCS;
 
 public partial class MRubyState
 {
+    public static MRubyState Create(Action<MRubyState> configure)
+    {
+        var state = Create();
+        configure(state);
+        return state;
+    }
+
     public static MRubyState Create()
     {
-        var mrb = new MRubyState();
-        mrb.InitClass();
-        mrb.InitObject();
-        mrb.InitKernel();
-        mrb.InitSymbol();
-        mrb.InitString();
-        mrb.InitProc();
-        mrb.InitException();
-        mrb.InitNumeric();
-        mrb.InitArray();
-        mrb.InitHash();
-        mrb.InitRange();
-        mrb.InitEnumerable();
-        mrb.InitFiber();
-        mrb.InitMrbLib();
-        return mrb;
+        var state = new MRubyState();
+        state.InitClass();
+        state.InitObject();
+        state.InitKernel();
+        state.InitSymbol();
+        state.InitString();
+        state.InitProc();
+        state.InitException();
+        state.InitNumeric();
+        state.InitArray();
+        state.InitHash();
+        state.InitRange();
+        state.InitEnumerable();
+        state.InitFiber();
+        state.InitMrbLib();
+        return state;
     }
 
     public RClass BasicObjectClass { get; private set; } = default!;

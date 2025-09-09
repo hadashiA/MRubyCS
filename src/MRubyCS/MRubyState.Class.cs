@@ -13,8 +13,11 @@ public sealed class ClassDefineOptions(MRubyState state, RClass c)
     public MRubyValue GetClassVariable(Symbol name) => state.GetClassVariable(c, name);
     public void SetClassVariable(Symbol name, MRubyValue value) => state.SetClassVariable(c, name, value);
 
-    public RClass DefineClass(Symbol name, RClass super) => state.DefineClass(name, c);
-    public RClass DefineClass(Symbol name, Action<ClassDefineOptions> configure) => state.DefineClass(name, c, configure);
+    public RClass DefineClass(Symbol name, RClass super) =>
+        state.DefineClass(name, super, outer: c);
+
+    public RClass DefineClass(Symbol name, Action<ClassDefineOptions> configure) =>
+        state.DefineClass(name, state.ObjectClass, outer: c, configure);
 
     public RClass DefineModule(Symbol name) => state.DefineModule(name, c);
     public RClass DefineModule(Symbol name, Action<ClassDefineOptions> configure) => state.DefineModule(name, c, configure);
