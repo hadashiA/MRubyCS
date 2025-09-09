@@ -343,6 +343,7 @@ public partial class MRubyState
 
         DefineClass(Intern("ScriptError"u8), ExceptionClass);
         DefineClass(Intern("SyntaxError"u8), ExceptionClass);
+        DefineClass(Intern("StopIteration"u8), ExceptionClass);
     }
 
     void InitNumeric()
