@@ -6,18 +6,18 @@ public sealed class ClassDefineOptions(MRubyState state, RClass c)
 {
     public void DefineConst(Symbol name, MRubyValue value) => state.DefineConst(c, name, value);
 
-    public void GetInstanceVariable(Symbol name) => state.GetInstanceVariable(c, name);
+    public MRubyValue GetInstanceVariable(Symbol name) => state.GetInstanceVariable(c, name);
     public void SetInstanceVariable(Symbol name, MRubyValue value) => state.SetInstanceVariable(c, name, value);
-    public void RemoveInstanceVariable(Symbol name) => state.RemoveInstanceVariable(c, name);
+    public MRubyValue RemoveInstanceVariable(Symbol name) => state.RemoveInstanceVariable(c, name);
 
-    public void GetClassVariable(Symbol name) => state.GetClassVariable(c, name);
+    public MRubyValue GetClassVariable(Symbol name) => state.GetClassVariable(c, name);
     public void SetClassVariable(Symbol name, MRubyValue value) => state.SetClassVariable(c, name, value);
 
-    public void DefineClass(Symbol name, RClass super) => state.DefineClass(name, c);
-    public void DefineClass(Symbol name, Action<ClassDefineOptions> configure) => state.DefineClass(name, c, configure);
+    public RClass DefineClass(Symbol name, RClass super) => state.DefineClass(name, c);
+    public RClass DefineClass(Symbol name, Action<ClassDefineOptions> configure) => state.DefineClass(name, c, configure);
 
-    public void DefineModule(Symbol name) => state.DefineModule(name, c);
-    public void DefineModule(Symbol name, Action<ClassDefineOptions> configure) => state.DefineModule(name, c, configure);
+    public RClass DefineModule(Symbol name) => state.DefineModule(name, c);
+    public RClass DefineModule(Symbol name, Action<ClassDefineOptions> configure) => state.DefineModule(name, c, configure);
 
     public void DefineMethod(Symbol name, MRubyMethod method) => state.DefineMethod(c, name, method);
     public void DefineMethod(Symbol name, MRubyFunc func) => state.DefineMethod(c, name, func);
@@ -244,7 +244,7 @@ partial class MRubyState
 
     public void UndefClassMethod(RClass c, Symbol methodId)
     {
-        UndefMethod(SingletonClassOf(MRubyValue.From(c))!, methodId);
+        UndefMethod(SingletonClassOf(c)!, methodId);
     }
 
     public bool RespondTo(MRubyValue self, Symbol methodId)
@@ -305,7 +305,7 @@ partial class MRubyState
             };
             PrepareSingletonClass(singletonClass);
         }
-        singletonClass.InstanceVariables.Set(Names.AttachedKey, MRubyValue.From(obj));
+        singletonClass.InstanceVariables.Set(Names.AttachedKey, obj);
         if (obj.IsFrozen)
         {
             singletonClass.MarkAsFrozen();
@@ -318,7 +318,7 @@ partial class MRubyState
         superClass.SetFlag(MRubyObjectFlags.ClassInherited);
         if (RespondTo(superClass.Class, Names.Inherited))
         {
-            Send(MRubyValue.From(superClass), Names.Inherited, MRubyValue.From(newClass));
+            Send(superClass, Names.Inherited, newClass);
         }
     }
 
@@ -331,7 +331,7 @@ partial class MRubyState
             var receiver = c.InstanceVariables.Get(Names.AttachedKey);
             if (RespondTo(receiver, added))
             {
-                Send(receiver, added, MRubyValue.From(methodId));
+                Send(receiver, added, methodId);
             }
         }
         else
@@ -339,8 +339,7 @@ partial class MRubyState
             added = Names.MethodAdded;
             if (RespondTo(c.Class, added))
             {
-                var receiver = MRubyValue.From(c);
-                Send(receiver, added, MRubyValue.From(methodId));
+                Send(c, added, methodId);
             }
 
         }
@@ -394,7 +393,7 @@ partial class MRubyState
 
         if (obj.VType is not (MRubyVType.Class or MRubyVType.SClass))
         {
-            clone.Class = CloneSingletonClass(MRubyValue.From(klass));
+            clone.Class = CloneSingletonClass(klass);
         }
 
         // copy instance variables

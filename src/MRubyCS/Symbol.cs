@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace MRubyCS;
 
@@ -37,6 +38,7 @@ class SymbolTable
 
     [ThreadStatic]
     static byte[]? nameBuffer;
+
     static uint lastId = (uint)Names.Count;
 
     static byte[] ThreadStaticBuffer() => nameBuffer ??= new byte[32];
@@ -69,6 +71,18 @@ class SymbolTable
         names.Add(symbol, utf8);
         symbols.Add(Key.Create(utf8), symbol);
         return symbol;
+    }
+
+    public Symbol Intern(string s)
+    {
+        var buf = ThreadStaticBuffer();
+        var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length);
+        if (buf.Length < maxLength)
+        {
+            buf = nameBuffer = new byte[maxLength];
+        }
+        var bytesWritten = Encoding.UTF8.GetBytes(s, 0, s.Length, buf, 0);
+        return Intern(buf.AsSpan(0, bytesWritten));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

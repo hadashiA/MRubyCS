@@ -88,8 +88,10 @@ public partial class MRubyState
         return symbolTable.Intern(format.GetBufferWriter().WrittenSpan);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Symbol InternLiteral(byte[] name) => symbolTable.InternLiteral(name);
+    public Symbol Intern(string name)
+    {
+        return symbolTable.Intern(name);
+    }
 
     void InitClass()
     {
