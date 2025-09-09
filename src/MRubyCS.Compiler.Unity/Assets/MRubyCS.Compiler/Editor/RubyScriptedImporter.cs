@@ -26,7 +26,7 @@ namespace MRubyCS.Compiler.Editor
             }
 
             using var bin = compiler.CompileToBytecode(source);
-            var mrbAsset = new TextAsset(bin.GetNativeData())
+            var mrbAsset = new TextAsset(bin.AsSpan())
             {
                 name = Path.GetFileNameWithoutExtension(ctx.assetPath) + ".mrb"
             };
