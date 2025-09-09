@@ -244,7 +244,7 @@ partial class MRubyState
 
     public void UndefClassMethod(RClass c, Symbol methodId)
     {
-        UndefMethod(SingletonClassOf(MRubyValue.From(c))!, methodId);
+        UndefMethod(SingletonClassOf(c)!, methodId);
     }
 
     public bool RespondTo(MRubyValue self, Symbol methodId)
@@ -305,7 +305,7 @@ partial class MRubyState
             };
             PrepareSingletonClass(singletonClass);
         }
-        singletonClass.InstanceVariables.Set(Names.AttachedKey, MRubyValue.From(obj));
+        singletonClass.InstanceVariables.Set(Names.AttachedKey, obj);
         if (obj.IsFrozen)
         {
             singletonClass.MarkAsFrozen();
@@ -318,7 +318,7 @@ partial class MRubyState
         superClass.SetFlag(MRubyObjectFlags.ClassInherited);
         if (RespondTo(superClass.Class, Names.Inherited))
         {
-            Send(MRubyValue.From(superClass), Names.Inherited, MRubyValue.From(newClass));
+            Send(superClass, Names.Inherited, newClass);
         }
     }
 
@@ -331,7 +331,7 @@ partial class MRubyState
             var receiver = c.InstanceVariables.Get(Names.AttachedKey);
             if (RespondTo(receiver, added))
             {
-                Send(receiver, added, MRubyValue.From(methodId));
+                Send(receiver, added, methodId);
             }
         }
         else
@@ -339,8 +339,7 @@ partial class MRubyState
             added = Names.MethodAdded;
             if (RespondTo(c.Class, added))
             {
-                var receiver = MRubyValue.From(c);
-                Send(receiver, added, MRubyValue.From(methodId));
+                Send(c, added, methodId);
             }
 
         }
@@ -394,7 +393,7 @@ partial class MRubyState
 
         if (obj.VType is not (MRubyVType.Class or MRubyVType.SClass))
         {
-            clone.Class = CloneSingletonClass(MRubyValue.From(klass));
+            clone.Class = CloneSingletonClass(klass);
         }
 
         // copy instance variables
