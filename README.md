@@ -44,6 +44,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
 - [Symbol/String](#symbolstring)
 - [Fiber (Coroutine)](#fiber-coroutine)
+- [RData](#rdata)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
     - [MRubyCS.Compiler](#mrubycscompiler)
 
@@ -83,13 +84,13 @@ $ mrbc -o fibonaci.mrbc fibonacci.rb
 using MRubyCS;
 
 // initialize state
-var state = MRubyState.Create();
+var mrb = MRubyState.Create();
 
 // Read the .mrb byte-code.
 var bytecode = File.ReadAllBytes("fibonacci.mrb");
 
 // execute bytecoe
-var result = state.LoadBytecode(bytecode);
+var result = mrb.LoadBytecode(bytecode);
 
 result.IsInteger    //=> true
 result.IntegerValue //=> 55
@@ -99,7 +100,7 @@ You can also parse bytecode in advance.
 The result of parsing bytecode is called `Irep` in mruby terminology.
 
 ``` cs
-Irep irep = state.ParseBytecode(bytecode);
+Irep irep = mrb.ParseBytecode(bytecode);
 
 state.Execute(irep);
 ```
@@ -158,40 +159,40 @@ MRubyValue intValue = new(100);
 
 ``` cs
 // Create MRubyState object.
-var state = MRubyState.Create();
+var mrb = MRubyState.Create();
 
 // Define class
-var classA = state.DefineClass(Intern("A"u8), c =>
+var classA = mrb.DefineClass(Intern("A"), c =>
 {
     // Method definition that takes a required argument.
-    c.DefineMethod(Intern("plus100"u8), (state, self) =>
+    c.DefineMethod(Intern("plus100"), (_, self) =>
     {
-        var arg0 = state.GetArgumentAsIntegerAt(0); // get first argument (index:0)
+        var arg0 = mrb.GetArgumentAsIntegerAt(0); // get first argument (index:0)
         return arg0 + 100;
     });
 
     // Method definition that takes a block argument.
-    c.DefineMethod(Intern("method2"), (state, self) =>
+    c.DefineMethod(mrb.Intern("method2"), (_, self) =>
     {
-        var arg0 = state.GetArgumentAt(0);
-        var blockArg = state.GetBlockArgument();
+        var arg0 = mrb.GetArgumentAt(0);
+        var blockArg = mrb.GetBlockArgument();
         if (!blockArg.IsNil)
         {
             // Execute `Proc#call`
-            state.Send(blockArg, state.Intern("call"u8), arg0);
+            mrb.Send(blockArg, mrb.Intern("call"), arg0);
         }
     });
 
     // Other complex arguments...
-    c.DefineMethod(Intern("method3"), (state, self) =>
+    c.DefineMethod(mrb.Intern("method3"), (_, self) =>
     {
-        var keywordArg = state.GetKeywordArgument(state.Intern("foo"))
+        var keywordArg = mrb.GetKeywordArgument(mrb.Intern("foo"))
         Console.WriteLine($"foo: {keywordArg}");
 
         // argument type checking
-        state.EnsureValueType(keywordArg, MrubyVType.Integer);
+        mrb.EnsureValueType(keywordArg, MrubyVType.Integer);
 
-        var restArguments = state.GetRestArgumentsAfter(0);
+        var restArguments = mrb.GetRestArgumentsAfter(0);
         for (var i = 0; i < restArguments.Length; i++)
         {
             Console.WriteLine($"rest arg({i}: {restArguments[i]})");
@@ -199,21 +200,20 @@ var classA = state.DefineClass(Intern("A"u8), c =>
     });
 
     // class method
-    c.DefineClassMethod(Intern("classmethod1"), (state, self) =>
+    c.DefineClassMethod(Intern("classmethod1"), (_, self) =>
     {
-        return state.NewString($"hoge fuga");
+        return mrb.NewString($"hoge fuga");
     });
-
 });
 
 // Monkey patching
-classA.DefineMethod(Intern("additional_method1"u8), (state, self) => { /* ... */ });
+classA.DefineMethod(mrb.Intern("additional_method1"u8), (_, self) => { /* ... */ });
 
 // Define module
-var moduleA = state.DefineModule(Intern("ModuleA");)
-state.DefineMethod(moduleA, Intern("additional_method2"u8), (state, self) => new MRubyValue(123));
+var moduleA = mrb.DefineModule(mrb.Intern("ModuleA");)
+mrb.DefineMethod(moduleA, mrb.Intern("additional_method2"), (_, self) => new MRubyValue(123));
 
-state.IncludeModule(classA, moduleA);
+mrb.IncludeModule(classA, moduleA);
 ```
 
 As a result of the definition, the following Ruby code can now be executed.
@@ -254,21 +254,20 @@ end
 
 ```cs
 // get class instance
-var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
+var classA = mrb.GetConst(mrb.Intern("A"), mrb.ObjectClass);
 
 // call class method
-mrb.Send(classA, mrb.Intern("foo="u8), new MRubyValue(123));
-mrb.Send(classA, mrb.Intern("foo"u8)); //=> 123
+mrb.Send(classA, mrb.Intern("foo="), new MRubyValue(123));
+mrb.Send(classA, mrb.Intern("foo")); //=> 123
 
 // get instance variable from top
-var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
-mrb.Send(instanceB, mrb.Intern("bar="u8), new MRubyValue(456));
-mrb.Send(instanceB, mrb.Intern("bar"u8)); //=> 456
+var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"));
+mrb.Send(instanceB, mrb.Intern("bar="), 456);
+mrb.Send(instanceB, mrb.Intern("bar")); //=> 456
 
 // find class instance on the hierarchy
-var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"u8), mrb.NewString("M::C"u8));
+var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"), mrb.NewString($"M::C"));
 ```
-
 
 ## Symbol/String
 
@@ -278,11 +277,11 @@ Therefore, to generate a ruby string from C#, [Utf8StringInterpolation](https://
 
 ```cs
 // Create string literal.
-var str1 = state.NewString("HOGE HOGE"u8);
+var str1 = state.NewString("HOGE HOGE"u8); // use u8 literal (C# 11 or newer)
+var str2 = state.NewString($"FOO BAR"); // use string interpolation
 
-// Create string via interpolation
 var x = 123;
-var str2 = state.NewString($"x={x}");
+var str3 = state.NewString($"x={x}");
 
 // wrap MRubyValue..
 var strValue = new MRubyValue(str1);
@@ -296,7 +295,7 @@ To create a symbol from C#, use `Intern`.
 
 ```cs
 // symbol literal
-var sym1 = state.Intern("sym"u8);
+var sym1 = state.Intern("sym");
 
 // create symbol from string interporation
 var x = 123;
@@ -307,8 +306,11 @@ state.NameOf(sym1); //=> "sym"u8
 state.NameOf(sym2); //=> "sym123"u8
 
 // create symbol from string
-var sym2 = state.ToSymbol(state.NewString("hoge"u8));
+var sym2 = state.ToSymbol(state.NewString($"hoge"));
 ```
+
+> [!NOTE]
+> Both `Intern(“str”)` and `Intern(“str”u8)` are valid, but the u8 literal is faster. We recommend using the u8 literal whenever possible.
 
 ## Fiber (Coroutine)
 
@@ -321,8 +323,8 @@ using MRubyCS;
 using MRubyCS.Compiler;
 
 // Create state and compiler
-var state = MRubyState.Create();
-var compiler = MRubyCompiler.Create(state);
+var mrb = MRubyState.Create();
+var compiler = MRubyCompiler.Create(mrb);
 
 // Define a fiber that yields values
 var code = """
@@ -334,7 +336,8 @@ var code = """
     """u8;
 
 // Load the Ruby code as a Fiber
-var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+var irep = compiler.Compile(code);
+var fiber = mrb.Execute(irep).As<RFiber>();
 
 // Resume the fiber with initial value
 var result1 = fiber.Resume(new MRubyValue(10));  // => 20
@@ -349,18 +352,24 @@ fiber.IsAlive  // => false
 
 If you want to execute arbitrary code snippets as fibers, do the following.
 
-```
-var fiber = compiler.LoadSourceCodeAsFiber("""
+```cs
+var code = """
   x = 1
   y = 2
   Fiber.yield (x + y) * 100
   Fiber.yield (x + y) * 200
 """u8);
 
+var fiber = compiler.LoadSourceCodeAsFiber(code);
+
+// `LoadSourceCodeAsFiber` is same as:
+// var irep = compiler.Compile(code);
+// var proc = mrb.CreateProc(irep);
+// var fiber = mrb.CreateFiber(proc);
+
 fiber.Resume(); //=> 300
 fiber.Resume(); //=> 600
 ```
-
 
 ### Async/Await Integration
 
@@ -376,7 +385,8 @@ var code = """
     end
     """u8;
 
-var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+var irep = compiler.Compile(code);
+var fiber = mrb.Execute(irep).As<RFiber>();
 
 // Start async wait before resuming
 var terminateTask = fiber.WaitForTerminateAsync();
@@ -402,7 +412,8 @@ var code = """
     end
     """u8;
 
-var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+var irep = compiler.Compile(code);
+var fiber = mrb.Execute(irep).As<RFiber>();
 
 // Process each yielded value asynchronously
 await foreach (var value in fiber.AsAsyncEnumerable())
@@ -414,7 +425,8 @@ await foreach (var value in fiber.AsAsyncEnumerable())
 MRubyCS supports multiple consumers waiting for fiber results simultaneously:
 
 ```cs
-var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+var irep = compiler.Compile(code);
+var fiber = mrb.Execute(irep).As<RFiber>();
 
 // Create multiple consumers
 var consumer1 = Task.Run(async () =>
@@ -460,7 +472,8 @@ var code = """
     end
     """u8;
 
-var fiber = compiler.LoadSourceCode(code).As<RFiber>();
+var irep = compiler.Compile(code);
+var fiber = mrb.Execute(irep).As<RFiber>();
 
 // First resume succeeds
 var result1 = fiber.Resume(new MRubyValue(10));  // => 10
@@ -487,6 +500,20 @@ catch (MRubyRaiseException ex)
     Console.WriteLine($"Async exception: {ex.Message}");
 }
 ```
+
+### yield/resume from C# 
+
+It is possible to resume/yield from a method defined in C#.
+
+TODO: example
+
+## RData
+
+You can stuff any C# object into an MRubyValue.
+
+This is useful when calling C# functionality from Ruby methods defined in C#.
+
+TODO: example
 
 ## Compiling Ruby source code
 
@@ -539,7 +566,7 @@ dotnet add package MRubyCS.Compiler
 Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
 
 ```
-https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.15.2
+https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.15.4
 ```
 
 If you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
@@ -552,11 +579,11 @@ This subasset is a TextAsset. To specify it in the inspector.
 
 Or, to extract in C#, do the following:
 ``` cs
-var state = MRubyState.Create();
+var mrb = MRubyState.Create();
 
 var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
        .First(x => x.name.EndsWith(".mrb"));
-state.LoadBytecode(bytecodeAsset.GetData<byte>().AsSpan());
+mrb.LoadBytecode(bytecodeAsset.GetData<byte>().AsSpan());
 ```
 
 For manual compilation, refer to the following.
@@ -574,8 +601,8 @@ end
 f 100
 """u8;
 
-var state = MRubyState.Create();
-var compiler = MRubyCompiler.Create(state);
+var mrb = MRubyState.Create();
+var compiler = MRubyCompiler.Create(mrb);
 
 // Compile to irep (internal executable representation)
 var irep = compiler.Compile(source);
@@ -585,7 +612,7 @@ var result = state.Execute(irep); // => 100
 using var bin = compiler.CompileToBytecode(source);
 File.WriteAllBytes("compiled.mrb", bin.AsSpan());
 
-state.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
+mrb.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
 
 // Compile and evaluate:
 result = compiler.LoadSourceCode("f(100)"u8);
