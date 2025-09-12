@@ -242,7 +242,7 @@ public sealed class RFiber : RObject
                 if (vmexec)
                 {
                     if (context.CallDepth > 0) context.PopCallStack(); // pop dummy callinfo
-                    context.Stack[context.CallStack[1].StackPointer] = result;
+                    context.Stack[context.CallStack[context.CallDepth + 1].StackPointer] = result;
                 }
             }
 
@@ -254,6 +254,7 @@ public sealed class RFiber : RObject
                 ref var callInfo = ref context.CurrentCallInfo;
                 result = state.Execute(callInfo.Proc!.Irep, callInfo.ProgramCounter, args.Length + 1);
                 state.SwitchToContext(currentContext);
+                currentContext.State = FiberState.Running;
                 // restore values as they may have changed in Fiber.yield
                 currentContext.CurrentCallInfo.CallerType = currentCallerType;
             }
