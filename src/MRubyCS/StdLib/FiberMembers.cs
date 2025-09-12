@@ -41,16 +41,13 @@ static class FiberMembers
     });
 
     [MRubyMethod]
-    public static MRubyMethod Current = new((state, self) =>
-    {
-        return MRubyValue.From(state.CurrentFiber);
-    });
+    public static MRubyMethod Current = new((state, _) => state.CurrentFiber);
 
     [MRubyMethod]
     public static MRubyMethod Alive = new((state, self) =>
     {
         var fiber = self.As<RFiber>();
-        return MRubyValue.From(fiber.IsAlive);
+        return fiber.IsAlive;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -60,7 +57,7 @@ static class FiberMembers
         var arg = state.GetArgumentAt(0);
         if (arg.Object is RFiber other)
         {
-            return MRubyValue.From(fiber == other);
+            return fiber == other;
         }
         return MRubyValue.False;
     });
@@ -87,6 +84,6 @@ static class FiberMembers
         result.Concat("("u8);
         result.Concat(s);
         result.Concat(")"u8);
-        return MRubyValue.From(result);
+        return result;
     });
 }

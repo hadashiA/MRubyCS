@@ -13,6 +13,28 @@ public class FiberTest
     {
         mrb = MRubyState.Create();
         compiler = MRubyCompiler.Create(mrb);
+
+        mrb.DefineMethod(mrb.FiberClass, mrb.Intern("yield_by_csharp"u8), (state, self) =>
+        {
+            var fiber = self.As<RFiber>();
+            fiber.Yield();
+            return state.AsFiberResult([state.GetArgumentAt(0)]);
+        });
+
+        mrb.DefineMethod(mrb.FiberClass, mrb.Intern("yield_by_csharp_send"u8), (state, self) =>
+        {
+            return state.Send(self, state.Intern("yield"u8), state.GetArgumentAt(0));
+        });
+
+        mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self) =>
+        {
+            return self.As<RFiber>().Resume();
+        });
+
+        mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp_send"u8), (state, self) =>
+        {
+            return state.Send(self,  state.Intern("resume"u8));
+        });
     }
 
     [TearDown]
@@ -33,15 +55,15 @@ public class FiberTest
 
         var fiber = compiler.LoadSourceCode(code).As<RFiber>();
 
-        var result1 = fiber.Resume(MRubyValue.From(100));
+        var result1 = fiber.Resume(100);
         Assert.That(result1.IntegerValue, Is.EqualTo(200));
         Assert.That(fiber.IsAlive, Is.True);
 
-        var result2 = fiber.Resume(MRubyValue.From(100));
+        var result2 = fiber.Resume(100);
         Assert.That(result2.IntegerValue, Is.EqualTo(300));
         Assert.That(fiber.IsAlive, Is.True);
 
-        var result3 = fiber.Resume(MRubyValue.From(100));
+        var result3 = fiber.Resume(100);
         Assert.That(result3.IsNil, Is.True);
         Assert.That(fiber.IsAlive, Is.False);
     }
@@ -154,17 +176,17 @@ public class FiberTest
 
         await Task.Delay(100);
 
-        var result1 = fiber.Resume(MRubyValue.From(10));
+        var result1 = fiber.Resume(10);
         Assert.That(result1.IntegerValue, Is.EqualTo(20));
 
         await Task.Delay(100);
 
-        var result2 = fiber.Resume(MRubyValue.From(10));
+        var result2 = fiber.Resume(10);
         Assert.That(result2.IntegerValue, Is.EqualTo(30));
 
         await Task.Delay(100);
 
-        var result3 = fiber.Resume(MRubyValue.From(10));
+        var result3 = fiber.Resume(10);
         Assert.That(result3.IntegerValue, Is.EqualTo(40));
 
         await Task.WhenAll(consumer1, consumer2);
@@ -189,7 +211,22 @@ public class FiberTest
                    """u8;
 
         var fiber = compiler.LoadSourceCodeAsFiber(code);
-        Assert.That(fiber.Resume(), Is.EqualTo(MRubyValue.From(1)));
-        Assert.That(fiber.Resume(), Is.EqualTo(MRubyValue.From(2)));
+        Assert.That(fiber.Resume(), Is.EqualTo(new MRubyValue(1)));
+        Assert.That(fiber.Resume(), Is.EqualTo(new MRubyValue(2)));
+    }
+
+    [Test]
+    public void EscapeBlockFromCSharp()
+    {
+         var code = """
+                fiber = Fiber.new do
+                  3.times do
+                    Fiber.yield
+                  end
+                end
+                fiber.resume_by_csharp
+                fiber.resume_by_csharp
+                """u8;
+        compiler.LoadSourceCode(code);
     }
 }
