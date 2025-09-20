@@ -103,17 +103,17 @@ public partial class MRubyState
 
     void InitClass()
     {
-        BasicObjectClass = new RClass(ClassClass)
+        BasicObjectClass = new RClass(default!)
         {
             InstanceVType = MRubyVType.Undef,
             Super = default!, // sentinel. only for BasicObject
         };
-        ObjectClass = new RClass(ClassClass)
+        ObjectClass = new RClass(default!)
         {
             InstanceVType = MRubyVType.Object,
             Super = BasicObjectClass,
         };
-        ModuleClass = new RClass(ClassClass)
+        ModuleClass = new RClass(default!)
         {
             InstanceVType = MRubyVType.Module,
             Super = ObjectClass,
@@ -380,8 +380,8 @@ public partial class MRubyState
         DefineMethod(IntegerClass, Names.Hash, IntegerMembers.Hash);
         DefineMethod(IntegerClass, Intern("divmod"u8), IntegerMembers.DivMod);
         DefineMethod(IntegerClass, Intern("to_f"u8), IntegerMembers.ToF);
-        DefineMethod(IntegerClass, Names.ToI, IntegerMembers.ToI);
-        DefineMethod(IntegerClass, Intern("to_int"u8), IntegerMembers.ToI);
+        DefineMethod(IntegerClass, Names.ToI, MRubyMethod.Identity);
+        DefineMethod(IntegerClass, Intern("to_int"u8), MRubyMethod.Identity);
         DefineMethod(IntegerClass, Names.OpAnd, IntegerMembers.OpAnd);
         DefineMethod(IntegerClass, Names.OpOr, IntegerMembers.OpOr);
         DefineMethod(IntegerClass, Names.OpXor, IntegerMembers.OpXor);

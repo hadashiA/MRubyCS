@@ -403,7 +403,7 @@ partial class MRubyState
                     case OpCode.LoadI32:
                         Markers.LoadI32();
                         var bss = OperandBSS.Read(sequence, ref callInfo.ProgramCounter);
-                        registers[bss.A] = (bss.B << 16) + bss.C;
+                        registers[bss.A] = NewIntegerFlex((bss.B << 16) + bss.C);
                         goto Next;
                     case OpCode.LoadSym:
                         Markers.LoadSym();
@@ -553,7 +553,7 @@ partial class MRubyState
                         switch (registerA.Object)
                         {
                             case RArray array when valueB.IsInteger:
-                                registerA = array[(int)valueB.bits];
+                                registerA = array[(int)valueB.IntegerValue];
                                 goto Next;
                             case RHash hash:
                                 registerA = hash.GetValueOrDefault(valueB, this);
@@ -728,7 +728,7 @@ partial class MRubyState
                                     }
                                     case BreakTag.Jump:
                                     {
-                                        var newProgramCounter = (int)breakObject.Value.bits;
+                                        var newProgramCounter = (int)breakObject.Value.IntegerValue;
                                         if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
                                         {
                                             // avoiding a jump from a catch handler into the same handler
@@ -1371,8 +1371,8 @@ partial class MRubyState
                         var rhsVType = rhs.VType;
                         if (lhsVType == MRubyVType.Integer && rhsVType == MRubyVType.Integer)
                         {
-                            var leftInt = registerA.bits;
-                            var rightInt = rhs.bits;
+                            var leftInt = registerA.IntegerValue;
+                            var rightInt = rhs.IntegerValue;
                             try
                             {
                                 registerA = new MRubyValue(opcode switch
@@ -1405,8 +1405,8 @@ partial class MRubyState
                         if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
                             rhsVType is MRubyVType.Integer or MRubyVType.Float)
                         {
-                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.bits : registerA.FloatValue;
-                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.bits : rhs.FloatValue;
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : rhs.FloatValue;
 
                             registerA = new MRubyValue(opcode switch
                             {
@@ -1442,7 +1442,7 @@ partial class MRubyState
                             case MRubyVType.Integer:
                                 try
                                 {
-                                    registerA = checked(registerA.bits + rV);
+                                    registerA = checked(registerA.IntegerValue + rV);
                                 }
                                 catch (OverflowException)
                                 {
@@ -1510,8 +1510,8 @@ partial class MRubyState
                         if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
                             rhsVType is MRubyVType.Integer or MRubyVType.Float)
                         {
-                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.bits : (long)registerA.FloatValue;
-                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.bits : (long)rhs.FloatValue;
+                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : (long)registerA.FloatValue;
+                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : (long)rhs.FloatValue;
                             {
                                 registerA = new MRubyValue(opcode switch
                                 {

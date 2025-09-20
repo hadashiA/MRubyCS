@@ -236,7 +236,7 @@ public class RiteParser(MRubyState state)
                     {
                         var x = BinaryPrimitives.ReadInt32BigEndian(bin);
                         bin = bin[sizeof(int)..];
-                        poolingValues[i] = MRubyValue.From(x);
+                        poolingValues[i] = x;
                         break;
                     }
                     // Int64
@@ -244,7 +244,7 @@ public class RiteParser(MRubyState state)
                     {
                         var x = BinaryPrimitives.ReadInt64BigEndian(bin);
                         bin = bin[sizeof(long)..];
-                        poolingValues[i] = MRubyValue.From(x);
+                        poolingValues[i] = state.NewIntegerFlex(x);
                         break;
                     }
                     // BigInt

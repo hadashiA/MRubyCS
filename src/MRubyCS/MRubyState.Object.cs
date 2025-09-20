@@ -34,6 +34,19 @@ partial class MRubyState
         ValueEqualityComparer,
         HashClass);
 
+    /// <summary>
+    /// Returns an integer MRubyValue. The only difference from new MRubyValue() is that the full 64-bit digit count is available.
+    /// </summary>
+    public MRubyValue NewIntegerFlex(long value)
+    {
+        if (value <= MRubyValue.FixnumMax &&
+            value >= MRubyValue.FixnumMin)
+        {
+            return new MRubyValue(value);
+        }
+        return new RInteger(value, IntegerClass);
+    }
+
     public Symbol ToSymbol(MRubyValue value)
     {
         if (value.IsSymbol) return value.SymbolValue;

@@ -16,7 +16,7 @@ static class FloatMembers
 
         if (f > 0.0) return (long)Math.Floor(f);
         if (f < 0.0) return (long)Math.Ceiling(f);
-        return (long)f;
+        return state.NewIntegerFlex((long)f);
     });
 
     public static MRubyMethod ToS = new((state, self) =>
