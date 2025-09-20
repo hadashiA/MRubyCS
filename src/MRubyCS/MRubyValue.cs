@@ -1,7 +1,6 @@
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using MRubyCS.Internals;
 using Utf8StringInterpolation;
 
 namespace MRubyCS;
@@ -49,92 +48,156 @@ public static class MRubyVTypeExtensions
     public static bool IsClass(this MRubyVType vType) => vType is MRubyVType.Class or MRubyVType.SClass or MRubyVType.Module;
 }
 
+// mrb_value representation:
+//
+// 64-bit word with inline float:
+//   nil   : ...0000 0000 (all bits are 0)
+//   false : ...0000 0100 (mrb_fixnum(v) != 0)
+//   true  : ...0000 1100
+//   undef : ...0001 0100
+//   symbol: ...0001 1100 (use only upper 32-bit as symbol value with MRB_64BIT)
+//   fixnum: ...IIII III1
+//   float : ...FFFF FF10 (51 bit significands; require MRB_64BIT)
+//   object: ...PPPP P000
 public readonly struct MRubyValue : IEquatable<MRubyValue>
 {
     public static MRubyValue Nil => default;
-    public static MRubyValue False => new(MRubyVType.False, 0);
-    public static MRubyValue True => new(MRubyVType.True, 0);
-    public static MRubyValue Undef => new(MRubyVType.Undef, 0);
+    public static MRubyValue False => new(FalseBits, null);
+    public static MRubyValue True => new(TrueBits, null);
+    public static MRubyValue Undef => new(UndefBits, null);
 
-    // New constructors
+    const long FalseBits = 0b0100;
+    const long TrueBits = 0b1100;
+    const long UndefBits = 0b0001_0100;
+    const int SymbolShift = 32;
+
+    internal static readonly long FixnumMin = long.MinValue >> 1;
+    internal static readonly long FixnumMax = long.MaxValue >> 1;
+
+    readonly long bits;
+
+    public RObject? Object
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
+
+    public MRubyVType VType => this switch
+    {
+        { Object: { } obj } => obj.VType,
+        { IsTrue: true } => MRubyVType.True,
+        { IsFalse: true } => MRubyVType.False,
+        { IsUndef: true } => MRubyVType.Undef,
+        { IsSymbol: true } => MRubyVType.Symbol,
+        { IsFixnum: true } => MRubyVType.Integer,
+        { IsFloat: true } => MRubyVType.Float,
+        _ => default
+    };
+
+    public bool IsNil => bits == 0 && Object == null;
+    public bool IsFalse => bits == FalseBits;
+    public bool IsTrue => bits == TrueBits;
+    public bool IsUndef => bits == UndefBits;
+    public bool IsSymbol => (bits & 0b1_1111) == 0b1_1100;
+    public bool IsFixnum => (bits & 1) == 1;
+    public bool IsObject => Object != null;
+    public bool IsImmediate => Object == null;
+
+    public bool Truthy => !IsFalse && !IsNil;
+    public bool Falsy => IsNil || IsFalse;
+
+    public bool IsInteger => IsFixnum ||
+                             Object?.VType == MRubyVType.Integer;
+    public bool IsFloat => (bits & 0b11) == 0b10;
+    internal bool IsNumeric => IsFixnum || IsFloat || Object?.VType == MRubyVType.Integer;
+    public bool IsBreak => Object?.VType == MRubyVType.Break;
+    public bool IsProc => Object?.VType == MRubyVType.Proc;
+    public bool IsClass => Object?.VType is MRubyVType.Class or MRubyVType.SClass or  MRubyVType.Module;
+    public bool IsNamespace => Object?.VType is MRubyVType.Class or MRubyVType.Module;
+
+    public bool BoolValue => (bits & ~False.bits) != 0;
+    public long FixnumValue => bits >> 1;
+    public Symbol SymbolValue => new((uint)(bits >> SymbolShift));
+
+    public long IntegerValue
+    {
+        get
+        {
+            if (Object?.VType == MRubyVType.Integer)
+            {
+                return As<RInteger>().Value;
+            }
+            return bits >> 1;
+        }
+    }
+
+    public double FloatValue
+    {
+        get
+        {
+            var fbits = bits & ~0b11;
+            return Unsafe.As<long, double>(ref fbits);
+        }
+    }
+
+    public unsafe long ObjectId
+    {
+        get
+        {
+            if (Object is { } obj)
+            {
+                return (nint)Unsafe.AsPointer(ref obj);
+            }
+            if (IsInteger) return IntegerValue;
+            if (IsFloat) return (long)FloatValue;
+            return bits;
+        }
+    }
+
     public MRubyValue(bool value)
     {
-        union = new TypeObjectUnion(value ? MRubyVType.True : MRubyVType.False);
+        bits = value ? TrueBits : FalseBits;
     }
 
-    public MRubyValue(RString obj)
+    public MRubyValue(int value)
     {
-        union = new TypeObjectUnion(obj);
-        bits = (long)MRubyVType.String;
-    }
-
-    public MRubyValue(RArray obj) : this(obj, MRubyVType.Array)
-    {
-        union = new TypeObjectUnion(obj);
-        bits = (long)MRubyVType.Array;
-    }
-
-    public MRubyValue(RHash obj) : this(obj, MRubyVType.Hash)
-    {
-        union = new TypeObjectUnion(obj);
-        bits = (long)MRubyVType.Hash;
-
-    }
-
-    public MRubyValue(RRange obj) : this(obj, MRubyVType.Range)
-    {
-        union = new TypeObjectUnion(obj);
-        bits = (long)MRubyVType.Range;
-
-    }
-
-    public MRubyValue(RProc obj)
-    {
-        union = new TypeObjectUnion(obj);
-        bits = (long)MRubyVType.Proc;
-    }
-
-    public MRubyValue(RBreak obj)
-    {
-        union = new TypeObjectUnion(obj);
-        bits = (long)MRubyVType.Break;
-
+        bits = (value << 1) | 1;
     }
 
     public MRubyValue(long value)
     {
-        union = new TypeObjectUnion(MRubyVType.Integer);
-        bits = value;
+        if (value > FixnumMax || value < FixnumMin)
+        {
+            ThrowIntegerOveflow(value);
+        }
+        bits = (value << 1) | 1;
     }
 
     public MRubyValue(Symbol symbol)
     {
-        union = new TypeObjectUnion(MRubyVType.Symbol);
-        bits = symbol.Value;
-
+        bits = ((long)symbol.Value << SymbolShift) | 0b1_1100;
     }
 
     public MRubyValue(double value)
     {
-        union = new TypeObjectUnion(MRubyVType.Float);
-        bits =
-#if NET6_0_OR_GREATER
-            Unsafe.BitCast<double, long>(value);
-#else
-            Unsafe.As<double, long>(ref value);
-#endif
+        var n = Unsafe.As<double, long>(ref value);
+        bits = (n & ~0b11) | 0b10;
+    }
+
+    public MRubyValue(RObject value)
+    {
+        Object = value;
+    }
+
+    MRubyValue(long bits, RObject? obj)
+    {
+        this.bits = bits;
+        Object = obj;
     }
 
     // Implicit conversion operators
     public static implicit operator MRubyValue(bool value) => new(value);
     public static implicit operator MRubyValue(RObject obj) => new(obj);
-    public static implicit operator MRubyValue(RString obj) => new(obj);
-    public static implicit operator MRubyValue(RArray obj) => new(obj);
-    public static implicit operator MRubyValue(RHash obj) => new(obj);
-    public static implicit operator MRubyValue(RRange obj) => new(obj);
-    public static implicit operator MRubyValue(RClass obj) => new(obj);
-    public static implicit operator MRubyValue(RProc obj) => new(obj);
-    public static implicit operator MRubyValue(RBreak obj) => new(obj);
     public static implicit operator MRubyValue(long value) => new(value);
     public static implicit operator MRubyValue(int value) => new(value);
     public static implicit operator MRubyValue(Symbol symbol) => new(symbol);
@@ -148,27 +211,6 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     [Obsolete("Use constructor instead: new MRubyValue(obj)")]
     public static MRubyValue From(RObject obj) => new(obj);
 
-    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
-    public static MRubyValue From(RString obj) => new(obj);
-
-    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
-    public static MRubyValue From(RArray obj) => new(obj);
-
-    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
-    public static MRubyValue From(RHash obj) => new(obj);
-
-    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
-    public static MRubyValue From(RRange obj) => new(obj);
-
-    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
-    public static MRubyValue From(RClass obj) => new(obj);
-
-    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
-    public static MRubyValue From(RProc obj) => new(obj);
-
-    [Obsolete("Use constructor instead: new MRubyValue(obj)")]
-    public static MRubyValue From(RBreak obj) => new(obj);
-
     [Obsolete("Use constructor instead: new MRubyValue(value)")]
     public static MRubyValue From(long value) => new(value);
 
@@ -178,88 +220,10 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     [Obsolete("Use constructor instead: new MRubyValue(value)")]
     public static MRubyValue From(double value) => new(value);
 
-    public RObject? Object
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => union.Object;
-    }
-
-    public MRubyVType VType => union.IsType ? union.TypeValue : Object!.VType;
-    internal MRubyVType ImmediateVType => union.TypeValue;
-    internal nint RawUnionValue => union.RawValue;
-    public bool IsNil => union.RawValue == 0;
-    public bool IsFalse => union.RawValue ==(long) MRubyVType.False;
-    public bool IsTrue => union.RawValue == (long)MRubyVType.True;
-    public bool IsUndef => union.RawValue == (long)MRubyVType.Undef;
-    public bool IsSymbol => union.RawValue == (long)MRubyVType.Symbol;
-    public bool IsObject => union.IsObject;
-    public bool IsImmediate => union.IsType;
-
     public T As<T>() where T : RObject => (T)Object!;
-    internal T UnsafeAs<T>() where T : RObject => Unsafe.As<T>(union.RawObject);
-
-    public bool Truthy => 1 < union.RawValue;
-    public bool Falsy => (nuint)union.RawValue <= 1;
-
-    public bool IsInteger => union.RawValue == (long)MRubyVType.Integer;
-    public bool IsFloat => union.RawValue ==(long) MRubyVType.Float;
-    internal bool IsNumeric => (long)union.RawValue is (long)MRubyVType.Integer or (long)MRubyVType.Float;
-    public bool IsBreak => union.IsObject && bits == (long)MRubyVType.Break;
-    public bool IsProc => union.IsObject && bits == (long)MRubyVType.Proc;
-    public bool IsClass => union.IsObject && bits is (long)MRubyVType.Class or (long)MRubyVType.SClass or  (long)MRubyVType.Module;
-    public bool IsNamespace => union.IsObject && bits is (long)MRubyVType.Class or (long)MRubyVType.Module;
-
-    public bool BoolValue => (long)union.RawValue is (long)MRubyVType.True or (long)MRubyVType.False;
-
-    public Symbol SymbolValue => new((uint)bits);
-
-    public long IntegerValue => bits;
-
-    public double FloatValue =>
-        // Assume that MRB_USE_FLOAT32 is not defined
-        // Assume that MRB_WORDBOX_NO_FLOAT_TRUNCATE is not defined
-        Unsafe.As<long, double>(ref Unsafe.AsRef(in bits));
-
-    public long ObjectId
-    {
-        get
-        {
-            if (union.IsObject) return union.RawObject.GetHashCode();
-            switch (union.TypeValue)
-            {
-                case MRubyVType.Free:
-                case MRubyVType.Undef: return 0;
-                case MRubyVType.Symbol:
-                case MRubyVType.Integer: return bits;
-                case MRubyVType.Float: return FloatValue.GetHashCode();
-            }
-            return union.RawValue;
-        }
-    }
-
-    readonly TypeObjectUnion union;
-    internal readonly long bits;
-
-    public MRubyValue(RObject obj)
-    {
-        union = new(obj);
-        bits = (long)obj.VType;
-    }
-
-    MRubyValue(RObject obj, MRubyVType type)
-    {
-        union = new(obj);
-        bits = (long)type;
-    }
-
-    MRubyValue(MRubyVType type, long bits)
-    {
-        union = new(type);
-        this.bits = bits;
-    }
 
     public bool Equals(MRubyValue other) => bits == other.bits &&
-                                            union == other.union;
+                                            Object == other.Object;
 
     public static bool operator ==(MRubyValue a, MRubyValue b) => a.Equals(b);
     public static bool operator !=(MRubyValue a, MRubyValue b) => !a.Equals(b);
@@ -271,9 +235,7 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
 
     public override int GetHashCode()
     {
-        return Object == null
-            ? bits.GetHashCode()
-            : Object?.GetHashCode() ?? 0;
+        return Object?.GetHashCode() ?? bits.GetHashCode();
     }
 
     public override string ToString()
@@ -281,22 +243,21 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
         if (Object is { } x) return x.ToString()!;
         if (IsNil) return "nil";
 
-        switch (VType)
+        return VType switch
         {
-            case MRubyVType.False:
-                return "false";
-            case MRubyVType.True:
-                return "true";
-            case MRubyVType.Undef:
-                return "undef";
-            case MRubyVType.Symbol:
-                return SymbolValue.ToString();
-            case MRubyVType.Float:
-                return FloatValue.ToString(CultureInfo.InvariantCulture);
-            case MRubyVType.Integer:
-                return IntegerValue.ToString(CultureInfo.InvariantCulture);
-            default:
-                return VType.ToString();
-        }
+            MRubyVType.False => "false",
+            MRubyVType.True => "true",
+            MRubyVType.Undef => "undef",
+            MRubyVType.Symbol => SymbolValue.ToString()!,
+            MRubyVType.Float => FloatValue.ToString(CultureInfo.InvariantCulture),
+            MRubyVType.Integer => IntegerValue.ToString(CultureInfo.InvariantCulture),
+            _ => VType.ToString()
+        };
+    }
+
+    static void ThrowIntegerOveflow(long intValue)
+    {
+        throw new ArgumentException(
+            $"MRubyValue integers only support values up to 63 bits ({FixnumMax}). To hold larger values, use MRubyState.NewInteger.");
     }
 }

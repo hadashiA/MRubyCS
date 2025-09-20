@@ -464,8 +464,7 @@ static class IntegerMembers
         return FloatMembers.DivMod.Invoke(state, self);
     });
 
-    public static MRubyMethod ToF = new((state, self) => (double)(state.ToInteger(self)));
-    public static MRubyMethod ToI = new((state, self) => self);
+    public static MRubyMethod ToF = new((state, self) => (double)state.ToInteger(self));
 
     internal static bool NumShift(MRubyState state, long val, long width, out long num)
     {

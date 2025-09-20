@@ -8,12 +8,12 @@ static class BasicObjectMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpEq = new((state, self) =>
     {
-        return MRubyValue.From(self == state.GetArgumentAt(0));
+        return self == state.GetArgumentAt(0);
     });
 
     public static MRubyMethod Id = new((state, self) =>
     {
-        return MRubyValue.From(self.ObjectId);
+        return self.ObjectId;
     });
 
     public static MRubyMethod Send = new((state, self) =>
@@ -31,7 +31,7 @@ static class BasicObjectMembers
     {
         var methodId = state.GetArgumentAsSymbolAt(0);
         var args = state.GetRestArgumentsAfter(1);
-        var array = MRubyValue.From(state.NewArray(args));
+        var array = state.NewArray(args);
         state.RaiseMethodMissing(methodId, self, array);
         return MRubyValue.Nil;
     });
