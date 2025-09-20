@@ -30,6 +30,7 @@ public class MRubyCompiler : IDisposable
     readonly MRubyState mruby;
     readonly MrbStateHandle compileStateHandle;
     readonly MRubyCompileOptions options;
+    bool disposed;
 
     MRubyCompiler(
         MRubyState mruby,
@@ -39,6 +40,11 @@ public class MRubyCompiler : IDisposable
         this.mruby = mruby;
         this.compileStateHandle = compileStateHandle;
         this.options = options ?? MRubyCompileOptions.Default;
+    }
+
+    ~MRubyCompiler()
+    {
+        Dispose(false);
     }
 
     public MRubyValue LoadSourceCodeFile(string path)
@@ -165,9 +171,15 @@ public class MRubyCompiler : IDisposable
         }
     }
 
+    public void Dispose(bool disposing)
+    {
+        if (disposed) return;
+        compileStateHandle.Dispose();
+    }
+
     public void Dispose()
     {
-        compileStateHandle.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
     }
 }
