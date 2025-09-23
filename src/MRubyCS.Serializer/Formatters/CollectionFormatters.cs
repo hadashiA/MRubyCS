@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Xml;
 
 namespace MRubyCS.Serializer;
 
@@ -19,7 +18,7 @@ public class ArrayFormatter<T> : IMRubyValueFormatter<T[]?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public T[]? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -31,7 +30,7 @@ public class ArrayFormatter<T> : IMRubyValueFormatter<T[]?>
         var result = new T[array.Length];
         for (var i = 0; i < result.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             var element = options.Resolver.GetFormatterWithVerify<T>()
                 .Deserialize(elementValue, state, options);
             result[i] = element;
@@ -56,9 +55,9 @@ public sealed class TwoDimensionalArrayFormatter<T> : IMRubyValueFormatter<T[,]?
                     .Serialize(value[i, j], state, options);
                 innerArray.Push(elementValue);
             }
-            outerArray.Push(MRubyValue.From(innerArray));
+            outerArray.Push(innerArray);
         }
-        return MRubyValue.From(outerArray);
+        return outerArray;
     }
 
     public T[,]? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -71,19 +70,19 @@ public sealed class TwoDimensionalArrayFormatter<T> : IMRubyValueFormatter<T[,]?
 
         if (outerArray.Length == 0) return new T[0, 0];
 
-        var firstInner = state.Send(value, Names.OpAref, [MRubyValue.From(0)]);
+        var firstInner = state.Send(value, Names.OpAref, [0]);
         MRubySerializationException.ThrowIfTypeMismatch(firstInner, MRubyVType.Array, "T[,] inner", state);
         var innerLength = firstInner.As<RArray>().Length;
 
         var result = new T[outerArray.Length, innerLength];
         for (var i = 0; i < outerArray.Length; i++)
         {
-            var innerValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var innerValue = state.Send(value, Names.OpAref, [i]);
             MRubySerializationException.ThrowIfTypeMismatch(innerValue, MRubyVType.Array, "T[,] inner", state);
 
             for (var j = 0; j < innerLength; j++)
             {
-                var elementValue = state.Send(innerValue, Names.OpAref, [MRubyValue.From(j)]);
+                var elementValue = state.Send(innerValue, Names.OpAref, [j]);
                 result[i, j] = formatter.Deserialize(elementValue, state, options);
             }
         }
@@ -110,11 +109,11 @@ public sealed class ThreeDimensionalArrayFormatter<T> : IMRubyValueFormatter<T[,
                         .Serialize(value[i, j, k], state, options);
                     innerArray.Push(elementValue);
                 }
-                middleArray.Push(MRubyValue.From(innerArray));
+                middleArray.Push(innerArray);
             }
-            outerArray.Push(MRubyValue.From(middleArray));
+            outerArray.Push(middleArray);
         }
-        return MRubyValue.From(outerArray);
+        return outerArray;
     }
 
     public T[,,]? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -127,26 +126,26 @@ public sealed class ThreeDimensionalArrayFormatter<T> : IMRubyValueFormatter<T[,
 
         if (outerArray.Length == 0) return new T[0, 0, 0];
 
-        var firstMiddle = state.Send(value, Names.OpAref, [MRubyValue.From(0)]);
+        var firstMiddle = state.Send(value, Names.OpAref, [0]);
         MRubySerializationException.ThrowIfTypeMismatch(firstMiddle, MRubyVType.Array, "T[,,] middle", state);
         var middleArray = firstMiddle.As<RArray>();
 
         if (middleArray.Length == 0) return new T[outerArray.Length, 0, 0];
 
-        var firstInner = state.Send(firstMiddle, Names.OpAref, [MRubyValue.From(0)]);
+        var firstInner = state.Send(firstMiddle, Names.OpAref, [0]);
         MRubySerializationException.ThrowIfTypeMismatch(firstInner, MRubyVType.Array, "T[,,] inner", state);
         var innerLength = firstInner.As<RArray>().Length;
 
         var result = new T[outerArray.Length, middleArray.Length, innerLength];
         for (var i = 0; i < outerArray.Length; i++)
         {
-            var middleValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var middleValue = state.Send(value, Names.OpAref, [i]);
             for (var j = 0; j < middleArray.Length; j++)
             {
-                var innerValue = state.Send(middleValue, Names.OpAref, [MRubyValue.From(j)]);
+                var innerValue = state.Send(middleValue, Names.OpAref, [j]);
                 for (var k = 0; k < innerLength; k++)
                 {
-                    var elementValue = state.Send(innerValue, Names.OpAref, [MRubyValue.From(k)]);
+                    var elementValue = state.Send(innerValue, Names.OpAref, [k]);
                     result[i, j, k] = formatter.Deserialize(elementValue, state, options);
                 }
             }
@@ -177,13 +176,13 @@ public sealed class FourDimensionalArrayFormatter<T> : IMRubyValueFormatter<T[,,
                             .Serialize(value[i, j, k, l], state, options);
                         array3.Push(elementValue);
                     }
-                    array2.Push(MRubyValue.From(array3));
+                    array2.Push(array3);
                 }
-                array1.Push(MRubyValue.From(array2));
+                array1.Push(array2);
             }
-            outerArray.Push(MRubyValue.From(array1));
+            outerArray.Push(array1);
         }
-        return MRubyValue.From(outerArray);
+        return outerArray;
     }
 
     public T[,,,]? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -196,35 +195,35 @@ public sealed class FourDimensionalArrayFormatter<T> : IMRubyValueFormatter<T[,,
 
         if (outerArray.Length == 0) return new T[0, 0, 0, 0];
 
-        var first1 = state.Send(value, Names.OpAref, [MRubyValue.From(0)]);
+        var first1 = state.Send(value, Names.OpAref, [0]);
         MRubySerializationException.ThrowIfTypeMismatch(first1, MRubyVType.Array, "T[,,,] dim1", state);
         var array1 = first1.As<RArray>();
 
         if (array1.Length == 0) return new T[outerArray.Length, 0, 0, 0];
 
-        var first2 = state.Send(first1, Names.OpAref, [MRubyValue.From(0)]);
+        var first2 = state.Send(first1, Names.OpAref, [0]);
         MRubySerializationException.ThrowIfTypeMismatch(first2, MRubyVType.Array, "T[,,,] dim2", state);
         var array2 = first2.As<RArray>();
 
         if (array2.Length == 0) return new T[outerArray.Length, array1.Length, 0, 0];
 
-        var first3 = state.Send(first2, Names.OpAref, [MRubyValue.From(0)]);
+        var first3 = state.Send(first2, Names.OpAref, [0]);
         MRubySerializationException.ThrowIfTypeMismatch(first3, MRubyVType.Array, "T[,,,] dim3", state);
         var array3 = first3.As<RArray>();
 
         var result = new T[outerArray.Length, array1.Length, array2.Length, array3.Length];
         for (var i = 0; i < outerArray.Length; i++)
         {
-            var value1 = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var value1 = state.Send(value, Names.OpAref, [i]);
             for (var j = 0; j < array1.Length; j++)
             {
-                var value2 = state.Send(value1, Names.OpAref, [MRubyValue.From(j)]);
+                var value2 = state.Send(value1, Names.OpAref, [j]);
                 for (var k = 0; k < array2.Length; k++)
                 {
-                    var value3 = state.Send(value2, Names.OpAref, [MRubyValue.From(k)]);
+                    var value3 = state.Send(value2, Names.OpAref, [k]);
                     for (var l = 0; l < array3.Length; l++)
                     {
-                        var elementValue = state.Send(value3, Names.OpAref, [MRubyValue.From(l)]);
+                        var elementValue = state.Send(value3, Names.OpAref, [l]);
                         result[i, j, k, l] = formatter.Deserialize(elementValue, state, options);
                     }
                 }
@@ -247,7 +246,7 @@ public class ListFormatter<T> : IMRubyValueFormatter<List<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public List<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -259,7 +258,7 @@ public class ListFormatter<T> : IMRubyValueFormatter<List<T>?>
         var result = new List<T>(array.Length);
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             var element = options.Resolver.GetFormatterWithVerify<T>()
                 .Deserialize(elementValue, state, options);
             result.Add(element);
@@ -467,7 +466,7 @@ class InterfaceEnumerableFormatter<T> : IMRubyValueFormatter<IEnumerable<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public IEnumerable<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -480,7 +479,7 @@ class InterfaceEnumerableFormatter<T> : IMRubyValueFormatter<IEnumerable<T>?>
         var result = new T[array.Length];
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result[i] = formatter.Deserialize(elementValue, state, options);
         }
         return result;
@@ -500,7 +499,7 @@ class InterfaceCollectionFormatter<T> : IMRubyValueFormatter<ICollection<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public ICollection<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -513,7 +512,7 @@ class InterfaceCollectionFormatter<T> : IMRubyValueFormatter<ICollection<T>?>
         var result = new T[array.Length];
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result[i] = formatter.Deserialize(elementValue, state, options);
         }
         return result;
@@ -534,7 +533,7 @@ class InterfaceReadOnlyCollectionFormatter<T> : IMRubyValueFormatter<IReadOnlyCo
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public IReadOnlyCollection<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -547,7 +546,7 @@ class InterfaceReadOnlyCollectionFormatter<T> : IMRubyValueFormatter<IReadOnlyCo
         var result = new T[array.Length];
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result[i] = formatter.Deserialize(elementValue, state, options);
         }
         return result;
@@ -567,7 +566,7 @@ class InterfaceListFormatter<T> : IMRubyValueFormatter<IList<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public IList<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -580,7 +579,7 @@ class InterfaceListFormatter<T> : IMRubyValueFormatter<IList<T>?>
         var result = new T[array.Length];
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result[i] = formatter.Deserialize(elementValue, state, options);
         }
         return result;
@@ -600,7 +599,7 @@ class InterfaceReadOnlyListFormatter<T> : IMRubyValueFormatter<IReadOnlyList<T>?
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public IReadOnlyList<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -613,7 +612,7 @@ class InterfaceReadOnlyListFormatter<T> : IMRubyValueFormatter<IReadOnlyList<T>?
         var result = new T[array.Length];
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result[i] = formatter.Deserialize(elementValue, state, options);
         }
         return result;
@@ -633,7 +632,7 @@ class HashSetFormatter<T> : IMRubyValueFormatter<HashSet<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public HashSet<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -646,7 +645,7 @@ class HashSetFormatter<T> : IMRubyValueFormatter<HashSet<T>?>
         var result = new HashSet<T>();
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.Add(formatter.Deserialize(elementValue, state, options));
         }
         return result;
@@ -666,7 +665,7 @@ class SortedSetFormatter<T> : IMRubyValueFormatter<SortedSet<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public SortedSet<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -679,7 +678,7 @@ class SortedSetFormatter<T> : IMRubyValueFormatter<SortedSet<T>?>
         var result = new SortedSet<T>();
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.Add(formatter.Deserialize(elementValue, state, options));
         }
         return result;
@@ -699,7 +698,7 @@ class InterfaceSetFormatter<T> : IMRubyValueFormatter<ISet<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public ISet<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -712,7 +711,7 @@ class InterfaceSetFormatter<T> : IMRubyValueFormatter<ISet<T>?>
         var result = new HashSet<T>();
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.Add(formatter.Deserialize(elementValue, state, options));
         }
         return result;
@@ -735,7 +734,7 @@ class StackFormatter<T> : IMRubyValueFormatter<Stack<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public Stack<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -749,7 +748,7 @@ class StackFormatter<T> : IMRubyValueFormatter<Stack<T>?>
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             list.Add(formatter.Deserialize(elementValue, state, options));
         }
 
@@ -775,7 +774,7 @@ class QueueFormatter<T> : IMRubyValueFormatter<Queue<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public Queue<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -789,7 +788,7 @@ class QueueFormatter<T> : IMRubyValueFormatter<Queue<T>?>
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             queue.Enqueue(formatter.Deserialize(elementValue, state, options));
         }
         return queue;
@@ -809,7 +808,7 @@ class LinkedListFormatter<T> : IMRubyValueFormatter<LinkedList<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public LinkedList<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -823,7 +822,7 @@ class LinkedListFormatter<T> : IMRubyValueFormatter<LinkedList<T>?>
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.AddLast(formatter.Deserialize(elementValue, state, options));
         }
         return result;
@@ -843,7 +842,7 @@ class CollectionFormatter<T> : IMRubyValueFormatter<Collection<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public Collection<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -857,7 +856,7 @@ class CollectionFormatter<T> : IMRubyValueFormatter<Collection<T>?>
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.Add(formatter.Deserialize(elementValue, state, options));
         }
         return result;
@@ -877,7 +876,7 @@ class ReadOnlyCollectionFormatter<T> : IMRubyValueFormatter<ReadOnlyCollection<T
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public ReadOnlyCollection<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -891,7 +890,7 @@ class ReadOnlyCollectionFormatter<T> : IMRubyValueFormatter<ReadOnlyCollection<T
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             list.Add(formatter.Deserialize(elementValue, state, options));
         }
         return new ReadOnlyCollection<T>(list);
@@ -911,7 +910,7 @@ class BlockingCollectionFormatter<T> : IMRubyValueFormatter<BlockingCollection<T
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public BlockingCollection<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -925,7 +924,7 @@ class BlockingCollectionFormatter<T> : IMRubyValueFormatter<BlockingCollection<T
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.Add(formatter.Deserialize(elementValue, state, options));
         }
         return result;
@@ -945,7 +944,7 @@ class ConcurrentQueueFormatter<T> : IMRubyValueFormatter<ConcurrentQueue<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public ConcurrentQueue<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -959,7 +958,7 @@ class ConcurrentQueueFormatter<T> : IMRubyValueFormatter<ConcurrentQueue<T>?>
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.Enqueue(formatter.Deserialize(elementValue, state, options));
         }
         return result;
@@ -983,7 +982,7 @@ class ConcurrentStackFormatter<T> : IMRubyValueFormatter<ConcurrentStack<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public ConcurrentStack<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -997,7 +996,7 @@ class ConcurrentStackFormatter<T> : IMRubyValueFormatter<ConcurrentStack<T>?>
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             list.Add(formatter.Deserialize(elementValue, state, options));
         }
 
@@ -1023,7 +1022,7 @@ class ConcurrentBagFormatter<T> : IMRubyValueFormatter<ConcurrentBag<T>?>
                 .Serialize(x, state, options);
             array.Push(elementValue);
         }
-        return MRubyValue.From(array);
+        return array;
     }
 
     public ConcurrentBag<T>? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -1037,7 +1036,7 @@ class ConcurrentBagFormatter<T> : IMRubyValueFormatter<ConcurrentBag<T>?>
 
         for (var i = 0; i < array.Length; i++)
         {
-            var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+            var elementValue = state.Send(value, Names.OpAref, [i]);
             result.Add(formatter.Deserialize(elementValue, state, options));
         }
         return result;
