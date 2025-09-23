@@ -5,37 +5,61 @@ namespace MRubyCS.Serializer;
 
 public class EnumAsStringFormatter<T> : IMRubyValueFormatter<T> where T : Enum
 {
-    static readonly Dictionary<string, T> Values;
-
-    static EnumAsStringFormatter()
+    class EnumSymbolTable(
+        Dictionary<Symbol, T> values,
+        Dictionary<T, Symbol> symbols)
     {
-        var names = Enum.GetNames(typeof(T));
-        var values = (T[])Enum.GetValues(typeof(T));
+        public Dictionary<Symbol, T> Values => values;
+        public Dictionary<T, Symbol> Symbols => symbols;
 
-        Values = new Dictionary<string, T>(names.Length);
-        for (var i = 0; i < names.Length; ++i)
+        public static EnumSymbolTable Create(MRubyState mrb)
         {
-            Values.Add(names[i], values[i]);
+            var values = new Dictionary<Symbol, T>();
+            var symbols = new Dictionary<T, Symbol>();
+
+            var csharpNames = Enum.GetNames(typeof(T));
+            var csharpValues = (T[])Enum.GetValues(typeof(T));
+            for (var i = 0; i < csharpNames.Length; i++)
+            {
+                var csharpName = csharpNames[i];
+                Span<byte> nameUtf8 = stackalloc byte[csharpName.Length];
+                System.Text.Encoding.UTF8.GetBytes(csharpName, nameUtf8);
+                Span<byte> underscoreNameUtf8 = stackalloc byte[csharpName.Length * 2];
+                NamingConventionMutator.SnakeCase.TryMutate(nameUtf8, underscoreNameUtf8, out var written);
+
+                var symbol = mrb.Intern(underscoreNameUtf8[..written]);
+                values.Add(symbol, csharpValues[i]);
+                symbols.Add(csharpValues[i], symbol);
+            }
+            return new EnumSymbolTable(values, symbols);
         }
     }
 
-    // public T? Deserialize(MrbValue mrbValue,MRubyContext context, MrbValueSerializerOptions options)
-    // {
-    //     var str = mrbValue.ToString(context);
-    //     if (Values.TryGetValue(str, out var value))
-    //     {
-    //         return value;
-    //     }
-    //     throw new MRubySerializationException($"Unknown enum value: {str} in {typeof(T)}");
-    // }
+    [ThreadStatic]
+    static Dictionary<MRubyState, EnumSymbolTable>? Cache;
 
-    public MRubyValue Serialize(T value, MRubyState state, MRubyValueSerializerOptions options)
+    public MRubyValue Serialize(T value, MRubyState mrb, MRubyValueSerializerOptions options)
     {
-        throw new NotImplementedException();
+        Cache ??= new Dictionary<MRubyState, EnumSymbolTable>();
+        if (!Cache.TryGetValue(mrb, out var table))
+        {
+            Cache[mrb] = table = EnumSymbolTable.Create(mrb);
+        }
+        return table.Symbols[value];
     }
 
-    public T Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
+    public T Deserialize(MRubyValue value, MRubyState mrb, MRubyValueSerializerOptions options)
     {
-        throw new NotImplementedException();
+        Cache ??= new Dictionary<MRubyState, EnumSymbolTable>();
+        if (!Cache.TryGetValue(mrb, out var table))
+        {
+            Cache[mrb] = table = EnumSymbolTable.Create(mrb);
+        }
+        MRubySerializationException.ThrowIfTypeMismatch(value, MRubyVType.Symbol, state: mrb);
+        if (table.Values.TryGetValue(value.SymbolValue, out var result))
+        {
+            return result;
+        }
+        throw new MRubySerializationException($"Cannot convert to enum `{typeof(T)}` from symbol `{mrb.Stringify(value)}`");
     }
 }

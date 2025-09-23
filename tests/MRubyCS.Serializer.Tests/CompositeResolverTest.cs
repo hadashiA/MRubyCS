@@ -7,7 +7,7 @@ public class CompositeResolverTest
 
     class CustomAFormatter : IMRubyValueFormatter<A>
     {
-        public static CustomAFormatter Instance = new();
+        public static readonly CustomAFormatter Instance = new();
 
         public MRubyValue Serialize(A value, MRubyState state, MRubyValueSerializerOptions options)
         {
