@@ -3,6 +3,7 @@ MRuby::CrossBuild.new("linux-x64") do |conf|
   conf.toolchain :gcc
 
   conf.gem core: 'mruby-compiler'
+  conf.gem core: 'mruby-string-ext'
   # conf.gem core: 'mruby-bin-mrbc'
   conf.gem './mrbgems/mrbcs-compiler'
 
@@ -33,6 +34,7 @@ MRuby::CrossBuild.new("linux-arm64") do |conf|
   conf.toolchain :gcc
 
   conf.gem core: 'mruby-compiler'
+  conf.gem core: 'mruby-string-ext'
   # conf.gem core: 'mruby-bin-mrbc'  
   conf.gem './mrbgems/mrbcs-compiler'
   

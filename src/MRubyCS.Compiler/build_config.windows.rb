@@ -2,6 +2,7 @@ MRuby::CrossBuild.new("windows") do |conf|
   conf.toolchain
 
   conf.gem core: 'mruby-compiler'
+  conf.gem core: 'mruby-string-ext'  
   # conf.gem core: 'mruby-bin-mrbc'  
   conf.gem './mrbgems/mrbcs-compiler'
 
