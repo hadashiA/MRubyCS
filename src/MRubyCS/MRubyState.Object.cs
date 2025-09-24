@@ -20,6 +20,8 @@ partial class MRubyState
         return NewString(format.GetBufferWriter().WrittenSpan);
     }
 
+    public RString NewString(string value) => NewString($"{value}");
+
     public RString NewStringOwned(byte[] buffer) => RString.Owned(buffer, StringClass);
 
     public RString NewStringOwned(byte[] buffer, int offset, int length) => RString.Owned(buffer, offset, length, StringClass);
