@@ -11,7 +11,5 @@ public class SampleBehaviour : MonoBehaviour
         var compiler = MRubyCompiler.Create(state);
         var result = compiler.LoadSourceCode(Encoding.UTF8.GetBytes("1 + 1"));
         Debug.Log(result);
-
-        compiler.CompileToBytecode()
     }
 }
