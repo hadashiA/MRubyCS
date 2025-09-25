@@ -436,15 +436,20 @@ var compiler = MRubyCompiler.Create(mrb);
 
 // Compile to irep (internal executable representation)
 var irep = compiler.Compile(source);
-var result = state.Execute(irep); // => 100
+
+// irep can be used later..
+var result = mrb.Execute(irep); // => 100
 
 // Compile to bytecode (mruby called this format is "Rite")
 using var bin = compiler.CompileToBytecode(source);
+
+// bytecode can be save a file or any other storage
 File.WriteAllBytes("compiled.mrb", bin.AsSpan());
 
+// Can be used later from file
 mrb.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
 
-// Compile and evaluate:
+// or, you can evaluate source code directly
 result = compiler.LoadSourceCode("f(100)"u8);
 result = compiler.LoadSourceCode("f(100)");
 ```
@@ -678,7 +683,7 @@ MRubyValueSerialize.Deserialize<string>(result2, mrb); //=> "HOGE"
 ```
 
 ```cs
-// Serialize (C# -> MRubyVAlue)
+// Serialize (C# -> MRubyValue)
 
 var intArray = new int[] { 111, 222, 333 };
 
