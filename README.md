@@ -27,7 +27,6 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 ## Limitations
 
 - `private` and `protected` visibitily is not yet implemented. (mruby got support for this in 3.4)
-- This project provides only the VM implementation; it does not include a compiler. To compile mruby scripts, see [Compiling Ruby source code](#compiling-ruby-source-code) section.
 
 ### Most recent roadmap
 
@@ -66,9 +65,9 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 1. Install [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity).
 2. Install following pacakges via NugetForUnity
-  - Utf8StringInterpolation
-  - MRubyCS
-  - (Optional) MRubyCS.Serializer
+    - Utf8StringInterpolation
+    - MRubyCS
+    - (Optional) MRubyCS.Serializer
 3. (Optional) To install utilities for generating mrb bytecode, refer to the [Compiling Ruby source code](#compiling-ruby-source-code) section.
 
 ## Basic Usage
@@ -171,11 +170,11 @@ Therefore, to generate a ruby string from C#, [Utf8StringInterpolation](https://
 
 ```cs
 // Create string literal.
-var str1 = state.NewString("HOGE HOGE"u8); // use u8 literal (C# 11 or newer)
-var str2 = state.NewString($"FOO BAR"); // use string interpolation
+var str1 = mrb.NewString("HOGE HOGE"u8); // use u8 literal (C# 11 or newer)
+var str2 = mrb.NewString($"FOO BAR"); // use string interpolation
 
 var x = 123;
-var str3 = state.NewString($"x={x}");
+var str3 = mrb.NewString($"x={x}");
 
 // wrap MRubyValue..
 var strValue = new MRubyValue(str1);
@@ -189,18 +188,18 @@ To create a symbol from C#, use `Intern`.
 
 ```cs
 // symbol literal
-var sym1 = state.Intern("sym");
+var sym1 = mrb.Intern("sym");
 
 // create symbol from string interporation
 var x = 123;
-var sym2 = state.Intern($"sym{x}");
+var sym2 = mrb.Intern($"sym{x}");
 
 // symbol to utf8 bytes
-state.NameOf(sym1); //=> "sym"u8
-state.NameOf(sym2); //=> "sym123"u8
+mrb.NameOf(sym1); //=> "sym"u8
+mrb.NameOf(sym2); //=> "sym123"u8
 
 // create symbol from string
-var sym2 = state.ToSymbol(state.NewString($"hoge"));
+var sym2 = mrb.ToSymbol(mrb.NewString($"hoge"));
 ```
 
 > [!NOTE]
@@ -237,9 +236,6 @@ mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("from_csharp_data"), (_, self) =>
 ### Define ruby class/module/method by C#
 
 ``` cs
-// Create MRubyState object.
-var mrb = MRubyState.Create();
-
 // Define class
 var classA = mrb.DefineClass(Intern("A"), c =>
 {
