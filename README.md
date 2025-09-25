@@ -748,7 +748,7 @@ partial struct SerializeExample
 ```cs
 // Deserialize (MRubyValue -> C#)
 
-var value = mrb.LoadSourceCode("{ id: "aiueo", x: 1234, foo_bar: 4567, z: 8901 }");
+var value = mrb.LoadSourceCode("{ id: 'aiueo', x: 1234, foo_bar: 4567, z: 8901 }");
 
 SerializeExample deserialized = MRubyValueSerializer.Deserialize<SerializeExample>(value, mrb);
 deserialized.Id     //=> "aiueo"
