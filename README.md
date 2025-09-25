@@ -53,9 +53,9 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 ### NuGet
 
-| Package   | Description    || Latest version |
+| Package   | Description    | Latest version |
 |:----------|:---------------|----------------|
-| MRubyCS   |  Main package. A mruby vm implementation. | [![NuGet](https://img.shields.io/nuget/v/MRubyCS)](https://www.nuget.org/packages/MRubyCS)
+| MRubyCS   |  Main package. A mruby vm implementation. | [![NuGet](https://img.shields.io/nuget/v/MRubyCS)](https://www.nuget.org/packages/MRubyCS) |
 | MRubyCS.Compiler | Compile ruby source code utility. (Native binding)  | [![NuGet](https://img.shields.io/nuget/v/MRubyCS.Compiler)](https://www.nuget.org/packages/MRubyCS.Compiler)   |
 | MRubyCS.Serializer  | Converting Ruby and C# Objects Between Each Other | [![NuGet](https://img.shields.io/nuget/v/MRubyCS.Serializer)](https://www.nuget.org/packages/MRubyCS.Serializer)  |
 
@@ -400,7 +400,7 @@ dotnet add package MRubyCS.Compiler
 Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
 
 ```
-https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.17.1
+https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.18.1
 ```
 
 If you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
