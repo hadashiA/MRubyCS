@@ -813,6 +813,20 @@ partial class Foo
 }
 ```
 
+### Dynamic serialization
+
+Specifying a `dynamic` type parameter allows conversion to C# Array/Dictionary and primitive types.
+
+```cs
+var array = mrb.NewArray();
+array.Push(123);
+
+var result = MRubyValueSerializer.Deserialize<dynamic>(array, mrb);
+
+((object[])result).Length //=> 1
+((object[])result)[0] //=> 123
+```
+
 ### Custom Formatter
 
 You can also customize the conversion of any C# type to an MRubyValue.

@@ -6,7 +6,7 @@ public class ByteFormatter : IMRubyValueFormatter<byte>
 
     public MRubyValue Serialize(byte value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public byte Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -22,7 +22,7 @@ public class SByteFormatter : IMRubyValueFormatter<sbyte>
 
     public MRubyValue Serialize(sbyte value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public sbyte Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -38,7 +38,7 @@ public class CharFormatter : IMRubyValueFormatter<char>
 
     public MRubyValue Serialize(char value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public char Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -54,7 +54,7 @@ public class Int16Formatters : IMRubyValueFormatter<short>
 
     public MRubyValue Serialize(short value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public short Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -70,7 +70,7 @@ public class Int32Formatters : IMRubyValueFormatter<int>
 
     public MRubyValue Serialize(int value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public int Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -86,7 +86,7 @@ public class Int64Formatter : IMRubyValueFormatter<long>
 
     public MRubyValue Serialize(long value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public long Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -102,7 +102,7 @@ public class UInt16Formatter : IMRubyValueFormatter<ushort>
 
     public MRubyValue Serialize(ushort value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public ushort Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -118,7 +118,7 @@ public class UInt32Formatter : IMRubyValueFormatter<uint>
 
     public MRubyValue Serialize(uint value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public uint Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -134,7 +134,7 @@ public class UInt64Formatter : IMRubyValueFormatter<ulong>
 
     public MRubyValue Serialize(ulong value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return value;
     }
 
     public ulong Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
