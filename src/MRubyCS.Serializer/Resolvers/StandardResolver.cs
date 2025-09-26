@@ -5,10 +5,10 @@ public sealed class StandardResolver : IMRubyValueFormatterResolver
     public static readonly StandardResolver Instance = new();
 
     public static readonly IMRubyValueFormatterResolver[] DefaultResolvers =
-    {
+    [
         BuiltinResolver.Instance,
-        GeneratedResolver.Instance,
-    };
+        GeneratedResolver.Instance
+    ];
 
     static class FormatterCache<T>
     {

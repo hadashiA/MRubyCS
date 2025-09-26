@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -8,27 +7,7 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
 {
     public static readonly PrimitiveObjectFormatter Instance = new();
 
-    static readonly Dictionary<Type, int> TypeToJumpCode = new()
-    {
-        // When adding types whose size exceeds 32-bits, add support in MessagePackSecurity.GetHashCollisionResistantEqualityComparer<T>()
-        { typeof(Boolean), 0 },
-        { typeof(Char), 1 },
-        { typeof(SByte), 2 },
-        { typeof(Byte), 3 },
-        { typeof(Int16), 4 },
-        { typeof(UInt16), 5 },
-        { typeof(Int32), 6 },
-        { typeof(UInt32), 7 },
-        { typeof(Int64), 8 },
-        { typeof(UInt64), 9 },
-        { typeof(Single), 10 },
-        { typeof(Double), 11 },
-        // { typeof(DateTime), 12 },
-        { typeof(string), 13 },
-        // { typeof(byte[]), 14 },
-    };
-
-    public MRubyValue Serialize(object? value, MRubyState state, MRubyValueSerializerOptions options)
+    public MRubyValue Serialize(object? value, MRubyState mrb, MRubyValueSerializerOptions options)
     {
         if (value == null) return default;
 
@@ -37,55 +16,59 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
         switch (value)
         {
             case bool x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case short x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case ushort x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case int x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case uint x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case long x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case ulong x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case float x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case double x:
-                return MRubyValue.From(x);
+                return new MRubyValue(x);
             case string x:
-                return MRubyValue.From(state.NewString($"{x}"));
+                return new MRubyValue(mrb.NewString($"{x}"));
+            case Symbol x:
+                return new MRubyValue(x);
+            case RObject x:
+                return new MRubyValue(x);
             case IDictionary d:
             {
-                var hash = state.NewHash(d.Count);
+                var hash = mrb.NewHash(d.Count);
                 foreach (DictionaryEntry x in d)
                 {
-                    var k = Serialize(x.Key, state, options);
-                    var v = Serialize(x.Value, state, options);
+                    var k = Serialize(x.Key, mrb, options);
+                    var v = Serialize(x.Value, mrb, options);
                     hash.Add(k, v);
                 }
-                return MRubyValue.From(hash);
+                return hash;
             }
             case ICollection c:
             {
-                var array = state.NewArray(c.Count);
+                var array = mrb.NewArray(c.Count);
                 foreach (var x in c)
                 {
-                    array.Push(Serialize(x, state, options));
+                    array.Push(Serialize(x, mrb, options));
                 }
-                return MRubyValue.From(array);
+                return array;
             }
             default:
                 if (type.IsEnum)
                 {
-                    return MRubyValue.From(state.NewString($"{value}"));
+                    return mrb.NewString($"{value}");
                 }
                 throw new MRubySerializationException($"Serialization not supported for type {value.GetType()}");
         }
     }
 
-    public object? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
+    public object? Deserialize(MRubyValue value, MRubyState mrb, MRubyValueSerializerOptions options)
     {
         if (value.IsNil)
         {
@@ -105,6 +88,7 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
             case MRubyVType.Float:
                 return value.FloatValue;
             case MRubyVType.Symbol:
+                return mrb.NameOf(value.SymbolValue).ToString();
             case MRubyVType.String:
                 return value.As<RString>().ToString();
             case MRubyVType.Array:
@@ -113,9 +97,9 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
                 var result = new object?[array.Length];
                 for (var i = 0; i < array.Length; i++)
                 {
-                    var elementValue = state.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+                    var elementValue = mrb.Send(value, Names.OpAref, [MRubyValue.From(i)]);
                     var element = options.Resolver.GetFormatterWithVerify<object?>()
-                        .Deserialize(elementValue, state, options);
+                        .Deserialize(elementValue, mrb, options);
                     result[i] = element;
                 }
                 return result;
@@ -126,9 +110,9 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
                 foreach (var x in value.As<RHash>())
                 {
                     var k = options.Resolver.GetFormatterWithVerify<string>()
-                        .Deserialize(x.Key, state, options);
+                        .Deserialize(x.Key, mrb, options);
                     var v = options.Resolver.GetFormatterWithVerify<object?>()
-                        .Deserialize(x.Value, state, options);
+                        .Deserialize(x.Value, mrb, options);
                     dict.Add(k, v);
                 }
                 return dict;
@@ -136,34 +120,4 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
         }
         throw new MRubySerializationException($"Deserialization not supported `{value.VType}`");
     }
-
-    // public static bool IsSupportedType(Type type, TypeInfo typeInfo, object? value)
-    // {
-    //     if (value == null)
-    //     {
-    //         return true;
-    //     }
-    //
-    //     if (TypeToJumpCode.ContainsKey(type))
-    //     {
-    //         return true;
-    //     }
-    //
-    //     if (typeInfo.IsEnum)
-    //     {
-    //         return true;
-    //     }
-    //
-    //     if (value is System.Collections.IDictionary)
-    //     {
-    //         return true;
-    //     }
-    //
-    //     if (value is System.Collections.ICollection)
-    //     {
-    //         return true;
-    //     }
-    //
-    //     return false;
-    // }
 }

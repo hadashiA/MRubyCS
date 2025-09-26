@@ -69,6 +69,15 @@ public class BuiltinResolver : IMRubyValueFormatterResolver
 
         // { typeof(System.Numerics.BigInteger), BigIntegerFormatter.Instance },
         // { typeof(System.Numerics.Complex), ComplexFormatter.Instance },
+        { typeof(Symbol), SymbolFormatter.Instance },
+        { typeof(RObject), RObjectFormatter<RObject>.Instance },
+        { typeof(RArray), RObjectFormatter<RArray>.Instance },
+        { typeof(RHash), RObjectFormatter<RHash>.Instance },
+        { typeof(RInteger), RObjectFormatter<RInteger>.Instance },
+        { typeof(RProc), RObjectFormatter<RProc>.Instance },
+        { typeof(RFiber), RObjectFormatter<RFiber>.Instance },
+        { typeof(RRange), RObjectFormatter<RRange>.Instance },
+        { typeof(MRubyValue), MRubyValueMRubyValueFormatter.Instance }
     };
 
     public static readonly Dictionary<Type, Type> KnownGenericTypes = new()
