@@ -683,10 +683,6 @@ mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self)
 Using the MRuby.Serializer package enables conversion between MRubyValue and C# objects.
 
 ```cs
-var mrb = MRubyState.Create();
-```
-
-```cs
 // Deserialize (MRubyValue -> C#)
 
 MRubyValue result1 = mrb.LoadSourceCode("111 + 222");
