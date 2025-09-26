@@ -371,7 +371,10 @@ graph TB
 ```
 
 By the way, MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
-Basically, you need the native compiler provided by the [mruby](https://github.com/mruby/mruby) project.
+
+##### `mrbc`
+
+Using the original [mruby](https://github.com/mruby/mruby) project's compiler is one approach.
 
 ```bash
 $ git clone git@github.com:mruby/mruby.git
@@ -382,10 +385,10 @@ $ ./build/host/bin/mrubc
 
 ### MRubyCS.Compiler
 
-To simplify compilation from C#, we also provide the MRubyCS.Compiler package, which is a thin wrapper for the native compiler.
+To simplify compilation from C#, we  provide the MRubyCS.Compiler package, which is a thin wrapper of the C# API for the native compiler.
 
 > [!NOTE]
-> This MRubyCS.Compiler package is a thin wrapper for the native binary. Currently, builds for linux (x64/arm64), macOS (x64/arm64), and windows (x64) are provided.
+> Currently, builds for linux (x64/arm64), macOS (x64/arm64), and windows (x64) are provided.
 
 ```cs
 dotnet add package MRubyCS.Compiler
@@ -397,23 +400,6 @@ Open the Package Manager window by selecting Window > Package Manager, then clic
 
 ```
 https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.18.1
-```
-
-If you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
-
-For example, importing the text file `hoge.rb` into a project will result in the following.
-
-![docs/screenshot_subasset](./docs/screenshot_subasset.png)
-
-This subasset is a TextAsset. To specify it in the inspector.
-
-Or, to extract in C#, do the following:
-``` cs
-var mrb = MRubyState.Create();
-
-var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
-       .First(x => x.name.EndsWith(".mrb"));
-mrb.LoadBytecode(bytecodeAsset.GetData<byte>().AsSpan());
 ```
 
 For manual compilation, refer to the following.
@@ -453,6 +439,34 @@ mrb.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
 result = compiler.LoadSourceCode("f(100)"u8);
 result = compiler.LoadSourceCode("f(100)");
 ```
+
+#### Unity AssetImporter
+
+In Unity, if you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
+
+For example, importing the text file `hoge.rb` into a project will result in the following.
+
+![docs/screenshot_subasset](./docs/screenshot_subasset.png)
+
+This subasset is a TextAsset. To specify it in the inspector.
+
+Or, to extract in C#, do the following:
+
+``` cs
+var mrb = MRubyState.Create();
+
+var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
+       .First(x => x.name.EndsWith(".mrb"));
+mrb.LoadBytecode(bytecodeAsset.GetData<byte>().AsSpan());
+```
+
+To read a subasset in Addressables, you would do the following.
+
+```cs
+Addressables.LoadAssetAsync<TextAsset>("Assets/hoge.rb[hoge.mrb]")
+```
+
+Alternatively, you can generate the .mrb bytecode yourself within your project.
 
 ## Fiber (Coroutine)
 
