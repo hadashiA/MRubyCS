@@ -726,6 +726,12 @@ The following C# types and MRubyValue type conversions are supported natively:
 | `Symbol`  | `Enum`
 | `nil`     | `T?`, `Nullable<T>`                                                                                                                                                                                                                                                                                                                                                                     |
 
+### Naming Convention
+
+- C# property/field names are converted to underscore style in Ruby
+    - e.g) `FooBar` <-> `foo_bar`
+- C# enum values are converted to underscore-style symbols in Ruby
+    - e.g) `EnumType.FooBar` <-> `:foo_bar`
 
 ### `[MRubyObject]` attribute
 
