@@ -133,6 +133,18 @@ public class MRubyCompiler : IDisposable
 
     public unsafe Irep Compile(ReadOnlySpan<byte> utf8Source)
     {
+        if (BomHelper.TryDetectEncoding(utf8Source, out var encoding))
+        {
+            if (encoding.Equals(Encoding.UTF8))
+            {
+                utf8Source = utf8Source[encoding.Preamble.Length..];
+            }
+            else
+            {
+                throw new MRubyCompileException("Only UTF-8 is supported");
+            }
+        }
+
         var mrbPtr = compileStateHandle.DangerousGetPtr();
         byte* bin = null;
         var binLength = 0;
