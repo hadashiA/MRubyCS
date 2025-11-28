@@ -4,11 +4,13 @@ public class RObject : RBasic
 {
     internal VariableTable InstanceVariables { get; set; } = new();
 
-    internal RObject(MRubyVType vType, RClass klass) : base(vType, klass)
+    public RObject(RClass klass) : this(klass.InstanceVType, klass)
     {
     }
 
-    // Removed - now handled by MRubyValue's implicit operator
+    internal RObject(MRubyVType vType, RClass klass) : base(vType, klass)
+    {
+    }
 
     /// <summary>
     /// Create a copy of the object (equivalent to `init_copy`)
