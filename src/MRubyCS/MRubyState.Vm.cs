@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using MRubyCS.Internals;
 using MRubyCS.StdLib;
 #if NET7_0_OR_GREATER
-using static MemoryMarshal;
+using static System.Runtime.InteropServices.MemoryMarshal;
 #else
 using static MemoryPack.Internal.MemoryMarshalEx;
 #endif

@@ -1,9 +1,13 @@
 ﻿using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using MRubyCS.Internals;
 using static Utf8StringInterpolation.Utf8String;
+#if NET7_0_OR_GREATER
+using static System.Runtime.InteropServices.MemoryMarshal;
+#else
+using static MemoryPack.Internal.MemoryMarshalEx;
+#endif
 
 namespace MRubyCS;
 
@@ -214,7 +218,7 @@ partial class MRubyState
         {
             var pc = 0;
             var endPc = irep.Sequence.Length;
-            ref var sequence = ref MemoryMarshal.GetArrayDataReference(irep.Sequence);
+            ref var sequence = ref GetArrayDataReference(irep.Sequence);
             while (pc < endPc)
             {
                 //TODO: Irep debug info
