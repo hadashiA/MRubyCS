@@ -6,6 +6,7 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <RuntimeIdentifiers>osx-arm64</RuntimeIdentifiers>
         <LangVersion>11</LangVersion>
+        <Description>Native binding for the mruby compiler for use from C# and MRubyCS</Description>
     </PropertyGroup>
 
     <ItemGroup>
