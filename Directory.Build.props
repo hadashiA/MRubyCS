@@ -8,5 +8,11 @@
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <Description>A new mruby virtual machine implemented in C#.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+        <EmbeddedResource Include="$(MSBuildThisFileDirectory)LICENSE" />
+    </ItemGroup>
 </Project>
