@@ -399,7 +399,7 @@ dotnet add package MRubyCS.Compiler
 Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
 
 ```
-https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler#0.18.1
+https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Unity/Assets/MRubyCS.Compiler.Unity#0.18.1
 ```
 
 For manual compilation, refer to the following.
@@ -901,6 +901,27 @@ deserialized.X //=> 111
 deserialized.Y //=> 222
 deserialized.Z //=> 333
 ```
+
+#### Serializing Unity-specific types
+
+
+By introducing the following packages, serialization of Unity-specific types will also be supported.
+
+Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
+
+```
+https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Unity/Assets/MRubyCS.Serializer.Unity#0.18.1
+```
+
+| mruby                                | C#  |
+|--------------------------------------|:--------------------------------------------------------------------------------------------------------------------|
+| `[Float, Float]`                     | `Vector2`, `Resolution`                                                                                                                                                                                                                               |
+| `[Integer, Integer]`                 | `Vector2Int`                                                                                                                                                                                                                               |
+| `[Float, Float, Float]`              | `Vector3`|
+| `[Int, Int, Int]`                    | `Vector3Int` |
+| `[Float, Float, Float, Float]`       | `Vector4`, `Quaternion`, `Rect`, `Bounds`, `Color`|
+| `[Int, Int, Int, Int]`               | `RectInt`, `BoundsInt`, `Color32` |
+
 
 ## LICENSE
 
