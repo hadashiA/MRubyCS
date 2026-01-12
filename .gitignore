@@ -483,13 +483,14 @@ $RECYCLE.BIN/
 
 # Unity
 
-src/MRubyCS.Compiler.Unity/Library/*
-src/MRubyCS.Compiler.Unity/Temp/*
-src/MRubyCS.Compiler.Unity/Logs/*
-src/MRubyCS.Compiler.Unity/*.csproj
-src/MRubyCS.Compiler.Unity/*.sln
-src/MRubyCS.Compiler.Unity/UserSettings
-!src/MRubyCS.Compiler.Unity/Assets/MRubyCS.Compiler
+src/MRubyCS.Unity/Library/*
+src/MRubyCS.Unity/Temp/*
+src/MRubyCS.Unity/Logs/*
+src/MRubyCS.Unity/*.csproj
+src/MRubyCS.Unity/*.sln
+src/MRubyCS.Unity/UserSettings
+!src/MRubyCS.Unity/Assets/MRubyCS.Compiler.Unity
+!src/MRubyCS.Unity/Assets/MRubyCS.Compiler.Serializer
 
-/Assets/Packages/*
+src/MRubyCS.Unity/Assets/Packages/*
 
