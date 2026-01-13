@@ -5,8 +5,9 @@
         <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <!-- TODO: not for production ready yet -->
-        <IsPackable>false</IsPackable>
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>mruby-compiler</ToolCommandName>
+        <Description>Wrapper for the mruby compiler CLI tool</Description>
     </PropertyGroup>
 
     <ItemGroup>
