@@ -10,7 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="MRubyD.Tests" />
+        <InternalsVisibleTo Include="MRubyCS.Tests" />
     </ItemGroup>
 
     <ItemGroup>
@@ -31,7 +31,7 @@
 
     <!-- Copy files for Unity -->
     <PropertyGroup>
-        <UnityAssetsRoot>$(MSBuildProjectDirectory)\..\MRubyCS.Compiler.Unity\Assets\MRubyCS.Compiler\Runtime</UnityAssetsRoot>
+        <UnityAssetsRoot>$(MSBuildProjectDirectory)\..\MRubyCS.Unity\Assets\MRubyCS.Compiler.Unity\Runtime</UnityAssetsRoot>
     </PropertyGroup>
     <ItemGroup>
         <UnityAssets Include="**\*.cs" Exclude="**\bin\**\*.*;**\obj\**\*.*" />

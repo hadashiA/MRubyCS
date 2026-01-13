@@ -1,8 +1,8 @@
 using System;
 using System.Text;
 
-namespace MRubyCS.Compiler;
-
+namespace MRubyCS.Compiler
+{
 static class BomHelper
 {
     static readonly Encoding[] encodings =
@@ -25,5 +25,6 @@ static class BomHelper
         }
         bomEncoding = default!;
         return false;
-   }
+    }
+}
 }
