@@ -127,7 +127,7 @@ partial class MRubyState
             _ => throw new ArgumentOutOfRangeException(nameof(code), code, null)
         };
 
-    internal void CodeDump(Irep irep, IBufferWriter<byte> writer, int tabWidth = 4)
+    public void CodeDump(Irep irep, IBufferWriter<byte> writer, int tabWidth = 4)
     {
         var longestOpCodeName = "RETURN_BLK"u8.Length;
         var maxTabCount = (longestOpCodeName) / tabWidth + 1;
