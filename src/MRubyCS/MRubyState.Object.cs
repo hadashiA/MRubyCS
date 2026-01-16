@@ -49,7 +49,7 @@ partial class MRubyState
         return new RInteger(value, IntegerClass);
     }
 
-    public Symbol ToSymbol(MRubyValue value)
+    public Symbol AsSymbol(MRubyValue value)
     {
         if (value.IsSymbol) return value.SymbolValue;
         if (value.VType == MRubyVType.String) return Intern(value.As<RString>());
@@ -57,7 +57,7 @@ partial class MRubyState
         return default; // not reached
     }
 
-    public long ToInteger(MRubyValue value)
+    public long AsInteger(MRubyValue value)
     {
         if (value.IsInteger) return value.IntegerValue;
 
@@ -77,7 +77,7 @@ partial class MRubyState
         return default;
     }
 
-    public double ToFloat(MRubyValue value)
+    public double AsFloat(MRubyValue value)
     {
         if (value.IsNil)
         {
@@ -94,6 +94,15 @@ partial class MRubyState
         Raise(Names.TypeError, $"{Stringify(value)} cannot be converted to Float");
         return default;
     }
+
+    [Obsolete("Use AsSymbol instead")]
+    public Symbol ToSymbol(MRubyValue value) => AsSymbol(value);
+
+    [Obsolete("Use AsInteger instead")]
+    public long ToInteger(MRubyValue value) => AsInteger(value);
+
+    [Obsolete("Use AsFloat instead")]
+    public double ToFloat(MRubyValue value) => AsFloat(value);
 
     public RString NameOf(Symbol symbol)
     {
@@ -628,8 +637,8 @@ partial class MRubyState
             return (int)-result.IntegerValue;
         }
 
-        var x = ToFloat(a);
-        var y = ToFloat(b);
+        var x = AsFloat(a);
+        var y = AsFloat(b);
         return x.CompareTo(y);
     }
 }

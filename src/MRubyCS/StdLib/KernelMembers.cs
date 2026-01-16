@@ -45,7 +45,7 @@ static class KernelMembers
     [MRubyMethod]
     public static MRubyMethod InternalToInt = new((state, self) =>
     {
-        return state.ToInteger(self);
+        return state.AsInteger(self);
     });
 
     public static MRubyMethod BlockGiven = new((state, self) =>

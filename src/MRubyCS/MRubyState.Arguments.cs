@@ -51,19 +51,19 @@ partial class MRubyState
     public Symbol GetArgumentAsSymbolAt(int index)
     {
         var arg = GetArgumentAt(index);
-        return ToSymbol(arg);
+        return AsSymbol(arg);
     }
 
     public long GetArgumentAsIntegerAt(int index)
     {
         var arg = GetArgumentAt(index);
-        return ToInteger(arg);
+        return AsInteger(arg);
     }
 
     public double GetArgumentAsFloatAt(int index)
     {
         var arg = GetArgumentAt(index);
-        return ToFloat(arg);
+        return AsFloat(arg);
     }
 
     public RString GetArgumentAsStringAt(int index)

@@ -100,7 +100,7 @@ static class StringMembers
         var rangeLength = default(int?);
         if (state.TryGetArgumentAt(1, out var arg1))
         {
-            rangeLength = (int)state.ToInteger(arg1);
+            rangeLength = (int)state.AsInteger(arg1);
         }
 
         var result = str.GetPartial(state, indexValue, rangeLength);
@@ -160,7 +160,7 @@ static class StringMembers
         var format = 'g';
         if (state.TryGetArgumentAt(0, out var arg0))
         {
-            var basis = state.ToInteger(arg0);
+            var basis = state.AsInteger(arg0);
             switch (basis)
             {
                 case 2:
@@ -542,7 +542,7 @@ static class StringMembers
         var pos = 0;
         if (state.TryGetArgumentAt(1, out var arg1))
         {
-            pos = (int)state.ToInteger(arg1);
+            pos = (int)state.AsInteger(arg1);
         }
 
         var index = str.ByteIndexOf(target, pos);
@@ -573,7 +573,7 @@ static class StringMembers
                 }
                 else
                 {
-                    start = (int)state.ToInteger(arg0);
+                    start = (int)state.AsInteger(arg0);
                     length = 1;
                     empty = false;
                 }
@@ -622,7 +622,7 @@ static class StringMembers
                 var arg0 = state.GetArgumentAt(0);
                 if (arg0.IsInteger)
                 {
-                    sourceIndex = (int)state.ToInteger(arg0);
+                    sourceIndex = (int)state.AsInteger(arg0);
                     var arg1 = state.GetArgumentAsIntegerAt(1);
                     // check overflow
                     if (sourceIndex > str.Length - arg1)

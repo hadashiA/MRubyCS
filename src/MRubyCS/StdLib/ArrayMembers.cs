@@ -39,10 +39,10 @@ static class ArrayMembers
                     case MRubyVType.Float:
                         return array[(int)index.FloatValue];
                     default:
-                        return array[(int)state.ToInteger(index)];
+                        return array[(int)state.AsInteger(index)];
                 }
             case 2:
-                var i = (int)state.ToInteger(index);
+                var i = (int)state.AsInteger(index);
                 var length = state.GetArgumentAsIntegerAt(1);
                 if (i < 0) i += array.Length;
                 if (i < 0 || array.Length < i) return MRubyValue.Nil;
@@ -72,7 +72,7 @@ static class ArrayMembers
                     switch (range.Calculate(array.Length, false, out var calculatedIndex, out var calculatedLength))
                     {
                         case RangeCalculateResult.TypeMismatch:
-                            array[(int)state.ToInteger(key)] = val;
+                            array[(int)state.AsInteger(key)] = val;
                             break;
                         case RangeCalculateResult.Ok:
                             state.SpliceArray(array, calculatedIndex, calculatedLength, val);
@@ -86,7 +86,7 @@ static class ArrayMembers
                 }
                 else
                 {
-                    array[(int)state.ToInteger(key)] = val;
+                    array[(int)state.AsInteger(key)] = val;
                 }
                 return val;
             case 3:
@@ -301,7 +301,7 @@ static class ArrayMembers
             return JoinArray(state, array, separator, new Stack<RArray>());
         }
 
-        var times = state.ToInteger(arg);
+        var times = state.AsInteger(arg);
         if (times == 0)
         {
             return state.NewArray();
@@ -357,7 +357,7 @@ static class ArrayMembers
     {
         var array = self.As<RArray>();
         var arg = state.GetArgumentAt(0);
-        var index = state.ToInteger(arg);
+        var index = state.AsInteger(arg);
         return array.DeleteAt((int)index);
     });
 
@@ -492,7 +492,7 @@ static class ArrayMembers
         state.EnsureNotFrozen(array);
         if (state.TryGetArgumentAt(0, out var arg0))
         {
-            var result = array.Shift((int)state.ToInteger(arg0));
+            var result = array.Shift((int)state.AsInteger(arg0));
             return result;
         }
         return array.Shift();
