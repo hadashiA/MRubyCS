@@ -38,6 +38,8 @@ jobs:
           9.0.x
     - run: dotnet build -c Release
     - run: dotnet test -c Release --no-build
+      env:
+        TZ: Asia/Tokyo
     - run: dotnet pack -c Release --no-build -o ./publish
     - uses: actions/upload-artifact@v4
       with:
