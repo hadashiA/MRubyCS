@@ -68,6 +68,7 @@ static class ClassMembers
                 Super = null!
             },
             MRubyVType.Fiber => new RFiber(state, c),
+            MRubyVType.CSharpData => new RData(c),
             _ => throw new InvalidOperationException()
         };
         var instanceValue = new MRubyValue(instance);

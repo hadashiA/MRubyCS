@@ -12,6 +12,8 @@ jobs:
   test-dotnet:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TZ: Asia/Tokyo    
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-dotnet@v3
