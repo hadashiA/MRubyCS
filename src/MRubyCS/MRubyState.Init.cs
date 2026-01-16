@@ -594,7 +594,7 @@ public partial class MRubyState
 
     public void DefineTime()
     {
-        var timeClass = DefineClass(Intern("Time"u8), ObjectClass);
+        var timeClass = DefineClass(Intern("Time"u8), ObjectClass, MRubyVType.CSharpData);
 
         var comparableModule = GetConst(Intern("Comparable"u8), ObjectClass);
         IncludeModule(timeClass, comparableModule.As<RClass>());
@@ -637,6 +637,8 @@ public partial class MRubyState
         DefineMethod(timeClass, Intern("getgm"u8), TimeMembers.GetUtc);
         DefineMethod(timeClass, Intern("getutc"u8), TimeMembers.GetUtc);
         DefineMethod(timeClass, Intern("getlocal"u8), TimeMembers.GetLocal);
+        DefineMethod(timeClass, Intern("utc"u8), TimeMembers.ConvertToUtc);
+        DefineMethod(timeClass, Intern("local"u8), TimeMembers.ConvertToLocal);
 
         DefineMethod(timeClass, Intern("year"u8), TimeMembers.Year);
         DefineMethod(timeClass, Intern("mon"u8), TimeMembers.Month);
@@ -645,7 +647,15 @@ public partial class MRubyState
         DefineMethod(timeClass, Intern("mday"u8), TimeMembers.Day);
         DefineMethod(timeClass, Intern("hour"u8), TimeMembers.Hour);
         DefineMethod(timeClass, Intern("min"u8), TimeMembers.Minute);
-        DefineMethod(timeClass, Intern("second"u8), TimeMembers.Second);
+        DefineMethod(timeClass, Intern("sec"u8), TimeMembers.Second);
+        DefineMethod(timeClass, Intern("usec"u8), TimeMembers.MicroSecond);
+        DefineMethod(timeClass, Intern("nsec"u8), TimeMembers.NanoSecond);
+        DefineMethod(timeClass, Intern("wday"u8), TimeMembers.Wday);
+        DefineMethod(timeClass, Intern("yday"u8), TimeMembers.Yday);
+        DefineMethod(timeClass, Intern("zone"u8), TimeMembers.Zone);
+        DefineMethod(timeClass, Intern("utc_offset"u8), TimeMembers.UtcOffset);
+        DefineMethod(timeClass, Intern("gmt_offset"u8), TimeMembers.UtcOffset);
+        DefineMethod(timeClass, Intern("gmtoff"u8), TimeMembers.UtcOffset);
     }
 
     void InitMrbLib()

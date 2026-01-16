@@ -1,4 +1,5 @@
 using System;
+using Utf8StringInterpolation;
 
 namespace MRubyCS.StdLib;
 
@@ -60,25 +61,25 @@ class MRubyTimeData(DateTimeOffset dateTimeOffset) :
 static class TimeMembers
 {
     const long TicksPerMicrosecond = 10;
-    const long TicksPerSecond = 10000000;
-    const long NanosecondsPerTick = 100;
 
     public static MRubyMethod Now = new((mrb, _) =>
     {
         var data = new MRubyTimeData(DateTimeOffset.Now);
-        return new RData(data);
+        return Wrap(mrb, data);
     });
 
     public static MRubyMethod CreateAt = new((mrb, _) =>
     {
         var secValue = mrb.GetArgumentAt(0);
-        var usecValue = mrb.GetArgumentAt(1);
 
-        var ticks = ConvertToTicks(mrb, secValue, true) +
-                    ConvertToTicks(mrb, usecValue, false) / 10;
+        var ticks = ConvertToTicks(mrb, secValue, true);
 
+        if (mrb.TryGetArgumentAt(1, out var usecValue))
+        {
+            ticks += ConvertToTicks(mrb, usecValue, false) / 10;
+        }
         var data = new MRubyTimeData(new DateTime(ticks, DateTimeKind.Local));
-        return new RData(data);
+        return Wrap(mrb, data);
     });
 
     public static MRubyMethod CreateUtc = new((mrb, _) =>
@@ -116,10 +117,10 @@ static class TimeMembers
         {
             usec = (int)mrb.ToInteger(usecValue);
         }
-        var millisec = (int)(usec * 0.01);
-        var dateTime = new DateTime(year, month, day, hour, minute, sec, millisec, DateTimeKind.Utc);
+        var dateTime = new DateTime(year, month, day, hour, minute, sec, DateTimeKind.Utc);
+        dateTime = dateTime.AddTicks(usec * TicksPerMicrosecond);
         var data =  new MRubyTimeData(dateTime);
-        return new RData(data);
+        return Wrap(mrb, data);
     });
 
     public static MRubyMethod CreateLocal = new((mrb, _) =>
@@ -157,23 +158,89 @@ static class TimeMembers
         {
             usec = (int)mrb.ToInteger(usecValue);
         }
-        var millisec = (int)(usec * 0.01);
-        var dateTime = new DateTime(year, month, day, hour, minute, sec, millisec, DateTimeKind.Local);
+        var dateTime = new DateTime(year, month, day, hour, minute, sec, DateTimeKind.Local);
+        dateTime = dateTime.AddTicks(usec * TicksPerMicrosecond);
         var data =  new MRubyTimeData(dateTime);
-        return new RData(data);
+        return Wrap(mrb, data);
     });
 
     public static MRubyMethod Initialize = new((mrb, self) =>
     {
+        DateTimeOffset dateTimeOffset;
         if (mrb.GetArgumentCount() <= 0)
         {
-            
+            dateTimeOffset = DateTimeOffset.Now;
         }
+        else
+        {
+            var year = 0;
+            var month = 1;
+            var day = 1;
+            var hour = 0;
+            var minute = 0;
+            var sec = 0;
+            var usec = 0;
+
+            if (mrb.TryGetArgumentAt(1, out var yearValue))
+            {
+                year = (int)mrb.ToInteger(yearValue);
+            }
+            if (mrb.TryGetArgumentAt(2, out var monthValue))
+            {
+                month = (int)mrb.ToInteger(monthValue);
+            }
+            if (mrb.TryGetArgumentAt(3, out var dayValue))
+            {
+                day = (int)mrb.ToInteger(dayValue);
+            }
+            if (mrb.TryGetArgumentAt(4, out var hourValue))
+            {
+                hour = (int)mrb.ToInteger(hourValue);
+            }
+            if (mrb.TryGetArgumentAt(5, out var minuteValue))
+            {
+                minute = (int)mrb.ToInteger(minuteValue);
+            }
+            if (mrb.TryGetArgumentAt(6, out var secValue))
+            {
+                sec = (int)mrb.ToInteger(secValue);
+            }
+            if (mrb.TryGetArgumentAt(7, out var usecValue))
+            {
+                usec = (int)mrb.ToInteger(usecValue);
+            }
+
+            var dateTime = new DateTime(year, month, day, hour, minute, sec, DateTimeKind.Local);
+            dateTime = dateTime.AddTicks(usec * TicksPerMicrosecond);
+            dateTimeOffset = new DateTimeOffset(dateTime);
+        }
+        self.As<RData>().Data = Wrap(mrb, new MRubyTimeData(dateTimeOffset));
+        return self;
     });
 
     public static MRubyMethod InitializeCopy = new((mrb, self) =>
     {
+        var copyValue = mrb.GetArgumentAt(0);
+        if (mrb.ValueEquals(copyValue, self)) return copyValue;
 
+        if (!mrb.InstanceOf(copyValue, mrb.ClassOf(self)))
+        {
+            mrb.Raise(Names.TypeError, "wrong argument class"u8);
+        }
+
+        var src = GetTimeData(mrb, self);
+
+        DateTimeOffset dateTimeOffset;
+        if (copyValue.As<RData>().Data is MRubyTimeData copy)
+        {
+            dateTimeOffset = copy.DateTimeOffset;
+        }
+        else
+        {
+            dateTimeOffset = DateTimeOffset.Now;
+        }
+        src.DateTimeOffset = dateTimeOffset;
+        return copyValue;
     });
 
     public static MRubyMethod Hash = new((mrb, self) =>
@@ -214,7 +281,7 @@ static class TimeMembers
         }
 
         var result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
-        return new RData(new MRubyTimeData(result));
+        return Wrap(mrb, new MRubyTimeData(result));
     });
 
     public static MRubyMethod OpSub = new((mrb, self) =>
@@ -274,17 +341,22 @@ static class TimeMembers
         return GetTimeData(mrb, self).DateTimeOffset.ToUnixTimeSeconds();
     });
 
+    public static MRubyMethod UtcOffset = new((mrb, self) =>
+    {
+        return GetTimeData(mrb, self).DateTimeOffset.Offset.TotalSeconds;
+    });
+
     public static MRubyMethod Year = new((mrb, self) =>
         GetTimeData(mrb, self).DateTimeOffset.Year);
 
     public static MRubyMethod Month = new((mrb, self) =>
-        GetTimeData(mrb, self).DateTimeOffset.Year);
+        GetTimeData(mrb, self).DateTimeOffset.Month);
 
     public static MRubyMethod Day = new((mrb, self) =>
-        GetTimeData(mrb, self).DateTimeOffset.Year);
+        GetTimeData(mrb, self).DateTimeOffset.Day);
 
     public static MRubyMethod Hour = new((mrb, self) =>
-        GetTimeData(mrb, self).DateTimeOffset.Year);
+        GetTimeData(mrb, self).DateTimeOffset.Hour);
 
     public static MRubyMethod Minute = new((mrb, self) =>
         GetTimeData(mrb, self).DateTimeOffset.Minute);
@@ -293,10 +365,32 @@ static class TimeMembers
         GetTimeData(mrb, self).DateTimeOffset.Second);
 
     public static MRubyMethod MicroSecond = new((mrb, self) =>
-        GetTimeData(mrb, self).DateTimeOffset.Ticks / TicksPerMicrosecond);
+        (GetTimeData(mrb, self).DateTimeOffset.Ticks / TicksPerMicrosecond) % 10000);
 
     public static MRubyMethod NanoSecond = new((mrb, self) =>
-        GetTimeData(mrb, self).DateTimeOffset.Ticks * NanosecondsPerTick);
+        (GetTimeData(mrb, self).DateTimeOffset.Ticks / TicksPerMicrosecond) * 100);
+
+    public static MRubyMethod Wday = new((mrb, self) =>
+        (int)GetTimeData(mrb, self).DateTimeOffset.DayOfWeek);
+
+    public static MRubyMethod Yday = new((mrb, self) =>
+        GetTimeData(mrb, self).DateTimeOffset.DayOfYear);
+
+    public static MRubyMethod Zone = new((mrb, self) =>
+    {
+        var dateTimeOffset = GetTimeData(mrb, self).DateTimeOffset;
+        if (dateTimeOffset.Offset == TimeSpan.Zero)
+        {
+            return mrb.NewString("UTC"u8);
+        }
+
+        Span<byte> result = stackalloc byte[5];
+
+        var format = Utf8String.Format($"{dateTimeOffset:zzz}");
+        format[0..3].CopyTo(result);
+        format[4..6].CopyTo(result[3..]);
+        return mrb.NewString(result);
+    });
 
     public static MRubyMethod QUtc = new((mrb, self) =>
     {
@@ -359,6 +453,20 @@ static class TimeMembers
         return new RData(utc);
     });
 
+    public static MRubyMethod ConvertToUtc = new((mrb, self) =>
+    {
+        var t = GetTimeData(mrb, self);
+        t.DateTimeOffset = t.DateTimeOffset.ToUniversalTime();
+        return self;
+    });
+
+    public static MRubyMethod ConvertToLocal = new((mrb, self) =>
+    {
+        var t = GetTimeData(mrb, self);
+        t.DateTimeOffset = t.DateTimeOffset.ToLocalTime();
+        return self;
+    });
+
     static MRubyTimeData GetTimeData(MRubyState mrb, MRubyValue value)
     {
         if (value.As<RData>().Data is MRubyTimeData timeData)
@@ -368,6 +476,12 @@ static class TimeMembers
 
         mrb.Raise(Names.ArgumentError, "uninitialized Time"u8);
         return default!; // unreachable
+    }
+
+    static RData Wrap(MRubyState mrb, MRubyTimeData timeData)
+    {
+        var timeClass = mrb.GetConst(mrb.Intern("Time"u8), mrb.ObjectClass).As<RClass>();
+        return new RData(timeClass, timeData);
     }
 
     static long ConvertToTicks(MRubyState mrb, MRubyValue secValue, bool withUSecs)
