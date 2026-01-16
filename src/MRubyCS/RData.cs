@@ -2,12 +2,12 @@ namespace MRubyCS;
 
 public class RData : RObject
 {
-    public RData(object data) : base(MRubyVType.CSharpData, null!)
+    public RData(object? data) : base(MRubyVType.CSharpData, null!)
     {
         Data = data;
     }
 
-    public RData(RClass c, object data) : base(MRubyVType.CSharpData, c)
+    public RData(RClass c, object? data) : base(MRubyVType.CSharpData, c)
     {
         Data = data;
     }
@@ -17,4 +17,11 @@ public class RData : RObject
     }
 
     public object? Data { get; set; }
+
+    internal override RObject Clone()
+    {
+        var clone = new RData(Class, Data);
+        InstanceVariables.CopyTo(clone.InstanceVariables);
+        return clone;
+    }
 }
