@@ -638,7 +638,9 @@ public partial class MRubyState
         DefineMethod(timeClass, Intern("getutc"u8), TimeMembers.GetUtc);
         DefineMethod(timeClass, Intern("getlocal"u8), TimeMembers.GetLocal);
         DefineMethod(timeClass, Intern("utc"u8), TimeMembers.ConvertToUtc);
+        DefineMethod(timeClass, Intern("gmtime"u8), TimeMembers.ConvertToUtc);
         DefineMethod(timeClass, Intern("local"u8), TimeMembers.ConvertToLocal);
+        DefineMethod(timeClass, Intern("localtime"u8), TimeMembers.ConvertToLocal);
 
         DefineMethod(timeClass, Intern("year"u8), TimeMembers.Year);
         DefineMethod(timeClass, Intern("mon"u8), TimeMembers.Month);

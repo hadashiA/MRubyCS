@@ -78,8 +78,18 @@ static class TimeMembers
         {
             ticks += ConvertToTicks(mrb, usecValue, false) / 10;
         }
-        var data = new MRubyTimeData(new DateTime(ticks, DateTimeKind.Local));
-        return Wrap(mrb, data);
+
+        DateTimeOffset dateTimeOffset;
+        try
+        {
+            dateTimeOffset = new DateTime(ticks, DateTimeKind.Local);
+        }
+        catch (ArgumentException)
+        {
+            mrb.Raise(Names.ArgumentError, "out of time range"u8);
+            throw; // unreached
+        }
+        return Wrap(mrb, new MRubyTimeData(dateTimeOffset));
     });
 
     public static MRubyMethod CreateUtc = new((mrb, _) =>
@@ -250,16 +260,22 @@ static class TimeMembers
 
     public static MRubyMethod OpEq = new((mrb, self) =>
     {
-        var a = GetTimeData(mrb, self);
-        var b = GetTimeData(mrb, mrb.GetArgumentAt(0));
-        return a.Equals(b);
+        if (!TryGetTimeData(mrb.GetArgumentAt(0), out var otherTime))
+        {
+            return false;
+        }
+        var selfTime = GetTimeData(mrb, self);
+        return selfTime.Equals(otherTime);
     });
 
     public static MRubyMethod OpCmp = new((mrb, self) =>
     {
-        var a = GetTimeData(mrb, self);
-        var b = GetTimeData(mrb, mrb.GetArgumentAt(0));
-        return a.CompareTo(b);
+        if (!TryGetTimeData(mrb.GetArgumentAt(0), out var otherTime))
+        {
+            return false;
+        }
+        var selfTime = GetTimeData(mrb, self);
+        return selfTime.CompareTo(otherTime);
     });
 
     public static MRubyMethod OpAdd = new((mrb, self) =>
@@ -307,8 +323,18 @@ static class TimeMembers
         {
             mrb.Raise(Names.RangeError, $"Time out of range in subtraction");
         }
-        var result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
-        return new RData(new MRubyTimeData(result));
+
+        DateTimeOffset result;
+        try
+        {
+            result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
+        }
+        catch (ArgumentException)
+        {
+            mrb.Raise(Names.RangeError, $"Time out of range in subtraction");
+            throw; // unreached
+        }
+        return Wrap(mrb, new MRubyTimeData(result));
     });
 
     public static MRubyMethod Asctime = new((mrb, self) =>
@@ -368,7 +394,7 @@ static class TimeMembers
         (GetTimeData(mrb, self).DateTimeOffset.Ticks / TicksPerMicrosecond) % 10000);
 
     public static MRubyMethod NanoSecond = new((mrb, self) =>
-        (GetTimeData(mrb, self).DateTimeOffset.Ticks / TicksPerMicrosecond) * 100);
+        (GetTimeData(mrb, self).DateTimeOffset.Ticks % TicksPerMicrosecond) * 100);
 
     public static MRubyMethod Wday = new((mrb, self) =>
         (int)GetTimeData(mrb, self).DateTimeOffset.DayOfWeek);
@@ -443,14 +469,14 @@ static class TimeMembers
     {
         var t = GetTimeData(mrb, self);
         var utc = new MRubyTimeData(t.DateTimeOffset.ToUniversalTime());
-        return new RData(utc);
+        return Wrap(mrb, utc);
     });
 
     public static MRubyMethod GetLocal = new((mrb, self) =>
     {
         var t = GetTimeData(mrb, self);
         var utc = new MRubyTimeData(t.DateTimeOffset.ToLocalTime());
-        return new RData(utc);
+        return Wrap(mrb, utc);
     });
 
     public static MRubyMethod ConvertToUtc = new((mrb, self) =>
@@ -467,13 +493,24 @@ static class TimeMembers
         return self;
     });
 
-    static MRubyTimeData GetTimeData(MRubyState mrb, MRubyValue value)
+    static bool TryGetTimeData(MRubyValue value, out MRubyTimeData data)
     {
-        if (value.As<RData>().Data is MRubyTimeData timeData)
+        if (value.Object is RData { Data: MRubyTimeData timeData })
         {
-            return timeData;
+            data = timeData;
+            return true;
         }
 
+        data = default!;
+        return false;
+    }
+
+    static MRubyTimeData GetTimeData(MRubyState mrb, MRubyValue value)
+    {
+        if (TryGetTimeData(value, out var data))
+        {
+            return data;
+        }
         mrb.Raise(Names.ArgumentError, "uninitialized Time"u8);
         return default!; // unreachable
     }

@@ -344,7 +344,7 @@ partial class MRubyState
             if (TryFindMethod(clone.Class, Names.InitializeCopy, out var method, out _) &&
                 method != KernelMembers.InitializeCopy)
             {
-                Send(cloneValue, Intern("initialize_copy"u8), obj);
+                Send(cloneValue, Names.InitializeCopy, obj);
             }
             return cloneValue;
         }
