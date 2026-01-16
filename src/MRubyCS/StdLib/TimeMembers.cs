@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Utf8StringInterpolation;
 
 namespace MRubyCS.StdLib;
@@ -272,7 +273,7 @@ static class TimeMembers
     {
         if (!TryGetTimeData(mrb.GetArgumentAt(0), out var otherTime))
         {
-            return false;
+            return default;
         }
         var selfTime = GetTimeData(mrb, self);
         return selfTime.CompareTo(otherTime);
@@ -295,7 +296,6 @@ static class TimeMembers
         {
             mrb.Raise(Names.RangeError, $"Time out of range in addition");
         }
-
         var result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
         return Wrap(mrb, new MRubyTimeData(result));
     });
@@ -340,7 +340,10 @@ static class TimeMembers
     public static MRubyMethod Asctime = new((mrb, self) =>
     {
         var d = GetTimeData(mrb, self).DateTimeOffset;
-        return mrb.NewString($"{d:ddd} {d:MMM} {d.Day,2} {d:HH}:{d:mm}:{d:ss} {d:yyyy}");
+        using var buffer = Utf8String.CreateWriter(out var writer, CultureInfo.InvariantCulture);
+        writer.AppendFormat($"{d:ddd} {d:MMM} {d.Day,2} {d:HH}:{d:mm}:{d:ss} {d:yyyy}");
+        writer.Flush();
+        return mrb.NewString(buffer.WrittenSpan);
     });
 
     public static MRubyMethod ToS = new((mrb, self) =>
@@ -353,7 +356,7 @@ static class TimeMembers
             return mrb.NewString($"{t.Year:0000}-{t.Month:00}-{t.Day:00} {t.Hour:00}:{t.Minute:00}:{t.Second:00} UTC");
         }
         // local
-        return mrb.NewString($"{t.Year:0000}-{t.Month:00}-{t.Day:00} {t.Hour:00}:{t.Minute:00}:{t.Second:00} +{t.Offset.Hours:00}:00");
+        return mrb.NewString($"{t.Year:0000}-{t.Month:00}-{t.Day:00} {t.Hour:00}:{t.Minute:00}:{t.Second:00} +{t.Offset.Hours:00}00");
     });
 
     public static MRubyMethod ToF = new((mrb, self) =>
@@ -523,6 +526,7 @@ static class TimeMembers
 
     static long ConvertToTicks(MRubyState mrb, MRubyValue secValue, bool withUSecs)
     {
+        var ticks = 0L;
         if (secValue.IsFloat)
         {
             var sec = secValue.FloatValue;
@@ -535,18 +539,27 @@ static class TimeMembers
             if (withUSecs)
             {
                 var secFloored = Math.Floor(sec);
-                var ticks = (long)secFloored * TimeSpan.TicksPerSecond;
+                ticks = (long)secFloored * TimeSpan.TicksPerSecond;
                 ticks += (long)Math.Truncate((sec - secFloored) * TicksPerMicrosecond);
-                return ticks;
             }
-            return (long)Math.Round(sec) * TimeSpan.TicksPerSecond;
+            else
+            {
+                ticks = (long)Math.Round(sec) * TimeSpan.TicksPerSecond;
+            }
         }
-        if (secValue.IsInteger)
+        else if (secValue.IsInteger)
         {
-            return secValue.IntegerValue * TimeSpan.TicksPerSecond;
+            ticks = secValue.IntegerValue * TimeSpan.TicksPerSecond;
         }
-
-        mrb.Raise(Names.TypeError, $"cannot convert {mrb.Stringify(secValue)} to time");
-        return default; // unreachable
+        else
+        {
+            mrb.Raise(Names.TypeError, $"cannot convert {mrb.Stringify(secValue)} to time");
+        }
+        ticks += DateTime.UnixEpoch.Ticks;
+        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
+        {
+            mrb.Raise(Names.RangeError, $"Time out of range in addition");
+        }
+        return ticks;
     }
 }
