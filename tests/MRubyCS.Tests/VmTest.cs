@@ -274,6 +274,13 @@ public class VmTest
     }
 
     [Test]
+    public void LargeInteger32()
+    {
+        var result = Exec("1000000000"u8);
+        Assert.That(result, Is.EqualTo(new MRubyValue(1000000000)));
+    }
+
+    [Test]
     public void NilExt()
     {
         var result = Exec("""

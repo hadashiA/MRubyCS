@@ -1,10 +1,9 @@
-﻿using System;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace MRubyCS.Internals;
 
-internal enum OperandType
+enum OperandType
 {
     Z,
     B,
@@ -17,7 +16,7 @@ internal enum OperandType
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct Operand
+struct Operand
 {
     [FieldOffset(0)]
     public OperandType Type;
@@ -44,7 +43,7 @@ internal struct Operand
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct OperandZ
+struct OperandZ
 {
     public static void Read(ref byte sequence, ref int pc)
     {
@@ -53,7 +52,7 @@ internal struct OperandZ
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct OperandB
+struct OperandB
 {
     [FieldOffset(0)]
     public byte A;
@@ -68,7 +67,7 @@ internal struct OperandB
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct OperandBB
+struct OperandBB
 {
     [FieldOffset(0)]
     public byte A;
@@ -86,48 +85,41 @@ internal struct OperandBB
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal unsafe struct OperandS
+unsafe struct OperandS
 {
-    [FieldOffset(0)]
-    public short A;
-
     [FieldOffset(0)]
     fixed byte bytesA[2];
 
+    public short A => (short)((bytesA[0] << 8) | bytesA[1]);
 
     public static OperandS Read(ref byte sequence, ref int pc)
     {
         pc += 3;
-        var result = Unsafe.ReadUnaligned<OperandS>(ref Unsafe.Add(ref sequence, (pc - 2)));
-        result.A = (short)((result.bytesA[0] << 8) | result.bytesA[1]);
-        return result;
+        return Unsafe.ReadUnaligned<OperandS>(ref Unsafe.Add(ref sequence, pc - 2));
     }
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal unsafe struct OperandBS
+unsafe struct OperandBS
 {
     [FieldOffset(0)]
     public byte A;
 
     [FieldOffset(1)]
-    public short B;
-
-    [FieldOffset(1)]
     fixed byte bytesB[2];
+
+    public int B => (bytesB[0] << 8) | bytesB[1];
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static OperandBS Read(ref byte sequence, ref int pc)
     {
         pc += 4;
-        var result = Unsafe.ReadUnaligned<OperandBS>(ref Unsafe.Add(ref sequence, (pc - 3)));
-        result.B = (short)((result.bytesB[0] << 8) | result.bytesB[1]);
-        return result;
+        return Unsafe.ReadUnaligned<OperandBS>(ref Unsafe.Add(ref sequence, (pc - 3)));
     }
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct OperandBBB
+struct OperandBBB
 {
     [FieldOffset(0)]
     public byte A;
@@ -141,22 +133,15 @@ internal struct OperandBBB
     public static OperandBBB Read(ref byte sequence, ref int pc)
     {
         pc += 4;
-        var result = Unsafe.ReadUnaligned<OperandBBB>(ref Unsafe.Add(ref sequence, (pc - 3)));
-        return result;
+        return Unsafe.ReadUnaligned<OperandBBB>(ref Unsafe.Add(ref sequence, (pc - 3)));
     }
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal unsafe struct OperandBSS
+unsafe struct OperandBSS
 {
     [FieldOffset(0)]
     public byte A;
-
-    [FieldOffset(1)]
-    public short B;
-
-    [FieldOffset(3)]
-    public short C;
 
     [FieldOffset(1)]
     fixed byte bytesB[2];
@@ -164,21 +149,22 @@ internal unsafe struct OperandBSS
     [FieldOffset(3)]
     fixed byte bytesC[2];
 
+    public int B => (bytesB[0] << 8) | bytesB[1];
+    public int C => (bytesC[0] << 8) | bytesC[1];
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static OperandBSS Read(ref byte sequence, ref int pc)
     {
         pc += 6;
-        var result = Unsafe.ReadUnaligned<OperandBSS>(ref Unsafe.Add(ref sequence, (pc - 5)));
-
-        result.B = (short)((result.bytesB[0] << 8) | result.bytesB[1]);
-        result.C = (short)((result.bytesC[0] << 8) | result.bytesC[1]);
-        return result;
+        return Unsafe.ReadUnaligned<OperandBSS>(ref Unsafe.Add(ref sequence, pc - 5));
     }
 }
 
-internal unsafe struct OperandW
+[StructLayout(LayoutKind.Explicit)]
+unsafe struct OperandW
 {
     // ReSharper disable once UnassignedField.Local
+    [FieldOffset(0)]
     public fixed byte Bytes[3];
     public int A => (Bytes[0] << 16) | (Bytes[1] << 8) | Bytes[2];
 
@@ -186,7 +172,6 @@ internal unsafe struct OperandW
     public static OperandW Read(ref byte sequence, ref int pc)
     {
         pc += 4;
-        var result = Unsafe.ReadUnaligned<OperandW>(ref Unsafe.Add(ref sequence, (pc - 3)));
-        return result;
+        return Unsafe.ReadUnaligned<OperandW>(ref Unsafe.Add(ref sequence, pc - 3));
     }
 }
