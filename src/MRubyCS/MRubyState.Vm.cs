@@ -1459,7 +1459,7 @@ partial class MRubyState
                         }
 
                         // Jump to send :+ or :-
-                        Unsafe.Add(ref registerA, 1) = new MRubyValue(rV);
+                        Unsafe.Add(ref registerA, 1) = new MRubyValue(bb.B);
                         callInfo = ref GetNextCallInfo(callInfo.StackPointer + bb.A, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
