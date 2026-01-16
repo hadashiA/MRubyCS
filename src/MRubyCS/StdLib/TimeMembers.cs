@@ -80,12 +80,7 @@ static class TimeMembers
             ticks += ConvertToTicks(mrb, usecValue, false) / 10;
         }
 
-        ticks += DateTime.UnixEpoch.Ticks;
-
-        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
-        {
-            mrb.Raise(Names.RangeError, $"Time out of range in addition");
-        }
+        ticks += DateTime.UnixEpoch.ToLocalTime().Ticks;
 
         DateTimeOffset dateTimeOffset;
         try
@@ -304,11 +299,6 @@ static class TimeMembers
             mrb.Raise(Names.RangeError, $"Time out of range in addition");
         }
 
-        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
-        {
-            mrb.Raise(Names.RangeError, $"Time out of range in addition");
-        }
-
         var result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
         return Wrap(mrb, new MRubyTimeData(result));
     });
@@ -335,11 +325,6 @@ static class TimeMembers
         catch (OverflowException)
         {
             mrb.Raise(Names.RangeError, $"Time out of range in subtraction");
-        }
-
-        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
-        {
-            mrb.Raise(Names.RangeError, $"Time out of range in addition");
         }
 
         DateTimeOffset result;
