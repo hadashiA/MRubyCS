@@ -708,7 +708,7 @@ public class RString : RObject, IEquatable<RString>
     {
         if (indexLength.HasValue)
         {
-            calculatedOffset = (int)state.ToInteger(index);
+            calculatedOffset = (int)state.AsInteger(index);
             calculatedLength = indexLength.Value;
             return RStringRangeType.CharRange;
         }
@@ -738,7 +738,7 @@ public class RString : RObject, IEquatable<RString>
                 }
                 break;
             default:
-                calculatedOffset = (int)state.ToInteger(index);
+                calculatedOffset = (int)state.AsInteger(index);
                 calculatedLength = 1;
                 return RStringRangeType.CharRange;
         }

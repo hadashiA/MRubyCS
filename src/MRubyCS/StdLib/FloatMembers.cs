@@ -28,7 +28,7 @@ static class FloatMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod Mod = new((state, self) =>
     {
-        var x = state.ToFloat(self);
+        var x = state.AsFloat(self);
         var y = state.GetArgumentAsFloatAt(0);
 
         if (double.IsNaN(y))
@@ -76,7 +76,7 @@ static class FloatMembers
         var b = arg.VType switch
         {
             MRubyVType.Float => arg.FloatValue,
-            _ => state.ToFloat(arg)
+            _ => state.AsFloat(arg)
         };
         return a + b;
     });
@@ -89,7 +89,7 @@ static class FloatMembers
         var b = arg.VType switch
         {
             MRubyVType.Float => arg.FloatValue,
-            _ => state.ToFloat(arg)
+            _ => state.AsFloat(arg)
         };
         return a - b;
     });
@@ -102,7 +102,7 @@ static class FloatMembers
         var b = arg.VType switch
         {
             MRubyVType.Float => arg.FloatValue,
-            _ => state.ToFloat(arg)
+            _ => state.AsFloat(arg)
         };
         return a * b;
     });
@@ -115,7 +115,7 @@ static class FloatMembers
         var b = arg.VType switch
         {
             MRubyVType.Float => arg.FloatValue,
-            _ => state.ToFloat(arg)
+            _ => state.AsFloat(arg)
         };
         return a / b;
     });
@@ -124,7 +124,7 @@ static class FloatMembers
     public static MRubyMethod OpPow = new((state, self) =>
     {
         var a = self.FloatValue;
-        var b = state.ToFloat(state.GetArgumentAt(0));
+        var b = state.AsFloat(state.GetArgumentAt(0));
         return Math.Pow(a, b);
     });
 
@@ -252,24 +252,24 @@ static class FloatMembers
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpLshift = new((state, self) =>
     {
-        var width = state.ToInteger(state.GetArgumentAt(0));
+        var width = state.AsInteger(state.GetArgumentAt(0));
         return FloShift(state, self, width);
     });
 
     [MRubyMethod(RequiredArguments = 1)]
     public static MRubyMethod OpRshift = new((state, self) =>
     {
-        var width = state.ToInteger(state.GetArgumentAt(0));
+        var width = state.AsInteger(state.GetArgumentAt(0));
         if (width == long.MinValue) return FloShift(state, self, -64);
         return FloShift(state, self, -width);
     });
 
     public static MRubyMethod DivMod = new((state, self) =>
     {
-        var x = state.ToFloat(self);
+        var x = state.AsFloat(self);
         var y = state.GetArgumentAt(0);
         MRubyValue a, b;
-        FloatDivMod(state, x, state.ToFloat(y), out var div, out var mod);
+        FloatDivMod(state, x, state.AsFloat(y), out var div, out var mod);
         if (!IsFixableFloatValue(div))
         {
             a = div;
@@ -413,7 +413,7 @@ static class FloatMembers
     public static MRubyMethod Quo = new((state, self) =>
     {
         var x = self.FloatValue;
-        var y = state.ToFloat(state.GetArgumentAt(0));
+        var y = state.AsFloat(state.GetArgumentAt(0));
         return x / y;
     });
 
@@ -421,7 +421,7 @@ static class FloatMembers
     public static MRubyMethod Div = new((state, self) =>
     {
         var x = self.FloatValue;
-        var y = state.ToFloat(state.GetArgumentAt(0));
+        var y = state.AsFloat(state.GetArgumentAt(0));
         if (y == 0.0)
         {
             state.Raise(Names.ZeroDivisionError, "divided by 0"u8);

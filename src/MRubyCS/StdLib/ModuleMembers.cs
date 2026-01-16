@@ -105,7 +105,7 @@ static class ModuleMembers
         var argv = state.GetRestArgumentsAfter(0);
         foreach (var arg in argv)
         {
-            var methodId = state.ToSymbol(arg);
+            var methodId = state.AsSymbol(arg);
             var name = state.PrepareInstanceVariableName(methodId);
 
             state.EnsureInstanceVariableName(name);
@@ -126,7 +126,7 @@ static class ModuleMembers
         var argv = state.GetRestArgumentsAfter(0);
         foreach (var arg in argv)
         {
-            var attrId = state.ToSymbol(arg);
+            var attrId = state.AsSymbol(arg);
             var variableName = state.PrepareInstanceVariableName(attrId);
             var setterName = state.PrepareName(attrId, default, "="u8);
 
