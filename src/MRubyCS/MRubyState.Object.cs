@@ -151,7 +151,7 @@ partial class MRubyState
             {
                 var path = ClassPath.Find(this, c);
                 var pathName = path.ToRString(this);
-                c.InstanceVariables.Set(Names.ClassNameKey, MRubyValue.From(pathName));
+                c.InstanceVariables.Set(Names.ClassNameKey, pathName);
                 return pathName.Dup();
             }
             // already cached

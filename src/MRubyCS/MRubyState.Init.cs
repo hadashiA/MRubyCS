@@ -393,6 +393,10 @@ public partial class MRubyState
         DefineMethod(IntegerClass, Names.OpLShift, IntegerMembers.OpLShift);
         DefineMethod(IntegerClass, Names.OpRShift, IntegerMembers.OpRShift);
         DefineMethod(IntegerClass, Names.OpCmp, NumericMembers.OpCmp);
+        DefineMethod(IntegerClass, Names.OpLt, NumericMembers.OpLt);
+        DefineMethod(IntegerClass, Names.OpLe, NumericMembers.OpLe);
+        DefineMethod(IntegerClass, Names.OpGt, NumericMembers.OpGt);
+        DefineMethod(IntegerClass, Names.OpGe, NumericMembers.OpGe);
 
         FloatClass = DefineClass(Intern("Float"u8), numericClass, MRubyVType.Float);
         UndefClassMethod(FloatClass, Names.New);
@@ -403,10 +407,10 @@ public partial class MRubyState
         DefineMethod(FloatClass, Names.OpDiv, FloatMembers.OpDiv);
         DefineMethod(FloatClass, Names.OpMod, FloatMembers.Mod);
         DefineMethod(FloatClass, Names.OpCmp, FloatMembers.OpCmp);
-        DefineMethod(FloatClass, Names.OpLt, FloatMembers.OpLt);
-        DefineMethod(FloatClass, Names.OpLe, FloatMembers.OpLe);
-        DefineMethod(FloatClass, Names.OpGt, FloatMembers.OpGt);
-        DefineMethod(FloatClass, Names.OpGe, FloatMembers.OpGe);
+        DefineMethod(FloatClass, Names.OpLt, NumericMembers.OpLt);
+        DefineMethod(FloatClass, Names.OpLe, NumericMembers.OpLe);
+        DefineMethod(FloatClass, Names.OpGt, NumericMembers.OpGt);
+        DefineMethod(FloatClass, Names.OpGe, NumericMembers.OpGe);
         DefineMethod(FloatClass, Names.OpEq, FloatMembers.OpEq);
         DefineMethod(FloatClass, Names.OpPlus, (state, self) => self);
         DefineMethod(FloatClass, Names.OpMinus, FloatMembers.OpNeg);

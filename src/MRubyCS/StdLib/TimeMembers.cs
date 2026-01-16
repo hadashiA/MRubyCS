@@ -107,28 +107,28 @@ static class TimeMembers
 
         if (mrb.TryGetArgumentAt(1, out var monthValue))
         {
-            month = (int)mrb.ToInteger(monthValue);
+            month = (int)mrb.AsInteger(monthValue);
         }
         if (mrb.TryGetArgumentAt(2, out var dayValue))
         {
-            day = (int)mrb.ToInteger(dayValue);
+            day = (int)mrb.AsInteger(dayValue);
         }
         if (mrb.TryGetArgumentAt(3, out var hourValue))
         {
-            hour = (int)mrb.ToInteger(hourValue);
+            hour = (int)mrb.AsInteger(hourValue);
         }
         if (mrb.TryGetArgumentAt(4, out var minuteValue))
         {
-            minute = (int)mrb.ToInteger(minuteValue);
+            minute = (int)mrb.AsInteger(minuteValue);
         }
 
         if (mrb.TryGetArgumentAt(5, out var secValue))
         {
-            sec = (int)mrb.ToInteger(secValue);
+            sec = (int)mrb.AsInteger(secValue);
         }
         if (mrb.TryGetArgumentAt(6, out var usecValue))
         {
-            usec = (int)mrb.ToInteger(usecValue);
+            usec = (int)mrb.AsInteger(usecValue);
         }
         var dateTime = new DateTime(year, month, day, hour, minute, sec, DateTimeKind.Utc);
         dateTime = dateTime.AddTicks(usec * TicksPerMicrosecond);
@@ -148,24 +148,24 @@ static class TimeMembers
 
         if (mrb.TryGetArgumentAt(1, out var monthValue))
         {
-            month = (int)mrb.ToInteger(monthValue);
+            month = (int)mrb.AsInteger(monthValue);
         }
         if (mrb.TryGetArgumentAt(2, out var dayValue))
         {
-            day = (int)mrb.ToInteger(dayValue);
+            day = (int)mrb.AsInteger(dayValue);
         }
         if (mrb.TryGetArgumentAt(3, out var hourValue))
         {
-            hour = (int)mrb.ToInteger(hourValue);
+            hour = (int)mrb.AsInteger(hourValue);
         }
         if (mrb.TryGetArgumentAt(4, out var minuteValue))
         {
-            minute = (int)mrb.ToInteger(minuteValue);
+            minute = (int)mrb.AsInteger(minuteValue);
         }
 
         if (mrb.TryGetArgumentAt(5, out var secValue))
         {
-            sec = (int)mrb.ToInteger(secValue);
+            sec = (int)mrb.AsInteger(secValue);
         }
         if (mrb.TryGetArgumentAt(6, out var usecValue))
         {
@@ -196,31 +196,31 @@ static class TimeMembers
 
             if (mrb.TryGetArgumentAt(1, out var yearValue))
             {
-                year = (int)mrb.ToInteger(yearValue);
+                year = (int)mrb.AsInteger(yearValue);
             }
             if (mrb.TryGetArgumentAt(2, out var monthValue))
             {
-                month = (int)mrb.ToInteger(monthValue);
+                month = (int)mrb.AsInteger(monthValue);
             }
             if (mrb.TryGetArgumentAt(3, out var dayValue))
             {
-                day = (int)mrb.ToInteger(dayValue);
+                day = (int)mrb.AsInteger(dayValue);
             }
             if (mrb.TryGetArgumentAt(4, out var hourValue))
             {
-                hour = (int)mrb.ToInteger(hourValue);
+                hour = (int)mrb.AsInteger(hourValue);
             }
             if (mrb.TryGetArgumentAt(5, out var minuteValue))
             {
-                minute = (int)mrb.ToInteger(minuteValue);
+                minute = (int)mrb.AsInteger(minuteValue);
             }
             if (mrb.TryGetArgumentAt(6, out var secValue))
             {
-                sec = (int)mrb.ToInteger(secValue);
+                sec = (int)mrb.AsInteger(secValue);
             }
             if (mrb.TryGetArgumentAt(7, out var usecValue))
             {
-                usec = (int)mrb.ToInteger(usecValue);
+                usec = (int)mrb.AsInteger(usecValue);
             }
 
             var dateTime = new DateTime(year, month, day, hour, minute, sec, DateTimeKind.Local);
