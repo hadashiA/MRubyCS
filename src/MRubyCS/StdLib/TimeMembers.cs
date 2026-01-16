@@ -286,20 +286,21 @@ static class TimeMembers
         var time = GetTimeData(mrb, self);
         var ticksAdd = ConvertToTicks(mrb, mrb.GetArgumentAt(0), true);
 
-        long ticks = 0;
+        long newTicks;
         try
         {
             checked
             {
-                ticks = time.Ticks + ticksAdd;
+                newTicks = time.Ticks + ticksAdd;
             }
         }
         catch (OverflowException)
         {
             mrb.Raise(Names.RangeError, $"Time out of range in addition");
+            throw;
         }
 
-        var result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
+        var result = new DateTimeOffset(newTicks, time.DateTimeOffset.Offset);
         return Wrap(mrb, new MRubyTimeData(result));
     });
 
@@ -308,29 +309,31 @@ static class TimeMembers
         var time = GetTimeData(mrb, self);
 
         var arg0 = mrb.GetArgumentAt(0);
-        if (arg0.Object is RData { Data: MRubyTimeData other })
+        if (TryGetTimeData(arg0,  out var other))
         {
             var diff = time.DateTimeOffset - other.DateTimeOffset;
             return diff.Ticks / TimeSpan.TicksPerSecond;
         }
 
-        var ticks = ConvertToTicks(mrb, arg0, true);
+        var ticksSub = ConvertToTicks(mrb, arg0, true);
+        long newTicks;
         try
         {
             checked
             {
-                time.Ticks -= ticks;
+                newTicks = time.Ticks - ticksSub;
             }
         }
         catch (OverflowException)
         {
             mrb.Raise(Names.RangeError, $"Time out of range in subtraction");
+            throw;
         }
 
         DateTimeOffset result;
         try
         {
-            result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
+            result = new DateTimeOffset(newTicks, time.DateTimeOffset.Offset);
         }
         catch (ArgumentException)
         {
