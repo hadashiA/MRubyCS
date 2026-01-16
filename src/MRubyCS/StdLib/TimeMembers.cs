@@ -77,7 +77,7 @@ static class TimeMembers
 
         if (mrb.TryGetArgumentAt(1, out var usecValue))
         {
-            ticks += ConvertToTicks(mrb, usecValue, false) / 10;
+            ticks += ConvertToTicks(mrb, usecValue, false) / 1_000_000;
         }
 
         ticks += DateTime.UnixEpoch.ToLocalTime().Ticks;
@@ -400,10 +400,19 @@ static class TimeMembers
         GetTimeData(mrb, self).DateTimeOffset.Second);
 
     public static MRubyMethod MicroSecond = new((mrb, self) =>
-        (GetTimeData(mrb, self).DateTimeOffset.Ticks / TicksPerMicrosecond) % 10000);
+    {
+        var dateTimeOffset = GetTimeData(mrb, self).DateTimeOffset;
+        return dateTimeOffset.Millisecond * 1_000 +
+               (int)((dateTimeOffset.Ticks / TicksPerMicrosecond) % 1000);
+    });
 
     public static MRubyMethod NanoSecond = new((mrb, self) =>
-        (GetTimeData(mrb, self).DateTimeOffset.Ticks % TicksPerMicrosecond) * 100);
+    {
+        var dateTimeOffset = GetTimeData(mrb, self).DateTimeOffset;
+        return dateTimeOffset.Millisecond * 1_000_000 +
+               (int)((dateTimeOffset.Ticks / TicksPerMicrosecond) % 1_000) * 1_000 +
+               (dateTimeOffset.Ticks % TicksPerMicrosecond) * 100;
+    });
 
     public static MRubyMethod Wday = new((mrb, self) =>
         (int)GetTimeData(mrb, self).DateTimeOffset.DayOfWeek);

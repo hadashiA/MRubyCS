@@ -38,6 +38,7 @@ struct Operand
 
     [FieldOffset(1)]
     public OperandBSS BSS;
+
     [FieldOffset(1)]
     public OperandW W;
 }

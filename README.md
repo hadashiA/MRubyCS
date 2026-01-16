@@ -199,7 +199,7 @@ mrb.NameOf(sym1); //=> "sym"u8
 mrb.NameOf(sym2); //=> "sym123"u8
 
 // create symbol from string
-var sym2 = mrb.ToSymbol(mrb.NewString($"hoge"));
+var sym2 = mrb.AsSymbol(mrb.NewString($"hoge"));
 ```
 
 > [!NOTE]
