@@ -631,7 +631,7 @@ public partial class MRubyState
         DefineMethod(timeClass, Intern("tuesday?"u8), TimeMembers.QTuesday);
         DefineMethod(timeClass, Intern("wednesday?"u8), TimeMembers.QWednesday);
         DefineMethod(timeClass, Intern("thursday?"u8), TimeMembers.QThursday);
-        DefineMethod(timeClass, Intern("fryday?"u8), TimeMembers.QFriday);
+        DefineMethod(timeClass, Intern("friday?"u8), TimeMembers.QFriday);
         DefineMethod(timeClass, Intern("saturday?"u8), TimeMembers.QSaturday);
 
         DefineMethod(timeClass, Intern("getgm"u8), TimeMembers.GetUtc);
@@ -652,6 +652,7 @@ public partial class MRubyState
         DefineMethod(timeClass, Intern("sec"u8), TimeMembers.Second);
         DefineMethod(timeClass, Intern("usec"u8), TimeMembers.MicroSecond);
         DefineMethod(timeClass, Intern("nsec"u8), TimeMembers.NanoSecond);
+        DefineMethod(timeClass, Intern("tv_nsec"u8), TimeMembers.NanoSecond);
         DefineMethod(timeClass, Intern("wday"u8), TimeMembers.Wday);
         DefineMethod(timeClass, Intern("yday"u8), TimeMembers.Yday);
         DefineMethod(timeClass, Intern("zone"u8), TimeMembers.Zone);

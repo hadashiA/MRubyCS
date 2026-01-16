@@ -80,6 +80,13 @@ static class TimeMembers
             ticks += ConvertToTicks(mrb, usecValue, false) / 10;
         }
 
+        ticks += DateTime.UnixEpoch.Ticks;
+
+        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
+        {
+            mrb.Raise(Names.RangeError, $"Time out of range in addition");
+        }
+
         DateTimeOffset dateTimeOffset;
         try
         {
@@ -296,6 +303,12 @@ static class TimeMembers
         {
             mrb.Raise(Names.RangeError, $"Time out of range in addition");
         }
+
+        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
+        {
+            mrb.Raise(Names.RangeError, $"Time out of range in addition");
+        }
+
         var result = new DateTimeOffset(ticks, time.DateTimeOffset.Offset);
         return Wrap(mrb, new MRubyTimeData(result));
     });
@@ -322,6 +335,11 @@ static class TimeMembers
         catch (OverflowException)
         {
             mrb.Raise(Names.RangeError, $"Time out of range in subtraction");
+        }
+
+        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
+        {
+            mrb.Raise(Names.RangeError, $"Time out of range in addition");
         }
 
         DateTimeOffset result;
@@ -372,7 +390,7 @@ static class TimeMembers
 
     public static MRubyMethod UtcOffset = new((mrb, self) =>
     {
-        return GetTimeData(mrb, self).DateTimeOffset.Offset.TotalSeconds;
+        return (int)GetTimeData(mrb, self).DateTimeOffset.Offset.TotalSeconds;
     });
 
     public static MRubyMethod Year = new((mrb, self) =>
@@ -554,11 +572,6 @@ static class TimeMembers
         else
         {
             mrb.Raise(Names.TypeError, $"cannot convert {mrb.Stringify(secValue)} to time");
-        }
-        ticks += DateTime.UnixEpoch.Ticks;
-        if (ticks > DateTime.MaxValue.Ticks || ticks < DateTime.MinValue.Ticks)
-        {
-            mrb.Raise(Names.RangeError, $"Time out of range in addition");
         }
         return ticks;
     }
