@@ -46,6 +46,8 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - [Compiling Ruby source code](#compiling-ruby-source-code)
     - [MRubyCS.Compiler](#mrubycscompiler)
 - [Fiber (Coroutine)](#fiber-coroutine)
+- [Extra Support Classes](#additional-support-classes)
+    - [Time](#time) 
 - [MRubyCS.Serializer](#mrubycsserializer)
 
 ## Installation
@@ -72,6 +74,11 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 ## Basic Usage
 
+> [!NOTE]
+> MRubyCS is a C# implementation of the bytecode machine component, with the source code compiler separated.
+> You will likely use either `mrbc` or `MRubyCS.Compiler`.
+> For details,  please refer to the [Compiling Ruby source code](#compiling-ruby-source-code) .
+
 ```ruby
 def fibonacci(n)
   return n if n <= 1
@@ -80,11 +87,6 @@ end
 
 fibonacci 10
 ```
-
-> [!NOTE]
-> MRubyCS is a C# implementation of the bytecode machine component, with the source code compiler separated.
-> You will likely use either `mrbc` or `MRubyCS.Compiler`.
-> For details,  please refer to the [Compiling Ruby source code](#compiling-ruby-source-code) .
 
 ``` bash
 $ mrbc -o fibonaci.mrbc fibonacci.rb
@@ -676,6 +678,27 @@ mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self)
  end
 
  fiber.resume_by_csharp
+```
+
+## Extra Support Classes
+
+### Time
+
+The [Time](https://docs.ruby-lang.org/ja/latest/class/Time.html) class becomes valid as follows.
+
+```cs
+var mrb = MRubyState.Create(x =>
+{
+    x.DefineTime();
+});
+```
+
+Then, the following ruby code becomes valid.
+
+```ruby
+Time.at(1300000000) #=> 2011-03-13 16:06:40 +0900
+Time.now #=> 2026-01-17 01:46:07.114792 +0900
+Time.local 2025, 1, 2, 3 #=> 2025-01-02 03:00:00 +0900
 ```
 
 ## MRubyCS.Serializer
