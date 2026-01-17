@@ -24,6 +24,7 @@ public class SpecTest
         mrb = MRubyState.Create(x =>
         {
             x.DefineTime();
+            x.DefineRandom();
         });
 
         compiler = MRubyCompiler.Create(mrb);
@@ -116,6 +117,7 @@ public class SpecTest
     [TestCase("localjumperror.rb")]
     // [TestCase("namerror.rb")]
     [TestCase("time.rb")]
+    [TestCase("random.rb")]
     public void RubyScript(string fileName)
     {
         Assert.Multiple(() =>
