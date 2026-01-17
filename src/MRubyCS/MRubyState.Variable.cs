@@ -45,6 +45,8 @@ partial class MRubyState
         return false;
     }
 
+    public MRubyValue GetConst(Symbol name) => GetConst(name, ObjectClass);
+
     public MRubyValue GetConst(Symbol name, RClass module)
     {
         EnsureConstName(name);
@@ -70,6 +72,15 @@ partial class MRubyState
             TrySetClassPathLink(mod, c, name);
         }
         mod.InstanceVariables.Set(name, value);
+    }
+
+    public RClass GetClass(Symbol name) => GetClass(name, ObjectClass);
+
+    public RClass GetClass(Symbol name, RClass module)
+    {
+        var value = GetConst(name, module);
+        EnsureClassOrModule(value);
+        return value.As<RClass>();
     }
 
     public MRubyValue GetClassVariable(Symbol id)

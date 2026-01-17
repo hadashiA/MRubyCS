@@ -31,7 +31,6 @@ public enum MRubyVType
     CSharpData,
     Fiber,
     Struct,
-    Istruct,
     Break,
     Complex,
     Rational,

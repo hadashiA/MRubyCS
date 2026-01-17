@@ -16,13 +16,6 @@ public partial class MRubyState
 {
     public static MRubyState Create(Action<MRubyState> configure)
     {
-        var state = Create();
-        configure(state);
-        return state;
-    }
-
-    public static MRubyState Create()
-    {
         var state = new MRubyState();
         state.InitClass();
         state.InitObject();
@@ -39,6 +32,37 @@ public partial class MRubyState
         state.InitFiber();
         state.InitMrbLib();
         state.InitObjectExt();
+
+        configure(state);
+
+        return state;
+    }
+
+    public static MRubyState Create()
+    {
+        var state = new MRubyState();
+
+        // built-in
+        state.InitClass();
+        state.InitObject();
+        state.InitKernel();
+        state.InitSymbol();
+        state.InitString();
+        state.InitProc();
+        state.InitException();
+        state.InitNumeric();
+        state.InitArray();
+        state.InitHash();
+        state.InitRange();
+        state.InitEnumerable();
+        state.InitFiber();
+        state.InitMrbLib();
+        state.InitObjectExt();
+
+        // extensions
+        state.DefineTime();
+        state.DefineRandom();
+
         return state;
     }
 
@@ -596,6 +620,40 @@ public partial class MRubyState
         DefineMethod(enumerableModule, Intern("__update_hash"u8), EnumerableMembers.InternalUpdateHash);
     }
 
+    void InitMrbLib()
+    {
+        LoadBytecode(LibEmbedded.Bytes);
+    }
+
+    void InitFiber()
+    {
+        FiberClass = DefineClass(Intern("Fiber"u8), ObjectClass, MRubyVType.Fiber);
+
+        DefineMethod(FiberClass, Names.Initialize, FiberMembers.Initialize);
+        DefineMethod(FiberClass, Names.OpEq, FiberMembers.OpEq);
+        DefineMethod(FiberClass, Names.ToS, FiberMembers.ToS);
+        DefineMethod(FiberClass, Names.Inspect, FiberMembers.ToS);
+        DefineMethod(FiberClass, Intern("resume"u8), FiberMembers.Resume);
+        DefineMethod(FiberClass, Intern("transfer"u8), FiberMembers.Transfer);
+        DefineMethod(FiberClass, Intern("alive?"u8), FiberMembers.Alive);
+        DefineClassMethod(FiberClass, Intern("yield"u8), FiberMembers.Yield);
+        DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
+
+        DefineClass(Intern("FiberError"u8), StandardErrorClass);
+    }
+
+    void InitObjectExt()
+    {
+        DefineMethod(NilClass, Names.ToA, (state, _) => state.NewArray(0));
+        DefineMethod(NilClass, Names.ToI, (state, _) => 0);
+        DefineMethod(NilClass, Names.ToF, (state, _) => 0.0);
+        DefineMethod(NilClass, Intern("to_h"u8), (state, self) => state.NewHash(0));
+
+        DefineMethod(KernelModule, Intern("itself"u8), MRubyMethod.Identity);
+
+        // TODO: impl `instance_exec`
+    }
+
     public void DefineTime()
     {
         var timeClass = DefineClass(Intern("Time"u8), ObjectClass, MRubyVType.CSharpData);
@@ -665,38 +723,30 @@ public partial class MRubyState
         DefineMethod(timeClass, Intern("gmtoff"u8), TimeMembers.UtcOffset);
     }
 
-    void InitMrbLib()
+    public void DefineRandom()
     {
-        LoadBytecode(LibEmbedded.Bytes);
-    }
+        var randomClass = DefineClass(Intern("Random"u8), ObjectClass, MRubyVType.CSharpData);
 
-    void InitFiber()
-    {
-        FiberClass = DefineClass(Intern("Fiber"u8), ObjectClass, MRubyVType.Fiber);
+        DefineMethod(KernelModule, Intern("rand"u8), RandomMembers.DefaultRand);
+        DefineMethod(KernelModule, Intern("srand"u8), RandomMembers.DefaultSRand);
 
-        DefineMethod(FiberClass, Names.Initialize, FiberMembers.Initialize);
-        DefineMethod(FiberClass, Names.OpEq, FiberMembers.OpEq);
-        DefineMethod(FiberClass, Names.ToS, FiberMembers.ToS);
-        DefineMethod(FiberClass, Names.Inspect, FiberMembers.ToS);
-        DefineMethod(FiberClass, Intern("resume"u8), FiberMembers.Resume);
-        DefineMethod(FiberClass, Intern("transfer"u8), FiberMembers.Transfer);
-        DefineMethod(FiberClass, Intern("alive?"u8), FiberMembers.Alive);
-        DefineClassMethod(FiberClass, Intern("yield"u8), FiberMembers.Yield);
-        DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
+        DefineClassMethod(randomClass, Intern("rand"u8), RandomMembers.DefaultRand);
+        DefineClassMethod(randomClass, Intern("srand"u8), RandomMembers.DefaultSRand);
+        DefineClassMethod(randomClass, Intern("bytes"u8), RandomMembers.DefaultBytes);
 
-        DefineClass(Intern("FiberError"u8), StandardErrorClass);
-    }
+        DefineMethod(randomClass, Names.Initialize, RandomMembers.Initialize);
+        DefineMethod(randomClass, Intern("rand"u8), RandomMembers.Rand);
+        DefineMethod(randomClass, Intern("srand"u8), RandomMembers.SRand);
+        DefineMethod(randomClass, Intern("bytes"u8), RandomMembers.Bytes);
 
-    void InitObjectExt()
-    {
-        DefineMethod(NilClass, Names.ToA, (state, _) => state.NewArray(0));
-        DefineMethod(NilClass, Names.ToI, (state, _) => 0);
-        DefineMethod(NilClass, Names.ToF, (state, _) => 0.0);
-        DefineMethod(NilClass, Intern("to_h"u8), (state, self) => state.NewHash(0));
+        // create default instance
+        var defaultInstance = Send(randomClass, Names.New);
+        SetInstanceVariable(randomClass, Names.Default, defaultInstance);
 
-        DefineMethod(KernelModule, Intern("itself"u8), MRubyMethod.Identity);
-
-        // TODO: impl `instance_exec`
+        // Array ext
+        DefineMethod(ArrayClass, Intern("shuffle"u8), RandomMembers.ArrayShuffle);
+        DefineMethod(ArrayClass, Intern("shuffle!"u8), RandomMembers.ArrayShuffleBang);
+        DefineMethod(ArrayClass, Intern("sample"u8), RandomMembers.ArraySample);
     }
 
     bool TrySetClassPathLink(RClass outer, RClass c, Symbol name)
