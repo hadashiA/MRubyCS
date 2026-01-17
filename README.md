@@ -30,7 +30,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 ### Most recent roadmap
 
-- [ ] [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) for the new version.
+- [x] [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) for the new version.
 
 ## Table of Contents
 
@@ -46,7 +46,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - [Compiling Ruby source code](#compiling-ruby-source-code)
     - [MRubyCS.Compiler](#mrubycscompiler)
 - [Fiber (Coroutine)](#fiber-coroutine)
-- [Extra Support Classes](#additional-support-classes)
+- [Extra Support Classes](#extra-support-classes)
     - [Time](#time) 
 - [MRubyCS.Serializer](#mrubycsserializer)
 
@@ -88,11 +88,11 @@ end
 fibonacci 10
 ```
 
-``` bash
+```bash
 $ mrbc -o fibonaci.mrbc fibonacci.rb
 ```
 
-``` cs
+```cs
 using MRubyCS;
 
 // initialize state
@@ -111,7 +111,7 @@ result.IntegerValue //=> 55
 You can also parse bytecode in advance.
 The result of parsing bytecode is called `Irep` in mruby terminology.
 
-``` cs
+```cs
 Irep irep = mrb.ParseBytecode(bytecode);
 
 mrb.Execute(irep);
@@ -123,7 +123,7 @@ mrb.Execute(irep);
 
 Above `result` is `MRubyValue`. This represents a Ruby value.
 
-``` cs
+```cs
 value.IsNil //=> true if `nil`
 value.IsInteger //=> true if integrr
 value.IsFloat //=> true if float
@@ -233,6 +233,37 @@ mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("from_csharp_data"), (_, self) =>
     var csharpInstance = dataValue.As<RData>().Data as YourCustomClass;
     // ...
 });
+```
+
+#### Embeded custom C# data with ruby class
+
+```cs
+// Instances of classes that specify `MRubyVType.CSharpData` have `self` as RData.
+var yourClass = DefineClass(Intern("MyCustomClass"u8), ObjectClass, MRubyVType.CSharpData);
+
+// Define custom `initialize` with C# data
+mrb.DefineMethod(yourClass, "initialize", (s, self) =>
+{
+    if (self.Object is RData x)
+    {
+        x.Data = new YourCustomClass { Value = "abcde" };
+    }
+    return self;
+)
+});
+
+// Use custom C# data
+mrb.DefineMethod(yourClass, "foo_method", (s, self) =>
+{
+    if (self.Object is RData { Data: YourCustomClass csharpInstance })
+    {
+        // Use C# data..
+        csharpInstance.Value = "fghij";
+    }
+    // ...
+)
+});
+
 ```
 
 ### Define ruby class/module/method by C#
@@ -696,9 +727,12 @@ var mrb = MRubyState.Create(x =>
 Then, the following ruby code becomes valid.
 
 ```ruby
-Time.at(1300000000) #=> 2011-03-13 16:06:40 +0900
-Time.now #=> 2026-01-17 01:46:07.114792 +0900
-Time.local 2025, 1, 2, 3 #=> 2025-01-02 03:00:00 +0900
+Time.at(0)                 # => 1970-01-01 09:00:00 +0900
+Time.at(Time.at(0))        # => 1970-01-01 09:00:00 +0900
+Time.at(Time.at(0).getutc) # => 1970-01-01 00:00:00 UTC
+Time.at(946702800)         # => 2000-01-01 14:00:00 +0900
+Time.at(-284061600)        # => 1960-12-31 15:00:00 +0900
+Time.at(946684800.2).usec  # => 200000
 ```
 
 ## MRubyCS.Serializer
