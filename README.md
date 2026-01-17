@@ -47,7 +47,8 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
     - [MRubyCS.Compiler](#mrubycscompiler)
 - [Fiber (Coroutine)](#fiber-coroutine)
 - [Extra Support Classes](#extra-support-classes)
-    - [Time](#time) 
+    - [Time](#time)
+    - [Random](#random)
 - [MRubyCS.Serializer](#mrubycsserializer)
 
 ## Installation
@@ -713,18 +714,26 @@ mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self)
 
 ## Extra Support Classes
 
-### Time
+When creating MRubyState, you can choose whether to load the following classes/features.
 
-The [Time](https://docs.ruby-lang.org/ja/latest/class/Time.html) class becomes valid as follows.
+By default, all functions are loaded. If you want to select the functions to load, set a lambda expression to MRubyState.Create.
 
 ```cs
-var mrb = MRubyState.Create(x =>
+// all class loaded
+var mrb = MRubyState.Crate();
+
+// omit some class
+var mrb = MRubyState.Craete(x =>
 {
-    x.DefineTime();
+    // For example, enable only Random without loading Time.
+    // mrb.DefineTime();
+    mrb.DefineRandom();
 });
 ```
 
-Then, the following ruby code becomes valid.
+### Time
+
+If you specify default or `DefineTime()`, the Time class becomes available.
 
 ```ruby
 Time.at(0)                 # => 1970-01-01 09:00:00 +0900
@@ -734,6 +743,23 @@ Time.at(946702800)         # => 2000-01-01 14:00:00 +0900
 Time.at(-284061600)        # => 1960-12-31 15:00:00 +0900
 Time.at(946684800.2).usec  # => 200000
 ```
+
+See [test/time.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb) for all supported features.
+
+### Random
+
+If you specify default or `DefineRandom()`, the Random class and several extension methods become available.
+
+```ruby
+rand #=> 0.584407483460382
+rand(10..20) #=> 12
+
+[1,2,3].sample #=> 2 (pick random one)
+[1,2,3].sample(2) #=> [1,2] (pick of 2 of random)
+[1,2,3].shuffle #=> [3,1,2] 
+```
+
+See [test/random.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb) for all supported features.
 
 ## MRubyCS.Serializer
 
