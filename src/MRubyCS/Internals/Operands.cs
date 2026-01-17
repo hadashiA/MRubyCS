@@ -91,7 +91,7 @@ unsafe struct OperandS
     [FieldOffset(0)]
     fixed byte bytesA[2];
 
-    public short A => (short)((bytesA[0] << 8) | bytesA[1]);
+    public int A => (bytesA[0] << 8) | bytesA[1];
 
     public static OperandS Read(ref byte sequence, ref int pc)
     {

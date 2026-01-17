@@ -628,7 +628,8 @@ partial class MRubyState
                     }
                     case OpCode.Jmp:
                         Markers.Jmp();
-                        var s = ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
+                        var s = (short)ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
+
                         callInfo.ProgramCounter += s;
                         goto Next;
                     case OpCode.JmpIf:
@@ -658,7 +659,7 @@ partial class MRubyState
                     case OpCode.JmpUw:
                     {
                         Markers.JmpUw();
-                        s = ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
+                        s = (short)ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
                         var newProgramCounter = callInfo.ProgramCounter + s;
                         if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
                         {
@@ -2065,7 +2066,7 @@ partial class MRubyState
 
     /// I don't know why, but introducing this method makes the code faster.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static short ReadOperandS(ref byte sequence, ref int pc)
+    static int ReadOperandS(ref byte sequence, ref int pc)
     {
         return OperandS.Read(ref sequence, ref pc).A;
     }
