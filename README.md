@@ -17,7 +17,8 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - **High compatibility with Ruby-level APIs**
   It is intended for use in software with a certain amount of resources, such as games/gui-apps. For this reason, we are focusing on Ruby API compatibility.
   At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) and built-in libs tests from the original mruby repository.
-
+    - Please refer to the [specification tests](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test) to confirm the supported features.
+    - [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb), [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb), [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb), [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb), [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb), [Proc](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/proc.rb), [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb), [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb), [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb), [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb), [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
 - **Portability & Extensibility**
   Compared to the original C implementation, calling C# extensive libraries from Ruby is straightforward, making the VM highly extensible.
 
@@ -45,7 +46,6 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
     - [MRubyCS.Compiler](#mrubycscompiler)
-- [Builtin Support Classes](#builtin-support-classes)
 - [Fiber (Coroutine)](#fiber-coroutine)
 - [MRubyCS.Serializer](#mrubycsserializer)
 
@@ -499,26 +499,6 @@ Addressables.LoadAssetAsync<TextAsset>("Assets/hoge.rb[hoge.mrb]")
 ```
 
 Alternatively, you can generate the .mrb bytecode yourself within your project.
-
-## Builtin support classes
-
-Currently, mruby 3.3 built-in classes are fully supported, along with additional features like Time and Random.
-
-Please refer to the [specification tests](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test) to confirm the supported features.
-- [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb)
-- [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb)
-- [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb)
-- [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb)
-- [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb)
-- [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb)
-- [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb)
-- [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb)
-- [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb)
-- [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb)
-- [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb)
-- [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
-- [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb)
-
 
 ## Fiber (Coroutine)
 
