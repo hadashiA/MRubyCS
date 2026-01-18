@@ -69,11 +69,13 @@ static class ClassMembers
             },
             MRubyVType.Fiber => new RFiber(state, c),
             MRubyVType.CSharpData => new RData(c),
-            _ => throw new InvalidOperationException()
+            MRubyVType.Proc => state.NewClosure(state.GetBlockArgument(false)!.Irep, procClass: c),
+            _ => throw new ArgumentOutOfRangeException($"Cannot instantiate: {c.InstanceVType}")
         };
         var instanceValue = new MRubyValue(instance);
         state.Send(instanceValue, Names.Initialize, args, kargs, block);
         return instanceValue;
+
     });
 
     [MRubyMethod]

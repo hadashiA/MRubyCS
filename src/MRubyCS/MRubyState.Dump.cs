@@ -6,7 +6,7 @@ using static Utf8StringInterpolation.Utf8String;
 #if NET7_0_OR_GREATER
 using static System.Runtime.InteropServices.MemoryMarshal;
 #else
-using static MemoryPack.Internal.MemoryMarshalEx;
+using static MRubyCS.Internal.MemoryMarshalEx;
 #endif
 
 namespace MRubyCS;

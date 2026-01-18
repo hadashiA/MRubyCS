@@ -1,3 +1,10 @@
+#if NET7_0_OR_GREATER
+using static System.Runtime.InteropServices.MemoryMarshal;
+#else
+using static MRubyCS.Internal.MemoryMarshalEx;
+#endif
+using MRubyCS.Internals;
+
 namespace MRubyCS.StdLib;
 
 static class ProcMembers
@@ -7,7 +14,7 @@ static class ProcMembers
     {
         var block = state.GetBlockArgument(false);
         var proc = block!.Dup();
-        var procValue = MRubyValue.From(proc);
+        var procValue = new MRubyValue(proc);
         state.Send(procValue, Names.Initialize, procValue);
         if (!proc.HasFlag(MRubyObjectFlags.ProcStrict) &&
             state.CheckProcIsOrphan(proc))
@@ -25,6 +32,27 @@ static class ProcMembers
         {
             return MRubyValue.False;
         }
-        return MRubyValue.From(self.As<RProc>() == other.As<RProc>());
+        return self.As<RProc>() == other.As<RProc>();
+    });
+
+    public static MRubyMethod Arity = new((state, self) =>
+    {
+        var proc = self.As<RProc>();
+        var sequence = proc.Irep.Sequence;
+        if (sequence[0] != (byte)OpCode.Enter)
+        {
+            // arity is depend on OP_ENTER
+            return 0;
+        }
+
+        var pc = 0;
+        var bbb = OperandBBB.Read(ref GetArrayDataReference(sequence), ref pc);
+        var bits = (uint)bbb.A << 16 | (uint)bbb.B << 8 | bbb.C;
+        var aspec = new ArgumentSpec(bits);
+        // arity = ra || (MRB_PROC_STRICT_P(p) && op) ? -(ma + pa + 1) : ma + pa;
+        var arity = aspec.TakeRestArguments || (proc.HasFlag(MRubyObjectFlags.ProcStrict) && aspec.OptionalArgumentsCount > 0)
+            ? -(aspec.MandatoryArguments1Count + aspec.MandatoryArguments2Count + 1)
+            : aspec.MandatoryArguments1Count + aspec.MandatoryArguments2Count;
+        return arity;
     });
 }

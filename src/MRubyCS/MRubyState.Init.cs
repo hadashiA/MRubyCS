@@ -296,7 +296,7 @@ public partial class MRubyState
     {
         ProcClass = DefineClass(Intern("Proc"u8), ObjectClass, MRubyVType.Proc);
         DefineClassMethod(ProcClass, Names.New, ProcMembers.New);
-        DefineMethod(ProcClass, Intern("arity"u8), MRubyMethod.Nop);
+        DefineMethod(ProcClass, Intern("arity"u8), ProcMembers.Arity);
         DefineMethod(ProcClass, Names.OpEq, ProcMembers.Eql);
         DefineMethod(ProcClass, Names.QEql, ProcMembers.Eql);
 

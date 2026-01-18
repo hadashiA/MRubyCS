@@ -106,7 +106,7 @@ public class SpecTest
     [TestCase("hash.rb")]
     [TestCase("range.rb")]
     [TestCase("fiber.rb")]
-    // [TestCase("proc.rb")]
+    [TestCase("proc.rb")]
     // error
     [TestCase("exception.rb")]
     [TestCase("indexerror.rb")]

@@ -498,19 +498,19 @@ partial class MRubyState
         }
     }
 
-    RProc NewProc(Irep irep, RClass? targetClass = null)
+    internal RProc NewProc(Irep irep, RClass? targetClass = null, RClass? procClass = null)
     {
         ref var callInfo = ref Context.CurrentCallInfo;
 
         targetClass ??= (callInfo.Proc?.Scope ?? callInfo.Scope).TargetClass;
-        return new RProc(irep, 0, ProcClass)
+        return new RProc(irep, 0, procClass ?? ProcClass)
         {
             Upper = callInfo.Proc,
             Scope = targetClass
         };
     }
 
-    RProc NewClosure(Irep irep)
+    internal RProc NewClosure(Irep irep, RClass? procClass = null)
     {
         ref var callInfo = ref Context.CurrentCallInfo;
         var env = callInfo.Scope as REnv;
@@ -538,7 +538,7 @@ partial class MRubyState
                 callInfo.Scope = env;
             }
         }
-        return new RProc(irep, 0, ProcClass)
+        return new RProc(irep, 0, procClass ?? ProcClass)
         {
             Upper = callInfo.Proc,
             Scope = env,
