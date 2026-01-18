@@ -10,7 +10,7 @@ using MRubyCS.StdLib;
 #if NET7_0_OR_GREATER
 using static System.Runtime.InteropServices.MemoryMarshal;
 #else
-using static MemoryPack.Internal.MemoryMarshalEx;
+using static MRubyCS.Internal.MemoryMarshalEx;
 #endif
 
 // ReSharper disable UnreachableSwitchArmDueToIntegerAnalysis
@@ -829,7 +829,15 @@ partial class MRubyState
                         else
                         {
                             var block = nextRegisters[blockOffset];
-                            if (!block.IsNil) EnsureValueIsBlock(block);
+                            if (!block.IsNil)
+                            {
+                                if (block.Object is not RProc)
+                                {
+                                    block = ConvertType(block, MRubyVType.Proc, Intern("to_proc"u8));
+                                    nextRegisters[blockOffset] = block;
+                                }
+                                EnsureValueIsBlock(block);
+                            }
                         }
 
                         // self send

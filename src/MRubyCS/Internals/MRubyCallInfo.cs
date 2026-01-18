@@ -259,7 +259,7 @@ class MRubyContext
         ref var currentCallInfo = ref CallStack[CallDepth];
         ref var parentCallInfo = ref CallStack[CallDepth - 1];
 
-        var currentBlock = Stack[currentCallInfo.BlockArgumentOffset];
+        var currentBlock = Stack[currentCallInfo.StackPointer + currentCallInfo.BlockArgumentOffset];
         if (currentBlock.Object is RProc b &&
             !b.HasFlag(MRubyObjectFlags.ProcStrict) &&
             b.Scope == parentCallInfo.Scope)

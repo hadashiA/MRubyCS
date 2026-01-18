@@ -186,7 +186,7 @@ partial class MRubyState
     {
         var exceptionClass = GetExceptionClass(Names.NoMethodError);
         var ex = new RException(NewString($"undefined method {NameOf(methodId)} for {ClassNameOf(self)}"), exceptionClass);
-        ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(methodId));
+        ex.InstanceVariables.Set(Names.NameVariable, methodId);
         ex.InstanceVariables.Set(Names.ArgsVariable, args);
         Raise(ex);
     }
@@ -194,7 +194,7 @@ partial class MRubyState
     internal void RaiseNameError(Symbol name, RString message)
     {
         var ex = new RException(message, GetExceptionClass(Names.NameError));
-        ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(name));
+        ex.InstanceVariables.Set(Names.NameVariable, name);
         Raise(ex);
     }
 

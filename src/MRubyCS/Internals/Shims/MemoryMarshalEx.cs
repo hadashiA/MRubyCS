@@ -4,9 +4,8 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace MemoryPack.Internal;
-
-internal static class MemoryMarshalEx
+namespace MRubyCS.Internal;
+static class MemoryMarshalEx
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ref T GetArrayDataReference<T>(T[] array)
@@ -21,5 +20,4 @@ internal static class MemoryMarshalEx
         return new T[length];
     }
 }
-
 #endif
