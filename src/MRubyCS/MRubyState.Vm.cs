@@ -829,7 +829,15 @@ partial class MRubyState
                         else
                         {
                             var block = nextRegisters[blockOffset];
-                            if (!block.IsNil) EnsureValueIsBlock(block);
+                            if (!block.IsNil)
+                            {
+                                if (block.Object is not RProc)
+                                {
+                                    block = ConvertType(block, MRubyVType.Proc, Intern("to_proc"u8));
+                                    nextRegisters[blockOffset] = block;
+                                }
+                                EnsureValueIsBlock(block);
+                            }
                         }
 
                         // self send
