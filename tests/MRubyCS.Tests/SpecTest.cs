@@ -21,11 +21,7 @@ public class SpecTest
     [SetUp]
     public void Before()
     {
-        mrb = MRubyState.Create(x =>
-        {
-            x.DefineTime();
-            x.DefineRandom();
-        });
+        mrb = MRubyState.Create();
 
         compiler = MRubyCompiler.Create(mrb);
 
@@ -110,6 +106,7 @@ public class SpecTest
     [TestCase("hash.rb")]
     [TestCase("range.rb")]
     [TestCase("fiber.rb")]
+    // [TestCase("proc.rb")]
     // error
     [TestCase("exception.rb")]
     [TestCase("indexerror.rb")]

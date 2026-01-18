@@ -7,34 +7,12 @@ using Utf8StringInterpolation;
 
 namespace MRubyCS;
 
-public class MRubyStateOptions
-{
-    public bool UseTimeClass { get; private set; } = true;
-}
-
 public partial class MRubyState
 {
     public static MRubyState Create(Action<MRubyState> configure)
     {
-        var state = new MRubyState();
-        state.InitClass();
-        state.InitObject();
-        state.InitKernel();
-        state.InitSymbol();
-        state.InitString();
-        state.InitProc();
-        state.InitException();
-        state.InitNumeric();
-        state.InitArray();
-        state.InitHash();
-        state.InitRange();
-        state.InitEnumerable();
-        state.InitFiber();
-        state.InitMrbLib();
-        state.InitObjectExt();
-
+        var state = Create();
         configure(state);
-
         return state;
     }
 
@@ -58,10 +36,8 @@ public partial class MRubyState
         state.InitFiber();
         state.InitMrbLib();
         state.InitObjectExt();
-
-        // extensions
-        state.DefineTime();
-        state.DefineRandom();
+        state.InitTime();
+        state.InitRandom();
 
         return state;
     }
@@ -654,7 +630,7 @@ public partial class MRubyState
         // TODO: impl `instance_exec`
     }
 
-    public void DefineTime()
+    void InitTime()
     {
         var timeClass = DefineClass(Intern("Time"u8), ObjectClass, MRubyVType.CSharpData);
 
@@ -723,7 +699,7 @@ public partial class MRubyState
         DefineMethod(timeClass, Intern("gmtoff"u8), TimeMembers.UtcOffset);
     }
 
-    public void DefineRandom()
+    void InitRandom()
     {
         var randomClass = DefineClass(Intern("Random"u8), ObjectClass, MRubyVType.CSharpData);
 
