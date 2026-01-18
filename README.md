@@ -45,10 +45,8 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
     - [MRubyCS.Compiler](#mrubycscompiler)
+- [Builtin Support Classes](#builtin-support-classes)
 - [Fiber (Coroutine)](#fiber-coroutine)
-- [Extra Support Classes](#extra-support-classes)
-    - [Time](#time)
-    - [Random](#random)
 - [MRubyCS.Serializer](#mrubycsserializer)
 
 ## Installation
@@ -502,6 +500,26 @@ Addressables.LoadAssetAsync<TextAsset>("Assets/hoge.rb[hoge.mrb]")
 
 Alternatively, you can generate the .mrb bytecode yourself within your project.
 
+## Builtin support classes
+
+Currently, mruby 3.3 built-in classes are fully supported, along with additional features like Time and Random.
+
+Please refer to the [specification tests](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test) to confirm the supported features.
+- [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb)
+- [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb)
+- [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb)
+- [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb)
+- [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb)
+- [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb)
+- [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb)
+- [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb)
+- [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb)
+- [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb)
+- [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb)
+- [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
+- [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb)
+
+
 ## Fiber (Coroutine)
 
 MRubyCS supports Ruby Fibers, which are lightweight concurrency primitives that allow you to pause and resume code execution. In addition to standard Ruby Fiber features, MRubyCS provides seamless integration with C#'s async/await pattern.
@@ -711,55 +729,6 @@ mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self)
 
  fiber.resume_by_csharp
 ```
-
-## Extra Support Classes
-
-When creating MRubyState, you can choose whether to load the following classes/features.
-
-By default, all functions are loaded. If you want to select the functions to load, set a lambda expression to MRubyState.Create.
-
-```cs
-// all class loaded
-var mrb = MRubyState.Crate();
-
-// omit some class
-var mrb = MRubyState.Craete(x =>
-{
-    // For example, enable only Random without loading Time.
-    // mrb.DefineTime();
-    mrb.DefineRandom();
-});
-```
-
-### Time
-
-If you specify default or `DefineTime()`, the Time class becomes available.
-
-```ruby
-Time.at(0)                 # => 1970-01-01 09:00:00 +0900
-Time.at(Time.at(0))        # => 1970-01-01 09:00:00 +0900
-Time.at(Time.at(0).getutc) # => 1970-01-01 00:00:00 UTC
-Time.at(946702800)         # => 2000-01-01 14:00:00 +0900
-Time.at(-284061600)        # => 1960-12-31 15:00:00 +0900
-Time.at(946684800.2).usec  # => 200000
-```
-
-See [test/time.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb) for all supported features.
-
-### Random
-
-If you specify default or `DefineRandom()`, the Random class and several extension methods become available.
-
-```ruby
-rand #=> 0.584407483460382
-rand(10..20) #=> 12
-
-[1,2,3].sample #=> 2 (pick random one)
-[1,2,3].sample(2) #=> [1,2] (pick of 2 of random)
-[1,2,3].shuffle #=> [3,1,2] 
-```
-
-See [test/random.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb) for all supported features.
 
 ## MRubyCS.Serializer
 
