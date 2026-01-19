@@ -1,7 +1,8 @@
 MRuby::CrossBuild.new("macos-arm64") do |conf|
   conf.toolchain :clang
 
-  conf.gem core: 'mruby-compiler'
+  #conf.gem core: 'mruby-compiler'
+  conf.gem github: 'picoruby/mruby-compiler2'
   conf.gem core: 'mruby-string-ext'  
   conf.gem './mrbgems/mrbcs-compiler'
 
@@ -14,8 +15,7 @@ end
 MRuby::CrossBuild.new("macos-x64") do |conf|
   conf.toolchain :clang
   
-  conf.gem core: 'mruby-compiler'
-  conf.gem core: 'mruby-bin-mrbc'
+  conf.gem github: 'picoruby/mruby-compiler2'
   conf.gem core: 'mruby-string-ext'
   conf.gem './mrbgems/mrbcs-compiler'  
 

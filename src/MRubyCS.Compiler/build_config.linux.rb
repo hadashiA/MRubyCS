@@ -2,7 +2,7 @@
 MRuby::CrossBuild.new("linux-x64") do |conf|
   conf.toolchain :gcc
 
-  conf.gem core: 'mruby-compiler'
+  conf.gem github: 'picoruby/mruby-compiler2'
   conf.gem core: 'mruby-string-ext'
   conf.gem './mrbgems/mrbcs-compiler'
 
@@ -32,7 +32,7 @@ end
 MRuby::CrossBuild.new("linux-arm64") do |conf|
   conf.toolchain :gcc
 
-  conf.gem core: 'mruby-compiler'
+  conf.gem github: 'picoruby/mruby-compiler2'  
   conf.gem core: 'mruby-string-ext'
   # conf.gem core: 'mruby-bin-mrbc'  
   conf.gem './mrbgems/mrbcs-compiler'
