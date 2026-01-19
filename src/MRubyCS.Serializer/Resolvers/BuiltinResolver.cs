@@ -46,16 +46,16 @@ public class BuiltinResolver : IMRubyValueFormatterResolver
         { typeof(byte), ByteFormatter.Instance },
         { typeof(sbyte), SByteFormatter.Instance },
         { typeof(char), CharFormatter.Instance },
-        // { typeof(DateTime), DateTimeFormatter.Instance },
+        { typeof(DateTime), DateTimeFormatter.Instance },
 
         // StandardClassLibraryFormatter
         { typeof(string), NullableStringFormatter.Instance },
         { typeof(decimal), DecimalFormatter.Instance },
-        // { typeof(TimeSpan), TimeSpanFormatter.Instance },
-        // { typeof(DateTimeOffset), DateTimeOffsetFormatter.Instance },
-        // { typeof(Guid), GuidFormatter.Instance },
-        // { typeof(Uri), UriFormatter.Instance },
-        // { typeof(Version), VersionFormatter.Instance },
+        { typeof(TimeSpan), TimeSpanFormatter.Instance },
+        { typeof(DateTimeOffset), DateTimeOffsetFormatter.Instance },
+        { typeof(Guid), GuidFormatter.Instance },
+        { typeof(Uri), UriFormatter.Instance },
+        { typeof(Version), VersionFormatter.Instance },
         // { typeof(BitArray), BitArrayFormatter.Instance },
         // { typeof(Type), TypeFormatter.Instance },
 
