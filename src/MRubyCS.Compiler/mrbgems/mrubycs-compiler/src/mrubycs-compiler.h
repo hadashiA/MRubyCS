@@ -1,0 +1,3 @@
+#ifndef MRUBYCS_COMPILER_H
+#define MRUBYCS_COMPILER_H
+#endif
