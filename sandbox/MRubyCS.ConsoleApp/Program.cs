@@ -15,14 +15,14 @@ var compiler = MRubyCompiler.Create(mRubyDState);
 
 var arrayBufferWriter = new ArrayBufferWriter<byte>();
 
-var fileIrep = compiler.Compile(ReadBytes("test.rb"));
+using var compilation = compiler.Compile(ReadBytes("test.rb"));
+var fileIrep = compilation.ToIrep(mRubyDState);
 
 Dump(fileIrep);
 
 
 Console.WriteLine(Encoding.UTF8.GetString(arrayBufferWriter.WrittenSpan));
 File.WriteAllBytes(GetAbsolutePath("dump.txt"), arrayBufferWriter.WrittenSpan);
-
 
 Console.WriteLine(mRubyDState.Execute(fileIrep));
 

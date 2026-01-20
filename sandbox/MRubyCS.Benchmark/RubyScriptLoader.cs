@@ -27,7 +27,8 @@ unsafe class RubyScriptLoader : IDisposable
 
     public void PreloadScript(ReadOnlySpan<byte> source)
     {
-        currentMRubyCSIrep = mrubyCSCompiler.Compile(source);
+        using var compilation = mrubyCSCompiler.Compile(source);
+        currentMRubyCSIrep = compilation.ToIrep(mrubyCSState);
 
         currentMRubyNativeProc?.Dispose();
 

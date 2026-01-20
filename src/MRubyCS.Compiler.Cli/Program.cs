@@ -17,7 +17,7 @@ ConsoleApp.Run(args, (
     var compiler = MRubyCompiler.Create(state);
 
     var inputBytes = File.ReadAllBytes(inputFile);
-    using var bin = compiler.CompileToBytecode(inputBytes);
+    using var compilation = compiler.Compile(inputBytes);
 
     using var outputStream = outputFile != null
         ? File.Create(outputFile)
@@ -26,7 +26,7 @@ ConsoleApp.Run(args, (
     switch (outputFormat)
     {
         case OutputFormat.Binary:
-            outputStream.Write(bin.AsSpan());
+            outputStream.Write(compilation.AsBytecode());
             break;
         case OutputFormat.CSharp:
             var stringBuilder = new StringBuilder();
@@ -43,7 +43,7 @@ public static class {{csharpClassName ?? "MRubyBytecodeEmbedded"}}
             var i = 0;
             const string indent = "        ";
             stringBuilder.Append(indent);
-            foreach (var b in bin.AsSpan())
+            foreach (var b in compilation.AsBytecode())
             {
                 stringBuilder.Append($"0x{b:X2}, ");
                 if (++i >= 16)
