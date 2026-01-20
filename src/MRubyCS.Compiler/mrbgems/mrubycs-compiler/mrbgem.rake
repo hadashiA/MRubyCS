@@ -25,7 +25,7 @@ MRuby.each_target do
     is_vc = primary_toolchain == 'visualcpp'
     is_mingw = ENV['OS'] == 'Windows_NT' && cc.command.start_with?('gcc')
 
-    deffile = "#{File.dirname(__FILE__)}/mrbcs.def"
+    deffile = "#{File.dirname(__FILE__)}/mrubycs-compiler.def"
 
     flags = []
     flags_after_libraries = []
@@ -38,14 +38,14 @@ MRuby.each_target do
       flags << '-shared'
       flags << '-fpic'
       if sharedlib_ext == 'dylib'
-        flags << '-Wl,-undefined,dynamic_lookup'
+        #flags << '-Wl,-undefined,dynamic_lookup'
         flags << "-Wl,-force_load #{libmruby_static}"
         # flags << '-install_name @rpath/libmruby.dylib'
       elsif is_mingw
         flags << deffile
         flags << libmruby_static
       else
-        flags << '--allow-shlib-undefined'
+        #flags << '--allow-shlib-undefined'
         flags << "-Wl,--whole-archive #{libmruby_static}"
         flags_after_libraries << '-Wl,--no-whole-archive'
       end
