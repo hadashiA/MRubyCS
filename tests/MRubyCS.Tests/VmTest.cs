@@ -335,7 +335,7 @@ public class VmTest
 
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
-        var irep = compiler.Compile(code);
-        return mrb.Execute(irep);
+        using var compilation = compiler.Compile(code);
+        return mrb.LoadBytecode(compilation.AsBytecode());
     }
 }

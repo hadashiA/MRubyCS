@@ -41,8 +41,8 @@ class Commands
             else
             {
                 var compiler = MRubyCompiler.Create(state);
-                using var bin = compiler.CompileToBytecode(inputBytes);
-                irep = state.ParseBytecode(bin.AsSpan());
+                using var compilation = compiler.Compile(inputBytes);
+                irep = state.ParseBytecode(compilation.AsBytecode());
             }
 
             var bufferWriter = new ArrayBufferWriter<byte>();
@@ -56,7 +56,7 @@ class Commands
         else
         {
             var compiler = MRubyCompiler.Create(state);
-            using var bin = compiler.CompileToBytecode(inputBytes);
+            using var compilation = compiler.Compile(inputBytes);
 
             using var outputStream = output == "-"
                 ? Console.OpenStandardOutput()
@@ -65,10 +65,10 @@ class Commands
             switch (format)
             {
                 case OutputFormat.binary:
-                    outputStream.Write(bin.AsSpan());
+                    outputStream.Write(compilation.AsBytecode());
                     break;
                 case OutputFormat.csharp:
-                    WriteCSharpOutput(outputStream, bin.AsSpan(), csharpNamespace, csharpClassName);
+                    WriteCSharpOutput(outputStream, compilation.AsBytecode(), csharpNamespace, csharpClassName);
                     break;
             }
         }

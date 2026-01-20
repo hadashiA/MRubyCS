@@ -17,7 +17,7 @@ class MrbStateHandle : SafeHandle
 
     public override bool IsInvalid => handle == IntPtr.Zero;
 
-    public unsafe MrbStateNative* DangerousGetPtr() => (MrbStateNative*)DangerousGetHandle();
+    public unsafe MrbState* DangerousGetPtr() => (MrbState*)DangerousGetHandle();
 
     protected override unsafe bool ReleaseHandle()
     {
