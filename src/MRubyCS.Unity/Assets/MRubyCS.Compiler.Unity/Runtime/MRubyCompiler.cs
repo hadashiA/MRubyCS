@@ -73,7 +73,7 @@ public class MRubyCompiler : IDisposable
     public RFiber LoadSourceCodeAsFiber(ReadOnlySpan<byte> utf8Source)
     {
         using var compilation = Compile(utf8Source);
-        var proc = mruby.CreateProc(compilation.ToIrep(mruby));
+        var proc = mruby.CreateProc(compilation.ToIrep());
         return mruby.CreateFiber(proc);
     }
 
@@ -121,10 +121,11 @@ public class MRubyCompiler : IDisposable
             if (irepPtr == null || context.HasError)
             {
                 // error
-                return new CompilationResult(compileStateHandle, context);
+                return new CompilationResult(mruby, compileStateHandle, context);
             }
             NativeMethods.MrcDumpIrep(context.DangerousGetPtr(), irepPtr, 0, &bin, &binLength);
-            return new CompilationResult(compileStateHandle, context, (IntPtr)bin, (int)binLength);
+            NativeMethods.MrcIrepFree(context.DangerousGetPtr(), irepPtr);
+            return new CompilationResult(mruby, compileStateHandle, context, (IntPtr)bin, (int)binLength);
         }
     }
 

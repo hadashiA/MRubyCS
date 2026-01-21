@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 namespace MRubyCS.Compiler
 {
@@ -9,6 +8,7 @@ public class CompilationResult : IDisposable
     public IReadOnlyList<DiagnosticsDescriptor> Diagnostics => diagnostics;
     public bool HasError => contextHandle.HasError;
 
+    readonly MRubyState mrb;
     readonly MrbStateHandle stateHandle;
     readonly MrcCContextHandle contextHandle;
     readonly IntPtr bytecodeDataPtr;
@@ -17,11 +17,13 @@ public class CompilationResult : IDisposable
     bool disposed;
 
     internal CompilationResult(
+        MRubyState mrb,
         MrbStateHandle stateHandle,
         MrcCContextHandle contextHandle,
         IntPtr bytecodeDataPtr,
         int bytecodeLength)
     {
+        this.mrb = mrb;
         this.stateHandle = stateHandle;
         this.contextHandle = contextHandle;
         this.bytecodeDataPtr = bytecodeDataPtr;
@@ -30,9 +32,11 @@ public class CompilationResult : IDisposable
     }
 
     internal CompilationResult(
+        MRubyState mrb,
         MrbStateHandle stateHandle,
         MrcCContextHandle contextHandle)
     {
+        this.mrb = mrb;
         this.stateHandle = stateHandle;
         this.contextHandle = contextHandle;
         diagnostics = contextHandle.GetDiagnostics();
@@ -50,9 +54,9 @@ public class CompilationResult : IDisposable
 
     public ReadOnlySpan<byte> AsSpan() => AsBytecode();
 
-    public Irep ToIrep(MRubyState mrubycsState)
+    public Irep ToIrep()
     {
-        return mrubycsState.RiteParser.Parse(AsBytecode());
+        return mrb.RiteParser.Parse(AsBytecode());
     }
 
     public void Dispose()

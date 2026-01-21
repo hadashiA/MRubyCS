@@ -124,7 +124,12 @@ public class SpecTest
 
     void Exec(string fileName)
     {
-        compiler.LoadSourceCodeFile(Path.Join(rubyTestDir, fileName));
+        using var compilation = compiler.CompileFile(Path.Join(rubyTestDir, fileName));
+        if (compilation.HasError)
+        {
+            throw new MRubyCompileException(string.Join("\n", compilation.Diagnostics));
+        }
+        mrb.LoadBytecode(compilation.AsBytecode());
     }
 
     /// <summary>
