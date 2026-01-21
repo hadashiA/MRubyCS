@@ -22,6 +22,7 @@ public class MRubyCompiler : IDisposable
 {
     public static MRubyCompiler Create(MRubyState mrb, MRubyCompileOptions? options = null)
     {
+        NativeMethods.PrismXAllocatorInit();
         var compilerStateHandle = MrbStateHandle.Create();
         return new MRubyCompiler(mrb, compilerStateHandle, options);
     }
@@ -112,10 +113,9 @@ public class MRubyCompiler : IDisposable
             }
         }
 
-        using var context = MrcCContextHandle.Create(compileStateHandle);
-
+        var context = MrcCContextHandle.Create(compileStateHandle);
         byte* bin = null;
-        var binLength = 0;
+        nint binLength = 0;
         fixed (byte* sourcePtr = utf8Source)
         {
             var irepPtr = NativeMethods.MrcLoadStringCxt(context.DangerousGetPtr(), &sourcePtr, utf8Source.Length);
@@ -124,7 +124,8 @@ public class MRubyCompiler : IDisposable
                 // error
                 return new CompilationResult(compileStateHandle, context);
             }
-            return new CompilationResult(compileStateHandle, context, *bin, binLength);
+            NativeMethods.MrcDumpIrep(context.DangerousGetPtr(), irepPtr, 0, &bin, &binLength);
+            return new CompilationResult(compileStateHandle, context, (IntPtr)bin, (int)binLength);
         }
     }
 

@@ -106,6 +106,9 @@ unsafe class NativeMethods
     }
 #endif
 
+    [DllImport(DllName, EntryPoint = "mrubycs_compiler_prism_xallocator_init", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern void PrismXAllocatorInit();
+
     [DllImport(DllName, EntryPoint = "mrb_open", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern MrbState* MrbOpen();
 

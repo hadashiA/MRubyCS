@@ -265,7 +265,7 @@ public class RiteParser(MRubyState state)
                                 : MemoryMarshal.Read<double>(bin);
 #endif
                         bin = bin[sizeof(double)..];
-                        poolingValues[i] = MRubyValue.From(x);
+                        poolingValues[i] = x;
                         break;
                     }
                     // String
@@ -275,7 +275,7 @@ public class RiteParser(MRubyState state)
                         bin = bin[sizeof(ushort)..];
                         var str = state.NewString(bin[..length]);
                         bin = bin[(length + 1)..]; // skip \0
-                        poolingValues[i] = MRubyValue.From(str);
+                        poolingValues[i] = str;
                         break;
                     }
                     default:
