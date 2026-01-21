@@ -70,8 +70,7 @@ public class CompilationResult : IDisposable
             NativeMethods.MrbFree(stateHandle.DangerousGetPtr(), bytecodeDataPtr.ToPointer());
         }
 
-        NativeMethods.MrcCContextFree(contextHandle.DangerousGetPtr());
-
+        contextHandle.Dispose();
         disposed = true;
     }
 }
