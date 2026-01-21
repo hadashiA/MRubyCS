@@ -10,10 +10,18 @@ public enum DiagnosticSeverity
 
 public class DiagnosticsDescriptor
 {
-    public DiagnosticSeverity Severity { get; init; }
-    public int Line { get; init; }
-    public int Column { get; init; }
-    public string? Message { get; init; }
+    public DiagnosticSeverity Severity { get; }
+    public int Line { get; }
+    public int Column { get; }
+    public string? Message { get; }
+
+    public DiagnosticsDescriptor(DiagnosticSeverity severity, int line, int column, string? message)
+    {
+        Severity = severity;
+        Line = line;
+        Column = column;
+        Message = message;
+    }
 
     public override string ToString() => $"{Severity}: {Message} ({Line}:{Column})";
 }

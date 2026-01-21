@@ -25,8 +25,23 @@ namespace MRubyCS.Compiler.Editor
                 compiler = MRubyCompiler.Create(state);
             }
 
-            using var bin = compiler.CompileToBytecode(source);
-            var mrbAsset = new TextAsset(bin.AsSpan())
+            using var compilationResult = compiler.Compile(source);
+            foreach (var x in compilationResult.Diagnostics)
+            {
+                if (x.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.GeneratorError)
+                {
+                    ctx.LogImportError(x.ToString(), rbAsset);
+                }
+                else
+                {
+                    ctx.LogImportWarning(x.ToString(), rbAsset);
+                }
+            }
+            if (compilationResult.HasError)
+            {
+                return;
+            }
+            var mrbAsset = new TextAsset(compilationResult.AsSpan())
             {
                 name = Path.GetFileNameWithoutExtension(ctx.assetPath) + ".mrb"
             };

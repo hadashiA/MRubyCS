@@ -1,4 +1,4 @@
-MRuby::Gem::Specification.new('mrbcs-compiler') do |spec|
+MRuby::Gem::Specification.new('mrubycs-compiler') do |spec|
   spec.license = 'MIT'
   spec.authors = 'hadashiA'
 end
