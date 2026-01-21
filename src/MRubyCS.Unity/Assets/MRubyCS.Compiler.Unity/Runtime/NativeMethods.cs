@@ -105,18 +105,14 @@ unsafe class NativeMethods
         return IntPtr.Zero;
     }
 #endif
-
-    [DllImport(DllName, EntryPoint = "mrubycs_compiler_prism_xallocator_init", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    public static extern void PrismXAllocatorInit();
-
     [DllImport(DllName, EntryPoint = "mrb_open", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern MrbState* MrbOpen();
 
     [DllImport(DllName, EntryPoint = "mrb_close", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern void MrbClose(MrbState* mrb);
 
-    [DllImport(DllName, EntryPoint = "mrb_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    public static extern void MrbFree(MrbState* mrb, void* ptr);
+    [DllImport(DllName, EntryPoint = "free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern void MrcFree(void* ptr);
 
     [DllImport(DllName, EntryPoint = "mrc_ccontext_new", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern MrcCContext* MrcCContextNew(MrbState* mrb);

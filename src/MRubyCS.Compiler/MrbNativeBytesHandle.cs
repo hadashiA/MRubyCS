@@ -27,7 +27,8 @@ public class MrbNativeBytesHandle : SafeHandle
     protected override unsafe bool ReleaseHandle()
     {
         if (IsClosed) return false;
-        NativeMethods.MrbFree(stateHandle1.DangerousGetPtr(), DangerousGetHandle().ToPointer());
+        // NativeMethods.MrbFree(stateHandle1.DangerousGetPtr(), DangerousGetHandle().ToPointer());
+        NativeMethods.MrcFree(DangerousGetHandle().ToPointer());
         return true;
     }
 }

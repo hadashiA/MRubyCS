@@ -67,7 +67,8 @@ public class CompilationResult : IDisposable
 
         if (bytecodeDataPtr != IntPtr.Zero)
         {
-            NativeMethods.MrbFree(stateHandle.DangerousGetPtr(), bytecodeDataPtr.ToPointer());
+            // NativeMethods.MrcFree(stateHandle.DangerousGetPtr(), bytecodeDataPtr.ToPointer());
+            NativeMethods.MrcFree(bytecodeDataPtr.ToPointer());
         }
 
         contextHandle.Dispose();

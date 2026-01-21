@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -22,7 +22,6 @@ public class MRubyCompiler : IDisposable
 {
     public static MRubyCompiler Create(MRubyState mrb, MRubyCompileOptions? options = null)
     {
-        NativeMethods.PrismXAllocatorInit();
         var compilerStateHandle = MrbStateHandle.Create();
         return new MRubyCompiler(mrb, compilerStateHandle, options);
     }
@@ -134,6 +133,7 @@ public class MRubyCompiler : IDisposable
         if (disposed) return;
         disposed = true;
         compileStateHandle.Dispose();
+        disposed = true;
     }
 
     public void Dispose()
