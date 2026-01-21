@@ -35,20 +35,16 @@ namespace MRubyCS.Compiler
             var nodePtr = DangerousGetPtr()->DiagnosticList;
             while (nodePtr != null)
             {
-                var descriptor = new DiagnosticsDescriptor
+                var severity = nodePtr->DiagnosticCode switch
                 {
-                    Severity = nodePtr->DiagnosticCode switch
-                    {
-                        MrcDiagnosticCode.Warning => DiagnosticSeverity.Warning,
-                        MrcDiagnosticCode.Error => DiagnosticSeverity.Error,
-                        MrcDiagnosticCode.GeneratorWarning => DiagnosticSeverity.GeneratorWarning,
-                        MrcDiagnosticCode.GeneratorError => DiagnosticSeverity.GeneratorError,
-                        _ => throw new ArgumentOutOfRangeException()
-                    },
-                    Line = nodePtr->Line,
-                    Column = nodePtr->Column,
-                    Message = Marshal.PtrToStringUTF8((IntPtr)nodePtr->Message)
+                    MrcDiagnosticCode.Warning => DiagnosticSeverity.Warning,
+                    MrcDiagnosticCode.Error => DiagnosticSeverity.Error,
+                    MrcDiagnosticCode.GeneratorWarning => DiagnosticSeverity.GeneratorWarning,
+                    MrcDiagnosticCode.GeneratorError => DiagnosticSeverity.GeneratorError,
+                    _ => throw new ArgumentOutOfRangeException()
                 };
+                var message = Marshal.PtrToStringUTF8((IntPtr)nodePtr->Message);
+                var descriptor = new DiagnosticsDescriptor(severity, nodePtr->Line, nodePtr->Column, message);
                 list.Add(descriptor);
                 nodePtr = nodePtr->Next;
             }

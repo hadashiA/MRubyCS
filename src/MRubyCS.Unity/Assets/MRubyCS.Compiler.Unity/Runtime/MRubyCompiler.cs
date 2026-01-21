@@ -124,7 +124,7 @@ public class MRubyCompiler : IDisposable
                 // error
                 return new CompilationResult(compileStateHandle, context);
             }
-            return new CompilationResult(compileStateHandle, context, *bin, binLength);
+            return new CompilationResult(compileStateHandle, context, (IntPtr)(*bin), binLength);
         }
     }
 
