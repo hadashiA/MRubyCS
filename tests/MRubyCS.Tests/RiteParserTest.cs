@@ -11,7 +11,7 @@ public class RiteParserTest
         var mrb = MRubyState.Create();
         using var compiler = MRubyCompiler.Create(mrb);
         using var compilation = compiler.Compile("a = 'abcdefg'"u8);
-        var irep = compilation.ToIrep(mrb);
+        var irep = compilation.ToIrep();
         Assert.That(irep.PoolValues.Count, Is.EqualTo(1));
     }
 }
