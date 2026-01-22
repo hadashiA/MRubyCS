@@ -467,8 +467,8 @@ $ mruby-compiler input.rb -o Bytecode.cs --format csharp --csharp-namespace MyAp
 
 | Option | Description |
 |:-------|:------------|
-| `-o`, `--output` | Output file path (default: stdout) |
-| `--dump` | Dump bytecode in human-readable format instead of compiling |
+| `-o`, `--output` | Output file path (default: same directory as input with `.mrb`/`.cs` extension). Use `-` for stdout. |
+| `--dump` | Dump bytecode in human-readable format (outputs to stdout) |
 | `--format` | Output format: `binary` (default) or `csharp` |
 | `--csharp-namespace` | C# namespace for generated code (used with `--format csharp`) |
 | `--csharp-class-name` | C# class name for generated code (used with `--format csharp`) |

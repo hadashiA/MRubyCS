@@ -14,8 +14,8 @@ class Commands
     /// Compile Ruby source file to mruby bytecode
     /// </summary>
     /// <param name="inputFile">Input Ruby source file path</param>
-    /// <param name="output">-o, Output file path (default: stdout)</param>
-    /// <param name="dump">Dump bytecode in human-readable format instead of compiling</param>
+    /// <param name="output">-o, Output file path (default: same directory as input with .mrb/.cs extension)</param>
+    /// <param name="dump">Dump bytecode in human-readable format instead of compiling (outputs to stdout)</param>
     /// <param name="format">Output format: binary or csharp</param>
     /// <param name="csharpNamespace">C# namespace for generated code</param>
     /// <param name="csharpClassName">C# class name for generated code</param>
@@ -48,9 +48,9 @@ class Commands
             var bufferWriter = new ArrayBufferWriter<byte>();
             DumpIrepRecursive(state, irep, bufferWriter);
 
-            using var outputStream = output != null
-                ? File.Create(output)
-                : Console.OpenStandardOutput();
+            using var outputStream = output is null or "-"
+                ? Console.OpenStandardOutput()
+                : File.Create(output);
             outputStream.Write(bufferWriter.WrittenSpan);
         }
         else
@@ -58,9 +58,9 @@ class Commands
             var compiler = MRubyCompiler.Create(state);
             using var bin = compiler.CompileToBytecode(inputBytes);
 
-            using var outputStream = output != null
-                ? File.Create(output)
-                : Console.OpenStandardOutput();
+            using var outputStream = output == "-"
+                ? Console.OpenStandardOutput()
+                : File.Create(output ?? GetDefaultOutputPath(inputFile, format));
 
             switch (format)
             {
@@ -72,6 +72,16 @@ class Commands
                     break;
             }
         }
+    }
+
+    static string GetDefaultOutputPath(string inputFile, OutputFormat format)
+    {
+        var extension = format switch
+        {
+            OutputFormat.csharp => ".cs",
+            _ => ".mrb"
+        };
+        return Path.ChangeExtension(inputFile, extension);
     }
 
     static bool IsBytecode(string filePath, byte[] bytes)
