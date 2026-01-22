@@ -1,26 +1,26 @@
 MRuby::CrossBuild.new("macos-arm64") do |conf|
   conf.toolchain :clang
 
-  conf.gem core: 'mruby-compiler'
-  conf.gem core: 'mruby-string-ext'  
-  conf.gem './mrbgems/mrbcs-compiler'
+  #conf.gem core: 'mruby-compiler'
+  conf.gem github: 'hadashiA/mruby-compiler2'
+  conf.gem core: 'mruby-string-ext'
+  conf.gem './mrbgems/mrubycs-compiler'
 
   conf.disable_presym
-  conf.cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM)
+  conf.cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY MRC_ALLOC_LIBC)
   conf.cc.flags << '-arch arm64'
   conf.linker.flags << '-arch arm64'
 end
 
-MRuby::CrossBuild.new("macos-x64") do |conf|
-  conf.toolchain :clang
-  
-  conf.gem core: 'mruby-compiler'
-  conf.gem core: 'mruby-bin-mrbc'
-  conf.gem core: 'mruby-string-ext'
-  conf.gem './mrbgems/mrbcs-compiler'  
+# MRuby::CrossBuild.new("macos-x64") do |conf|
+#   conf.toolchain :clang
 
-  conf.disable_presym
-  conf.cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM)
-  conf.cc.flags << '-arch x86_64'
-  conf.linker.flags << '-arch x86_64'
-end
+#   conf.gem github: 'picoruby/mruby-compiler2'
+#   conf.gem core: 'mruby-string-ext'
+#   conf.gem './mrbgems/mrubycs-compiler'
+
+#   conf.disable_presym
+#   conf.cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY)
+#   conf.cc.flags << '-arch x86_64'
+#   conf.linker.flags << '-arch x86_64'
+# end

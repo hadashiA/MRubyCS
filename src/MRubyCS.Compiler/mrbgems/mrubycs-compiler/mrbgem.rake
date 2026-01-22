@@ -1,4 +1,4 @@
-MRuby::Gem::Specification.new('mrbcs-compiler') do |spec|
+MRuby::Gem::Specification.new('mrubycs-compiler') do |spec|
   spec.license = 'MIT'
   spec.authors = 'hadashiA'
 end
@@ -25,7 +25,7 @@ MRuby.each_target do
     is_vc = primary_toolchain == 'visualcpp'
     is_mingw = ENV['OS'] == 'Windows_NT' && cc.command.start_with?('gcc')
 
-    deffile = "#{File.dirname(__FILE__)}/mrbcs.def"
+    deffile = "#{File.dirname(__FILE__)}/mrubycs-compiler.def"
 
     flags = []
     flags_after_libraries = []
@@ -33,22 +33,25 @@ MRuby.each_target do
     if is_vc
       flags << '/DLL'
       flags << "/DEF:#{deffile}"
+      flags << libmruby_static
     else
       flags << '-shared'
       flags << '-fpic'
       if sharedlib_ext == 'dylib'
-        flags << '-Wl,-force_load'
+        #flags << '-Wl,-undefined,dynamic_lookup'
+        flags << "-Wl,-force_load #{libmruby_static}"
         # flags << '-install_name @rpath/libmruby.dylib'
       elsif is_mingw
-        flags << deffile          
+        flags << deffile
+        flags << libmruby_static
       else
-        flags << '-Wl,--whole-archive'
+        #flags << '--allow-shlib-undefined'
+        flags << "-Wl,--whole-archive #{libmruby_static}"
         flags_after_libraries << '-Wl,--no-whole-archive'
       end
     end
 
     flags << "/MACHINE:#{ENV['Platform']}" if is_vc && ENV.include?('Platform')
-    flags << libmruby_static
     flags += flags_after_libraries
 
     linker.run mruby_sharedlib, [], [], [], flags
