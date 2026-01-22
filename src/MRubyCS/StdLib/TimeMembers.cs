@@ -63,10 +63,27 @@ static class TimeMembers
 {
     const long TicksPerMicrosecond = 10;
 
+    public static RData CreateRDataFromDateTime(MRubyState mrb, DateTimeOffset dateTimeOffset)
+    {
+        var timeClass = mrb.GetConst(mrb.Intern("Time"u8), mrb.ObjectClass).As<RClass>();
+        var data = new MRubyTimeData(dateTimeOffset);
+        return new RData(timeClass, data);
+    }
+
+    public static bool TryGetDateTimeOffset(MRubyValue value, out DateTimeOffset dateTimeOffset)
+    {
+        if (TryGetTimeData(value, out var data))
+        {
+            dateTimeOffset = data.DateTimeOffset;
+            return true;
+        }
+        dateTimeOffset = default;
+        return false;
+    }
+
     public static MRubyMethod Now = new((mrb, _) =>
     {
-        var data = new MRubyTimeData(DateTimeOffset.Now);
-        return Wrap(mrb, data);
+        return CreateRDataFromDateTime(mrb, DateTimeOffset.Now);
     });
 
     public static MRubyMethod CreateAt = new((mrb, _) =>
@@ -92,7 +109,7 @@ static class TimeMembers
             mrb.Raise(Names.ArgumentError, "out of time range"u8);
             throw; // unreached
         }
-        return Wrap(mrb, new MRubyTimeData(dateTimeOffset));
+        return CreateRDataFromDateTime(mrb, dateTimeOffset);
     });
 
     public static MRubyMethod CreateUtc = new((mrb, _) =>
@@ -132,8 +149,7 @@ static class TimeMembers
         }
         var dateTime = new DateTime(year, month, day, hour, minute, sec, DateTimeKind.Utc);
         dateTime = dateTime.AddTicks(usec * TicksPerMicrosecond);
-        var data =  new MRubyTimeData(dateTime);
-        return Wrap(mrb, data);
+        return CreateRDataFromDateTime(mrb, dateTime);
     });
 
     public static MRubyMethod CreateLocal = new((mrb, _) =>
@@ -169,12 +185,11 @@ static class TimeMembers
         }
         if (mrb.TryGetArgumentAt(6, out var usecValue))
         {
-            usec = (int)mrb.ToInteger(usecValue);
+            usec = (int)mrb.AsInteger(usecValue);
         }
         var dateTime = new DateTime(year, month, day, hour, minute, sec, DateTimeKind.Local);
         dateTime = dateTime.AddTicks(usec * TicksPerMicrosecond);
-        var data =  new MRubyTimeData(dateTime);
-        return Wrap(mrb, data);
+        return CreateRDataFromDateTime(mrb, dateTime);
     });
 
     public static MRubyMethod Initialize = new((mrb, self) =>
@@ -227,7 +242,7 @@ static class TimeMembers
             dateTime = dateTime.AddTicks(usec * TicksPerMicrosecond);
             dateTimeOffset = new DateTimeOffset(dateTime);
         }
-        self.As<RData>().Data = Wrap(mrb, new MRubyTimeData(dateTimeOffset));
+        self.As<RData>().Data = CreateRDataFromDateTime(mrb, dateTimeOffset);
         return self;
     });
 
@@ -301,7 +316,7 @@ static class TimeMembers
         }
 
         var result = new DateTimeOffset(newTicks, time.DateTimeOffset.Offset);
-        return Wrap(mrb, new MRubyTimeData(result));
+        return CreateRDataFromDateTime(mrb, result);
     });
 
     public static MRubyMethod OpSub = new((mrb, self) =>
@@ -340,7 +355,7 @@ static class TimeMembers
             mrb.Raise(Names.RangeError, $"Time out of range in subtraction");
             throw; // unreached
         }
-        return Wrap(mrb, new MRubyTimeData(result));
+        return CreateRDataFromDateTime(mrb, result);
     });
 
     public static MRubyMethod Asctime = new((mrb, self) =>
@@ -486,15 +501,13 @@ static class TimeMembers
     public static MRubyMethod GetUtc = new((mrb, self) =>
     {
         var t = GetTimeData(mrb, self);
-        var utc = new MRubyTimeData(t.DateTimeOffset.ToUniversalTime());
-        return Wrap(mrb, utc);
+        return CreateRDataFromDateTime(mrb, t.DateTimeOffset.ToUniversalTime());
     });
 
     public static MRubyMethod GetLocal = new((mrb, self) =>
     {
         var t = GetTimeData(mrb, self);
-        var utc = new MRubyTimeData(t.DateTimeOffset.ToLocalTime());
-        return Wrap(mrb, utc);
+        return CreateRDataFromDateTime(mrb, t.DateTimeOffset.ToLocalTime());
     });
 
     public static MRubyMethod ConvertToUtc = new((mrb, self) =>
@@ -533,11 +546,6 @@ static class TimeMembers
         return default!; // unreachable
     }
 
-    static RData Wrap(MRubyState mrb, MRubyTimeData timeData)
-    {
-        var timeClass = mrb.GetConst(mrb.Intern("Time"u8), mrb.ObjectClass).As<RClass>();
-        return new RData(timeClass, timeData);
-    }
 
     static long ConvertToTicks(MRubyState mrb, MRubyValue secValue, bool withUSecs)
     {

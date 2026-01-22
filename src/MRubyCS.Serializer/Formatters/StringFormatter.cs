@@ -11,7 +11,7 @@ public class NullableStringFormatter : IMRubyValueFormatter<string?>
         {
             return default;
         }
-        return MRubyValue.From(state.NewString($"{value}"));
+        return state.NewString($"{value}");
     }
 
     public string? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -32,8 +32,7 @@ public class ByteArrayFormatter : IMRubyValueFormatter<byte[]?>
     {
         if (value == null) return default;
 
-        var str = state.NewString(value.AsSpan());
-        return MRubyValue.From(str);
+        return state.NewString(value.AsSpan());
     }
 
     public byte[]? Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
