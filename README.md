@@ -8,22 +8,21 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 ## Features
 
-- **Implemented in C#**
-  Utilizes the robust capabilities of C# to ensure seamless integration with C#-based game engines.
+- **Pure C#**
+  Seamless integration with Unity and .NET applications.
 
 - **High Performance**
-  Takes advantage of modern C# language features such as managed pointers, `Span`, and the performance benefits of the .NET runtimes GC and JIT compiler to deliver superior speed and efficiency.
+  Leverages modern C# features (`Span<T>`, managed pointers) and .NET JIT for speed.
 
-- **High compatibility with Ruby-level APIs**
-  It is intended for use in software with a certain amount of resources, such as games/gui-apps. For this reason, we are focusing on Ruby API compatibility.
-  At this time, all opcodes are implemented and pass the [syntax.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [class.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [module.rb](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb) and built-in libs tests from the original mruby repository.
-    - Please refer to the [specification tests](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test) to confirm the supported features.
-    - [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb), [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb), [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb), [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb), [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb), [Proc](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/proc.rb), [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb), [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb), [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb), [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb), [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
-- **Portability & Extensibility**
-  Compared to the original C implementation, calling C# extensive libraries from Ruby is straightforward, making the VM highly extensible.
+- **Ruby Compatibility**
+  All opcodes implemented; passes mruby's official tests.
+  - Supported: [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb), [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb), [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb), [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb), [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb), [Proc](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/proc.rb), [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb), [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb), [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb), [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb), [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
 
-- **Fiber and async/await integration**
-  You can communicate between the Ruby world and the C# world like channels without blocking threads with `Fiber`. This enables integration such as suspending Ruby and then executing async methods in the C# world.
+- **Portability**
+  Runs anywhere Unity/.NET runs—no native mruby build required. Easy to call C# libraries from Ruby.
+
+- **Fiber & async/await**
+  Communicate between Ruby and C# without blocking threads. Suspend Ruby execution and await C# async methods.
 
 ## Limitations
 
@@ -45,7 +44,8 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
     - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
-    - [MRubyCS.Compiler](#mrubycscompiler)
+    - [MRubyCS.Compiler.Cli (dotnet tool)](#mrubycscompilercli-dotnet-tool)
+    - [MRubyCS.Compiler (library)](#mrubycscompiler-library)
 - [Fiber (Coroutine)](#fiber-coroutine)
 - [MRubyCS.Serializer](#mrubycsserializer)
 
@@ -57,6 +57,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 |:----------|:---------------|----------------|
 | MRubyCS   |  Main package. A mruby vm implementation. | [![NuGet](https://img.shields.io/nuget/v/MRubyCS)](https://www.nuget.org/packages/MRubyCS) |
 | MRubyCS.Compiler | Compile ruby source code utility. (Native binding)  | [![NuGet](https://img.shields.io/nuget/v/MRubyCS.Compiler)](https://www.nuget.org/packages/MRubyCS.Compiler)   |
+| MRubyCS.Compiler.Cli | dotnet tool for compiling Ruby source to bytecode | [![NuGet](https://img.shields.io/nuget/v/MRubyCS.Compiler.Cli)](https://www.nuget.org/packages/MRubyCS.Compiler.Cli) |
 | MRubyCS.Serializer  | Converting Ruby and C# Objects Between Each Other | [![NuGet](https://img.shields.io/nuget/v/MRubyCS.Serializer)](https://www.nuget.org/packages/MRubyCS.Serializer)  |
 
 ### Unity
@@ -73,10 +74,16 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 ## Basic Usage
 
-> [!NOTE]
-> MRubyCS is a C# implementation of the bytecode machine component, with the source code compiler separated.
-> You will likely use either `mrbc` or `MRubyCS.Compiler`.
-> For details,  please refer to the [Compiling Ruby source code](#compiling-ruby-source-code) .
+### Option A: Using CLI tool (pre-compile)
+
+**1. Install**
+
+```bash
+dotnet add package MRubyCS
+dotnet tool install -g MRubyCS.Compiler.Cli
+```
+
+**2. Write Ruby code** (`fibonacci.rb`)
 
 ```ruby
 def fibonacci(n)
@@ -87,32 +94,62 @@ end
 fibonacci 10
 ```
 
+**3. Compile to bytecode**
+
 ```bash
-$ mrbc -o fibonaci.mrbc fibonacci.rb
+mruby-compiler fibonacci.rb -o fibonacci.mrb
 ```
+
+**4. Execute in C#**
 
 ```cs
 using MRubyCS;
 
-// initialize state
 var mrb = MRubyState.Create();
-
-// Read the .mrb byte-code.
 var bytecode = File.ReadAllBytes("fibonacci.mrb");
-
-// execute bytecoe
 var result = mrb.LoadBytecode(bytecode);
 
-result.IsInteger    //=> true
 result.IntegerValue //=> 55
 ```
 
-You can also parse bytecode in advance.
-The result of parsing bytecode is called `Irep` in mruby terminology.
+> [!TIP]
+> For local tool installation, use `dotnet tool install MRubyCS.Compiler.Cli` and run with `dotnet mruby-compiler`.
+
+### Option B: Using Compiler library (runtime compile)
+
+```bash
+dotnet add package MRubyCS
+dotnet add package MRubyCS.Compiler
+```
+
+```cs
+using MRubyCS;
+using MRubyCS.Compiler;
+
+var mrb = MRubyState.Create();
+var compiler = MRubyCompiler.Create(mrb);
+
+var result = compiler.LoadSourceCode("""
+    def fibonacci(n)
+      return n if n <= 1
+      fibonacci(n - 1) + fibonacci(n - 2)
+    end
+
+    fibonacci 10
+    """u8);
+
+result.IntegerValue //=> 55
+```
+
+> [!NOTE]
+> `MRubyCS.Compiler` includes native binaries. See [Compiling Ruby source code](#compiling-ruby-source-code) for supported platforms.
+
+### Irep
+
+You can also parse bytecode in advance. The result is called `Irep` in mruby terminology.
 
 ```cs
 Irep irep = mrb.ParseBytecode(bytecode);
-
 mrb.Execute(irep);
 ```
 
@@ -404,18 +441,50 @@ graph TB
 
 By the way, MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
 
-##### `mrbc`
+### MRubyCS.Compiler.Cli (dotnet tool)
 
-Using the original [mruby](https://github.com/mruby/mruby) project's compiler is one approach.
+The easiest way to compile Ruby source files is using the `mruby-compiler` dotnet tool.
+
+```bash
+# Install globally
+$ dotnet tool install -g MRubyCS.Compiler.Cli
+$ mruby-compiler input.rb -o output.mrb
+
+# Or, install locally
+$ dotnet tool install MRubyCS.Compiler.Cli
+$ dotnet mruby-compiler input.rb -o output.mrb
+```
+
+```bash
+# Dump bytecode in human-readable format
+$ mruby-compiler input.rb --dump
+
+# Generate C# code with embedded bytecode
+$ mruby-compiler input.rb -o Bytecode.cs --format csharp --csharp-namespace MyApp
+```
+
+#### Options
+
+| Option | Description |
+|:-------|:------------|
+| `-o`, `--output` | Output file path (default: stdout) |
+| `--dump` | Dump bytecode in human-readable format instead of compiling |
+| `--format` | Output format: `binary` (default) or `csharp` |
+| `--csharp-namespace` | C# namespace for generated code (used with `--format csharp`) |
+| `--csharp-class-name` | C# class name for generated code (used with `--format csharp`) |
+
+### mrbc (original mruby compiler)
+
+Alternatively, you can use the original [mruby](https://github.com/mruby/mruby) project's compiler.
 
 ```bash
 $ git clone git@github.com:mruby/mruby.git
 $ cd mruby
 $ rake
-$ ./build/host/bin/mrubc
+$ ./build/host/bin/mrbc -o output.mrb input.rb
 ```
 
-### MRubyCS.Compiler
+### MRubyCS.Compiler (library)
 
 To simplify compilation from C#, we  provide the MRubyCS.Compiler package, which is a thin wrapper of the C# API for the native compiler.
 
