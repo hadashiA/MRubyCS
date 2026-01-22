@@ -2,11 +2,12 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <!-- TODO: not for production ready yet -->
-        <IsPackable>false</IsPackable>
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>mruby-compiler</ToolCommandName>
+        <Description>Wrapper for the mruby compiler CLI tool</Description>
     </PropertyGroup>
 
     <ItemGroup>
@@ -14,6 +15,7 @@
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
+      <PackageReference Include="System.IO.Pipelines" Version="10.0.1" />
     </ItemGroup>
 
     <ItemGroup>
