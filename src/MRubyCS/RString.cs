@@ -594,14 +594,14 @@ public class RString : RObject, IEquatable<RString>
                 if (elementEnd < 0) break;
 
                 var slice = span.Slice(i, elementEnd);
-                result.Push(MRubyValue.From(new RString(slice, Class)));
+                result.Push(new RString(slice, Class));
                 i += elementEnd + separatorSpan.Length;
             }
             else
             {
                 var l = Utf8Helper.GetUtf8SequenceLength(span[i]);
                 var slice = span.Slice(i, l);
-                result.Push(MRubyValue.From(new RString(slice, Class)));
+                result.Push(new RString(slice, Class));
                 i += l;
             }
         }
@@ -609,7 +609,7 @@ public class RString : RObject, IEquatable<RString>
         if (span.Length > 0 && i < span.Length && (limit < 0 || limit > result.Length))
         {
             var remaining = SubByteSequence(i, span.Length - i)!;
-            result.Push(MRubyValue.From(remaining));
+            result.Push(remaining);
         }
     }
 

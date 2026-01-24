@@ -191,6 +191,17 @@ partial class MRubyState
         Raise(ex);
     }
 
+    internal void RaiseMethodVisibilityVioration(Symbol methodId, MRubyValue self, MRubyValue args, MRubyMethodVisibility visibility)
+    {
+        var exceptionClass = GetExceptionClass(Names.NoMethodError);
+        var ex = new RException(NewString(
+            $"{visibility} method '{NameOf(methodId)}' called for {ClassNameOf(self)}"),
+            exceptionClass);
+        ex.InstanceVariables.Set(Names.NameVariable, methodId);
+        ex.InstanceVariables.Set(Names.ArgsVariable, args);
+        Raise(ex);
+    }
+
     internal void RaiseNameError(Symbol name, RString message)
     {
         var ex = new RException(message, GetExceptionClass(Names.NameError));

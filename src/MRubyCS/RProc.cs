@@ -5,7 +5,7 @@ namespace MRubyCS;
 
 public interface ICallScope
 {
-    public RClass TargetClass { get; }
+    RClass TargetClass { get; }
 }
 
 /// <summary>
@@ -19,6 +19,8 @@ class REnv() : RBasic(MRubyVType.Env, default!), ICallScope
     public required MRubyContext? Context { get; init; }
     public required RClass TargetClass { get; init; }
     public required Symbol MethodId { get; init; }
+    public required MRubyMethodVisibility Visibility { get; internal set; }
+    public required bool VisibilityBreak { get; init; }
 
     public bool OnStack => Context != null;
 

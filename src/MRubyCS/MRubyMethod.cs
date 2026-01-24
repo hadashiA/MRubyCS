@@ -5,14 +5,21 @@ namespace MRubyCS;
 
 public delegate MRubyValue MRubyFunc(MRubyState state, MRubyValue self);
 
-[Flags]
 public enum MRubyMethodKind
 {
     RProc,
     CSharpFunc,
 }
 
-public readonly unsafe struct MRubyMethod : IEquatable<MRubyMethod>
+public enum MRubyMethodVisibility
+{
+    Default,
+    Public,
+    Private,
+    Protected,
+}
+
+public readonly struct MRubyMethod : IEquatable<MRubyMethod>
 {
     public static readonly MRubyMethod Nop = new((_, _) => MRubyValue.Nil);
     public static readonly MRubyMethod Undef = new((_, _) => MRubyValue.Nil);
@@ -20,25 +27,29 @@ public readonly unsafe struct MRubyMethod : IEquatable<MRubyMethod>
     public static readonly MRubyMethod False = new((_, _) => MRubyValue.False);
     public static readonly MRubyMethod Identity = new((_, self) => self);
 
-    public MRubyMethodKind Kind
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => Proc != null ? MRubyMethodKind.RProc : MRubyMethodKind.CSharpFunc;
-    }
-
     public readonly RProc? Proc;
     public readonly MRubyFunc? Func;
     // readonly delegate* managed<MRubyState, MRubyValue, MRubyValue> funcPtr = default;
+    public readonly MRubyMethodVisibility Visibility;
+    public readonly MRubyMethodKind Kind;
 
-    public MRubyMethod(RProc proc)
+    public MRubyMethod(RProc proc, MRubyMethodVisibility visibility = MRubyMethodVisibility.Default)
     {
         Proc = proc;
+        Kind = MRubyMethodKind.RProc;
+        Visibility = visibility;
     }
 
-    public MRubyMethod(MRubyFunc? func)
+    public MRubyMethod(MRubyFunc? func, MRubyMethodVisibility visibility = MRubyMethodVisibility.Default)
     {
         Func = func;
+        Kind = MRubyMethodKind.CSharpFunc;
+        Visibility = visibility;
     }
+
+    public MRubyMethod WithVisibility(MRubyMethodVisibility visibility) => Proc != null
+        ? new MRubyMethod(Proc, visibility)
+        : new MRubyMethod(Func, visibility);
 
     // internal MRubyMethod(delegate* managed<MRubyState, MRubyValue, MRubyValue> funcPtr)
     // {
@@ -67,10 +78,7 @@ public readonly unsafe struct MRubyMethod : IEquatable<MRubyMethod>
         {
             return Proc.GetHashCode();
         }
-        else
-        {
-            return Func!.GetHashCode();
-        }
+        return Func!.GetHashCode();
     }
 
     public static bool operator ==(MRubyMethod left, MRubyMethod right)

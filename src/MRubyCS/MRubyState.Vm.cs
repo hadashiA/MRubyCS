@@ -135,6 +135,7 @@ partial class MRubyState
             : callInfo.MethodId;
         nextCallInfo.Proc = block;
         nextCallInfo.Scope = c;
+        nextCallInfo.VisibilityBreak = true;
 
         var nextStack = Context.Stack.AsSpan(nextCallInfo.StackPointer);
         nextStack[0] = self;
@@ -200,6 +201,7 @@ partial class MRubyState
         callInfo.Scope = ObjectClass;
         callInfo.MethodId = default;
         callInfo.CallerType = CallerType.InVmLoop;
+        callInfo.VisibilityBreak = true;
         Context.Stack[0] = TopSelf;
         return Execute(irep, 0, 1);
     }
@@ -311,6 +313,7 @@ partial class MRubyState
         callInfo.ArgumentCount = 0;
         callInfo.KeywordArgumentCount = 0;
         callInfo.MethodId = Context.CallStack[Context.CallDepth - 1].MethodId;
+        callInfo.VisibilityBreak = true;
 
         var nregs = block.Irep.RegisterVariableCount < 4 ? 4 : block.Irep.RegisterVariableCount;
         Context.ExtendStack(nregs);
@@ -869,6 +872,28 @@ partial class MRubyState
 
                         // var block = stack[blockArgumentOffset];
                         // if (!block.IsNil) EnsureValueIsBlock(block);
+
+                        // Validate method visibility
+                        if (opcode is OpCode.Send or OpCode.SendB)
+                        {
+                            if (method.Visibility == MRubyMethodVisibility.Private)
+                            {
+                                var args = callInfo.ArgumentPacked
+                                    ? Context.Stack[callInfo.StackPointer + 1]
+                                    : NewArray(Context.Stack.AsSpan(callInfo.StackPointer + 1, callInfo.ArgumentCount));
+
+                                RaiseMethodVisibilityVioration(methodId, self, args, MRubyMethodVisibility.Private);
+                            }
+                            else if (method.Visibility == MRubyMethodVisibility.Protected &&
+                                     KindOf(self, callInfo.Scope.TargetClass))
+                            {
+                                var args = callInfo.ArgumentPacked
+                                    ? Context.Stack[callInfo.StackPointer + 1]
+                                    : NewArray(Context.Stack.AsSpan(callInfo.StackPointer + 1, callInfo.ArgumentCount));
+
+                                RaiseMethodVisibilityVioration(methodId, self, args, MRubyMethodVisibility.Protected);
+                            }
+                        }
 
                         if (method.Kind == MRubyMethodKind.CSharpFunc)
                         {

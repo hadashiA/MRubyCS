@@ -69,6 +69,8 @@ struct MRubyCallInfo
     public CallerType CallerType;
     public ICallScope Scope;
     public Symbol MethodId;
+    public MRubyMethodVisibility Visibility;
+    public bool VisibilityBreak;
 
     public bool ArgumentPacked => ArgumentCount >= CallMaxArgs;
     public bool KeywordArgumentPacked => KeywordArgumentCount >= CallMaxArgs;
@@ -98,6 +100,8 @@ struct MRubyCallInfo
         MethodId = default;
         ArgumentCount = 0;
         KeywordArgumentCount = 0;
+        Visibility = MRubyMethodVisibility.Default;
+        VisibilityBreak = false;
     }
 
     public void MarkAsArgumentPacked()
@@ -513,6 +517,38 @@ class MRubyContext
             }
         }
         return CollectionsMarshal.AsSpan(list);
+    }
+
+    internal ref MRubyCallInfo FindClosestVisibilityScope(RClass? c, int n, out REnv? env)
+    {
+        ref var callInfo = ref CallStack[CallDepth - n];
+        c ??= callInfo.Scope.TargetClass;
+
+        var proc = callInfo.Proc;
+
+        if (proc?.Upper is null ||
+            proc.HasFlag(MRubyObjectFlags.ProcScope) ||
+            proc?.Scope is not REnv ||
+            callInfo.Scope.TargetClass != c ||
+            callInfo.VisibilityBreak)
+        {
+            env = callInfo.Scope as REnv;
+            return ref callInfo;
+        }
+
+        while (true)
+        {
+            env = proc.Scope as REnv;
+            proc = proc.Upper;
+            if (proc?.Upper is null ||
+                proc.HasFlag(MRubyObjectFlags.ProcScope) ||
+                env is null ||
+                env.TargetClass != c ||
+                env.VisibilityBreak)
+            {
+                return ref callInfo;
+            }
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
