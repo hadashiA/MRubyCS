@@ -22,7 +22,10 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 
 ## Limitations
 
-- `private` and `protected` visibitily is not yet implemented. (mruby got support for this in 3.4)
+- As of mruby 3.3, almost all bundled classes/methods are supported.
+    - Support for extensions split into [mrbgems](https://github.com/mruby/mruby/tree/master/mrbgems) remains limited.
+    - Some methods/specs added in 3.4 are not yet covered.
+- However, basic private/protected visibility is already supported. 
 
 ### Most recent roadmap
 
