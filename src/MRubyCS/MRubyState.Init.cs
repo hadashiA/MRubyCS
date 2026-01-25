@@ -178,9 +178,6 @@ public partial class MRubyState
         DefineMethod(ModuleClass, Intern("included"u8), MRubyMethod.Nop);
         DefineMethod(ModuleClass, Names.Initialize, ModuleMembers.Initialize);
         DefineMethod(ModuleClass, Intern("module_function"u8), ModuleMembers.ModuleFunction);
-        DefineMethod(ModuleClass, Intern("private"u8), MRubyMethod.Nop);
-        DefineMethod(ModuleClass, Intern("protected"u8), MRubyMethod.Nop);
-        DefineMethod(ModuleClass, Intern("public"u8), MRubyMethod.Nop);
         DefineMethod(ModuleClass, Intern("attr_reader"u8), ModuleMembers.AttrReader);
         DefineMethod(ModuleClass, Intern("attr_writer"u8), ModuleMembers.AttrWriter);
         DefineMethod(ModuleClass, Intern("attr_accessor"u8), ModuleMembers.AttrAccessor);
@@ -200,6 +197,10 @@ public partial class MRubyState
         DefineMethod(ModuleClass, Names.Dup, ModuleMembers.Dup);
         DefineMethod(ModuleClass, Names.MethodAdded, MRubyMethod.Nop);
 
+        DefinePrivateMethod(ModuleClass, Intern("public"u8), ModuleMembers.Public);
+        DefinePrivateMethod(ModuleClass, Intern("private"u8), ModuleMembers.Private);
+        DefinePrivateMethod(ModuleClass, Intern("protected"u8), ModuleMembers.Protected);
+
         UndefMethod(ClassClass, Intern("append_features"u8));
         UndefMethod(ClassClass, Intern("prepend_features"u8));
         UndefMethod(ClassClass, Intern("extend_object"u8));
@@ -209,6 +210,10 @@ public partial class MRubyState
         // DefineSingletonMethod(TopSelf, Names.Inspect, MainMembers.Inspect);
         // DefineSingletonMethod(TopSelf, Names.ToS, MainMembers.ToS);
         // DefineSingletonMethod(TopSelf, Intern("define_method"u8), MainMembers.DefineMethod);
+
+        DefineSingletonMethod(TopSelf, Intern("public"u8), ModuleMembers.TopPublic);
+        DefineSingletonMethod(TopSelf, Intern("private"u8), ModuleMembers.TopPrivate);
+        DefineSingletonMethod(TopSelf, Intern("protected"u8), ModuleMembers.TopProtected);
     }
 
     void InitObject()

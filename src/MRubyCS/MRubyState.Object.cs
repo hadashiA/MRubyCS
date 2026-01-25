@@ -533,7 +533,9 @@ partial class MRubyState
                     StackSize = stackSize,
                     MethodId = methodId,
                     BlockArgumentOffset = callInfo.BlockArgumentOffset,
-                    TargetClass = callInfo.Scope.TargetClass
+                    TargetClass = callInfo.Scope.TargetClass,
+                    Visibility = callInfo.Visibility,
+                    VisibilityBreak = callInfo.VisibilityBreak
                 };
                 callInfo.Scope = env;
             }

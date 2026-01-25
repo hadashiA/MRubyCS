@@ -4,6 +4,42 @@ namespace MRubyCS.StdLib;
 
 static class ModuleMembers
 {
+    public static MRubyMethod Public = new((mrb, mod) =>
+    {
+        SetMethodVisibility(mrb, mod.As<RClass>(), MRubyMethodVisibility.Public);
+        return mod;
+    });
+
+    public static MRubyMethod Private = new((mrb, mod) =>
+    {
+        SetMethodVisibility(mrb, mod.As<RClass>(), MRubyMethodVisibility.Private);
+        return mod;
+    });
+
+    public static MRubyMethod Protected = new((mrb, mod) =>
+    {
+        SetMethodVisibility(mrb, mod.As<RClass>(), MRubyMethodVisibility.Protected);
+        return mod;
+    });
+
+    public static MRubyMethod TopPublic = new((mrb, mod) =>
+    {
+        SetMethodVisibility(mrb, mrb.ObjectClass, MRubyMethodVisibility.Public);
+        return mrb.ObjectClass;
+    });
+
+    public static MRubyMethod TopPrivate = new((mrb, mod) =>
+    {
+        SetMethodVisibility(mrb, mrb.ObjectClass, MRubyMethodVisibility.Private);
+        return mrb.ObjectClass;
+    });
+
+    public static MRubyMethod TopProtected = new((mrb, mod) =>
+    {
+        SetMethodVisibility(mrb, mrb.ObjectClass, MRubyMethodVisibility.Protected);
+        return mrb.ObjectClass;
+    });
+
     [MRubyMethod]
     public static MRubyMethod Initialize = new((state, self) =>
     {
@@ -155,12 +191,12 @@ static class ModuleMembers
         if (mod.VType == MRubyVType.SClass)
         {
             var v = mod.InstanceVariables.Get(Names.AttachedKey);
-            return MRubyValue.From(v.VType.IsClass()
+            return v.VType.IsClass()
                 ? state.NewString($"<Class:{state.InspectObject(v)}>")
-                : state.NewString($"<Class:{state.StringifyAny(v)}>"));
+                : state.NewString($"<Class:{state.StringifyAny(v)}>");
         }
 
-        return MRubyValue.From(state.NameOf(mod));
+        return state.NameOf(mod);
     });
 
     [MRubyMethod(RequiredArguments = 2)]
@@ -197,17 +233,17 @@ static class ModuleMembers
         {
             if (c.VType == MRubyVType.IClass)
             {
-                result.Push(MRubyValue.From(c.Class));
+                result.Push(c.Class);
             }
             else if (!c.Flags.HasFlag(MRubyObjectFlags.ClassPrepended))
             {
-                result.Push(MRubyValue.From(c));
+                result.Push(c);
             }
 
             c = c.Super;
         }
 
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
@@ -220,7 +256,7 @@ static class ModuleMembers
         var result = inherit.Truthy
             ? state.ConstDefinedAt(id, mod)
             : state.ConstDefinedAt(id, mod, true);
-        return MRubyValue.From(result);
+        return result;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -297,7 +333,7 @@ static class ModuleMembers
     public static MRubyMethod MethodDefined = new((state, self) =>
     {
         var methodId = state.GetArgumentAsSymbolAt(0);
-        return MRubyValue.From(state.RespondTo(self.As<RClass>(), methodId));
+        return state.RespondTo(self.As<RClass>(), methodId);
     });
 
     [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1, BlockArgument = true)]
@@ -331,7 +367,7 @@ static class ModuleMembers
         state.DefineMethod(mod, methodId, method);
         state.MethodAddedHook(mod, methodId);
 
-        return MRubyValue.From(methodId);
+        return methodId;
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -339,7 +375,7 @@ static class ModuleMembers
     {
         var mod = self.As<RClass>();
         var other = state.GetArgumentAt(0);
-        return MRubyValue.From(state.KindOf(other, mod));
+        return state.KindOf(other, mod);
     });
 
     [MRubyMethod]
@@ -352,4 +388,31 @@ static class ModuleMembers
         }
         return clone;
     });
+
+    static void SetMethodVisibility(MRubyState mrb, RClass c, MRubyMethodVisibility visibility)
+    {
+        var args = mrb.GetRestArgumentsAfter(0);
+        if (args.Length <= 0)
+        {
+            ref var callInfo = ref mrb.Context.FindClosestVisibilityScope(null, 1, out var env);
+            if (env != null)
+            {
+                env.Visibility = visibility;
+            }
+            else
+            {
+                callInfo.Visibility = visibility;
+            }
+        }
+        else
+        {
+            foreach (var arg in args)
+            {
+                mrb.EnsureValueType(arg, MRubyVType.Symbol);
+                var methodId = arg.SymbolValue;
+                c.TryFindMethod(methodId, out var method, out _);
+                c.MethodTable[methodId] = method.WithVisibility(visibility);
+            }
+        }
+    }
 }

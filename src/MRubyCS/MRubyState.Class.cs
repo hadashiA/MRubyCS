@@ -191,7 +191,6 @@ partial class MRubyState
     public void DefineMethod(RClass c, Symbol id, MRubyFunc func) =>
         DefineMethod(c, id, new MRubyMethod(func));
 
-
     public void DefineMethod(RClass c, Symbol id, MRubyMethod method)
     {
         c = c.AsOrigin();
@@ -213,7 +212,29 @@ partial class MRubyState
                 proc.UpdateScope(c);
             }
         }
+
+        if (id == Names.Initialize ||
+            id == Names.InitializeCopy ||
+            id == Names.QRespondToMissing)
+        {
+            method = method.WithVisibility(MRubyMethodVisibility.Private);
+        }
+        else if (method.Visibility == MRubyMethodVisibility.Default)
+        {
+            ref var callInfo = ref Context.FindClosestVisibilityScope(c, 0, out var env);
+            var visibility = env?.Visibility ?? callInfo.Visibility;
+            if (method.Visibility != visibility)
+            {
+                method = method.WithVisibility(visibility);
+            }
+        }
+
         c.MethodTable[id] = method;
+    }
+
+    public void DefinePrivateMethod(RClass c, Symbol id, MRubyMethod method)
+    {
+        DefineMethod(c, id, method.WithVisibility(MRubyMethodVisibility.Private));
     }
 
     public void AliasMethod(RClass c, Symbol aliasMethodId, Symbol methodId)

@@ -13,14 +13,13 @@ public class RClass : RObject, ICallScope
 
     public bool IsSingletonClass => VType == MRubyVType.SClass;
 
-    internal MethodTable MethodTable => methodTable;
+    internal MethodTable MethodTable { get; private set; } = new();
 
     internal VariableTable ClassInstanceVariables => VType == MRubyVType.IClass
         ? Class.InstanceVariables
         : InstanceVariables;
 
     RClass super = default!;
-    MethodTable methodTable = new();
 
     internal RClass(RClass classClass, MRubyVType vType = MRubyVType.Class) : base(vType, classClass)
     {
@@ -54,7 +53,7 @@ public class RClass : RObject, ICallScope
         }
         else
         {
-            methodTable.CopyTo(clone.methodTable);
+            MethodTable.CopyTo(clone.MethodTable);
         }
         clone.super = Super;
         clone.UnFreeze();
@@ -140,8 +139,8 @@ public class RClass : RObject, ICallScope
 
     internal void MoveMethodTableTo(RClass to)
     {
-        to.methodTable = methodTable;
-        methodTable = new MethodTable();
+        to.MethodTable = MethodTable;
+        MethodTable = new MethodTable();
     }
 
     internal void ShareInstanceVariablesTo(RClass to)
@@ -218,7 +217,7 @@ public class RClass : RObject, ICallScope
         {
             Super = insertionClass,
             InstanceVType = MRubyVType.Class,
-            methodTable = mod.methodTable,
+            MethodTable = mod.MethodTable,
             InstanceVariables = mod.InstanceVariables
         };
     }
