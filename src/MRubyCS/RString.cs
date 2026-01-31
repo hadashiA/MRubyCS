@@ -119,6 +119,11 @@ public class RString : RObject, IEquatable<RString>
         return Encoding.UTF8.GetString(buffer, offset, Length);
     }
 
+    /// <summary>
+    /// Alias for ToString() to improve readability in conversion contexts.
+    /// </summary>
+    public string ConvertToString() => ToString();
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<byte> AsSpan() => buffer.AsSpan(offset, Length);
 

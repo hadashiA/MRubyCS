@@ -1,7 +1,9 @@
 using System;
 using System.Buffers;
 using System.Buffers.Text;
+using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using MRubyCS.Internals;
 
 namespace MRubyCS.StdLib;
@@ -456,10 +458,28 @@ static class StringMembers
     {
         var str = self.As<RString>();
         var argc = state.GetArgumentCount();
+        var limit = -1; // Default: no limit (use -1 for existing methods)
+        var regexpLimit = 0; // Default for regexp: remove trailing empty strings
+
+        // Get limit from second argument if present
+        if (argc >= 2)
+        {
+            limit = (int)state.GetArgumentAsIntegerAt(1);
+            regexpLimit = limit;
+        }
+
+        // Check for Regexp argument first
+        if (argc >= 1)
+        {
+            var arg0 = state.GetArgumentAt(0);
+            if (RegexpMembers.TryGetRegexpData(arg0, out var regexpData))
+            {
+                return SplitByRegexp(state, str, regexpData, regexpLimit);
+            }
+        }
 
         var splitType = RStringSplitType.String;
         var separator = default(RString?);
-        var limit = -1;
 
         switch (argc)
         {
@@ -484,7 +504,6 @@ static class StringMembers
                     state.EnsureValueType(arg0, MRubyVType.String);
                     separator = arg0.As<RString>();
                 }
-                limit = (int)state.GetArgumentAsIntegerAt(1);
                 break;
             }
             default:
@@ -513,6 +532,92 @@ static class StringMembers
         }
         return result;
     });
+
+    static MRubyValue SplitByRegexp(MRubyState state, RString str, MRubyRegexpData regexpData, int limit)
+    {
+        var input = str.ConvertToString();
+        var result = state.NewArray();
+        var regex = regexpData.Regex;
+
+        if (input.Length == 0)
+        {
+            return result;
+        }
+
+        // Special handling for empty pattern - split into individual characters
+        if (regexpData.Pattern.Length == 0)
+        {
+            var maxParts = limit > 0 ? limit : input.Length;
+            for (var i = 0; i < input.Length && result.Length < maxParts - 1; i++)
+            {
+                result.Push(state.NewString(input.Substring(i, 1)));
+            }
+            if (result.Length < maxParts && result.Length < input.Length)
+            {
+                result.Push(state.NewString(input.Substring(result.Length)));
+            }
+            return result;
+        }
+
+        var matches = regex.Matches(input);
+
+        if (matches.Count == 0)
+        {
+            result.Push(str.Dup());
+            return result;
+        }
+
+        var lastEnd = 0;
+        var count = 0;
+
+        foreach (Match match in matches)
+        {
+            if (limit > 0 && count >= limit - 1) break;
+
+            // Add the substring before this match
+            var before = input.Substring(lastEnd, match.Index - lastEnd);
+            result.Push(state.NewString(before));
+            count++;
+
+            // Add captured groups if any
+            for (var i = 1; i < match.Groups.Count; i++)
+            {
+                if (match.Groups[i].Success)
+                {
+                    result.Push(state.NewString(match.Groups[i].Value));
+                }
+            }
+
+            lastEnd = match.Index + match.Length;
+        }
+
+        // Add the remaining substring
+        if (lastEnd <= input.Length)
+        {
+            var remaining = input.Substring(lastEnd);
+            result.Push(state.NewString(remaining));
+        }
+
+        // If limit == 0 (default), remove trailing empty strings
+        // If limit < 0, keep all trailing empties
+        if (limit == 0)
+        {
+            while (result.Length > 0)
+            {
+                var last = result[result.Length - 1];
+                if (last.Object is RString lastStr && lastStr.Length == 0)
+                {
+                    result.DeleteAt(result.Length - 1);
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
 
     [MRubyMethod]
     public static MRubyMethod ByteCount = new((state, self) =>
@@ -806,4 +911,6 @@ static class StringMembers
         }
         return result;
     });
+
 }
+

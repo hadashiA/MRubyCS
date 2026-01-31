@@ -47,19 +47,19 @@ end
 
 assert('Regexp.union') do
   re = Regexp.union('a', 'b', 'c')
-  assert_true re =~ 'a'
-  assert_true re =~ 'b'
-  assert_true re =~ 'c'
+  assert_not_nil re =~ 'a'
+  assert_not_nil re =~ 'b'
+  assert_not_nil re =~ 'c'
   assert_nil re =~ 'd'
 
   re = Regexp.union(/abc/i, /def/)
-  assert_true re =~ 'ABC'
-  assert_true re =~ 'def'
+  assert_not_nil re =~ 'ABC'
+  assert_not_nil re =~ 'def'
   assert_nil re =~ 'DEF'
 
   re = Regexp.union([/a/, /b/])
-  assert_true re =~ 'a'
-  assert_true re =~ 'b'
+  assert_not_nil re =~ 'a'
+  assert_not_nil re =~ 'b'
 end
 
 assert('Regexp.try_convert') do
@@ -461,7 +461,8 @@ end
 
 assert('String#sub with block') do
   assert_equal 'hEllo', 'hello'.sub(/e/) { |m| m.upcase }
-  assert_equal 'hELLOworld', 'helloworld'.sub(/[aeiou]+/) { |m| m.upcase }
+  # [aeiou]+ matches only 'e' since 'l' is not a vowel
+  assert_equal 'hElloworld', 'helloworld'.sub(/[aeiou]+/) { |m| m.upcase }
 end
 
 assert('String#sub!') do
@@ -491,8 +492,10 @@ assert('String#gsub with block') do
 end
 
 assert('String#gsub with hash') do
-  assert_equal 'hEllO', 'hello'.gsub(/[eo]/, 'e' => 'E', 'o' => 'O')
-  assert_equal 'hllo', 'hello'.gsub(/[eo]/, {})
+  # Use explicit hash syntax for compatibility
+  assert_equal 'hEllO', 'hello'.gsub(/[eo]/, {'e' => 'E', 'o' => 'O'})
+  # Empty hash means no replacements found, so matches are removed
+  assert_equal 'hll', 'hello'.gsub(/[eo]/, {})
 end
 
 assert('String#gsub!') do
@@ -508,7 +511,8 @@ end
 assert('String#scan') do
   assert_equal ['e', 'o'], 'hello'.scan(/[eo]/)
   assert_equal ['he', 'll'], 'hello'.scan(/../)
-  assert_equal [['h', 'e'], ['l', 'l']], 'hello'.scan(/(.)(.?)/)
+  # (.?) is optional, so 'o' at end matches with empty second group
+  assert_equal [['h', 'e'], ['l', 'l'], ['o', '']], 'hello'.scan(/(.)(.?)/)
 end
 
 assert('String#scan with block') do
@@ -569,9 +573,9 @@ end
 
 assert('Regexp ignorecase mode') do
   reg = Regexp.new('hello', Regexp::IGNORECASE)
-  assert_true reg =~ 'HELLO'
-  assert_true reg =~ 'Hello'
-  assert_true reg =~ 'hello'
+  assert_not_nil reg =~ 'HELLO'
+  assert_not_nil reg =~ 'Hello'
+  assert_not_nil reg =~ 'hello'
 end
 
 assert('Regexp anchors') do
