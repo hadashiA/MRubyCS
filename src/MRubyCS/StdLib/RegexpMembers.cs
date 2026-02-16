@@ -2,29 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using MRubyCS;
 
 namespace MRubyCS.StdLib;
 
-/// <summary>
-/// Wraps a .NET Regex object for use in MRuby.
-/// </summary>
-class MRubyRegexpData : IEquatable<MRubyRegexpData>
+class MRubyRegexpData(string pattern, int rubyOptions = 0) : IEquatable<MRubyRegexpData>
 {
     public const int RubyIgnoreCase = 1;
     public const int RubyExtended = 2;
     public const int RubyMultiline = 4;
 
-    public Regex Regex { get; }
-    public string Pattern { get; }
-    public int RubyOptions { get; }
-
-    public MRubyRegexpData(string pattern, int rubyOptions = 0)
-    {
-        Pattern = pattern;
-        RubyOptions = rubyOptions;
-        Regex = new Regex(pattern, ConvertToRegexOptions(rubyOptions));
-    }
+    public Regex Regex { get; } = new(pattern, ConvertToRegexOptions(rubyOptions));
+    public string Pattern => pattern;
+    public int RubyOptions => rubyOptions;
 
     public bool Equals(MRubyRegexpData? other)
     {
