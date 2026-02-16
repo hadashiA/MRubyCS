@@ -3,6 +3,7 @@ using System.Text;
 using ConsoleAppFramework;
 using MRubyCS;
 using MRubyCS.Compiler;
+using MRubyCS.Compiler.Cli.Repl;
 
 var app = ConsoleApp.Create();
 app.Add<Commands>();
@@ -10,6 +11,16 @@ app.Run(args);
 
 class Commands
 {
+    /// <summary>
+    /// Start an interactive Ruby REPL (IRB)
+    /// </summary>
+    [Command("irb")]
+    public async Task Irb()
+    {
+        var session = ReplSession.Create();
+        await session.RunAsync();
+    }
+
     /// <summary>
     /// Compile Ruby source file to mruby bytecode
     /// </summary>
