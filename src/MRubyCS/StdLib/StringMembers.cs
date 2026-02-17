@@ -535,7 +535,7 @@ static class StringMembers
 
     static MRubyValue SplitByRegexp(MRubyState state, RString str, MRubyRegexpData regexpData, int limit)
     {
-        var input = str.ConvertToString();
+        var input = str.ToString();
         var result = state.NewArray();
         var regex = regexpData.Regex;
 

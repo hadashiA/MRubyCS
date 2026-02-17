@@ -68,12 +68,12 @@ static class MatchDataMembers
         if (arg.IsSymbol)
         {
             var name = mrb.NameOf(arg.SymbolValue);
-            return GetByName(mrb, matchData, name.ConvertToString());
+            return GetByName(mrb, matchData, name.ToString());
         }
 
         if (arg.Object is RString nameStr)
         {
-            return GetByName(mrb, matchData, nameStr.ConvertToString());
+            return GetByName(mrb, matchData, nameStr.ToString());
         }
 
         // Handle numeric index

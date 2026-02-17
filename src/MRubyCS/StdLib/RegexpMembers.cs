@@ -178,7 +178,7 @@ static class RegexpMembers
 
         if (patternValue.Object is RString patternStr)
         {
-            pattern = patternStr.ConvertToString();
+            pattern = patternStr.ToString();
         }
         else
         {
@@ -223,7 +223,7 @@ static class RegexpMembers
     public static MRubyMethod Escape = new((mrb, self) =>
     {
         var str = mrb.GetArgumentAsStringAt(0);
-        var input = str.ConvertToString();
+        var input = str.ToString();
         var escaped = EscapeForRegexp(input);
         return mrb.NewString(escaped);
     });
@@ -354,7 +354,7 @@ static class RegexpMembers
         }
         if (value.Object is RString str)
         {
-            return EscapeForRegexp(str.ConvertToString());
+            return EscapeForRegexp(str.ToString());
         }
         mrb.Raise(Names.TypeError, "no implicit conversion into String"u8);
         return "";
@@ -398,7 +398,7 @@ static class RegexpMembers
     {
         var regexpData = GetRegexpData(mrb, self);
         var str = mrb.GetArgumentAsStringAt(0);
-        var input = str.ConvertToString();
+        var input = str.ToString();
 
         var pos = 0;
         if (mrb.TryGetArgumentAt(1, out var posValue))
@@ -435,7 +435,7 @@ static class RegexpMembers
     {
         var regexpData = GetRegexpData(mrb, self);
         var str = mrb.GetArgumentAsStringAt(0);
-        var input = str.ConvertToString();
+        var input = str.ToString();
 
         var pos = 0;
         if (mrb.TryGetArgumentAt(1, out var posValue))
@@ -468,7 +468,7 @@ static class RegexpMembers
 
         var regexpData = GetRegexpData(mrb, self);
         var str = mrb.GetArgumentAsStringAt(0);
-        var input = str.ConvertToString();
+        var input = str.ToString();
 
         var match = regexpData.Regex.Match(input);
         if (!match.Success)
@@ -511,7 +511,7 @@ static class RegexpMembers
         }
 
         var regexpData = GetRegexpData(mrb, self);
-        var input = str.ConvertToString();
+        var input = str.ToString();
         var match = regexpData.Regex.Match(input);
 
         if (match.Success)
@@ -716,7 +716,7 @@ static class StringRegexpMembers
             return state.Send(arg, state.Intern("=~"u8), self);
         }
 
-        var input = str.ConvertToString();
+        var input = str.ToString();
         var match = regexpData.Regex.Match(input);
 
         if (!match.Success)
@@ -746,7 +746,7 @@ static class StringRegexpMembers
         {
             try
             {
-                regexpData = new MRubyRegexpData(patternStr.ConvertToString());
+                regexpData = new MRubyRegexpData(patternStr.ToString());
             }
             catch (ArgumentException ex)
             {
@@ -760,7 +760,7 @@ static class StringRegexpMembers
             return MRubyValue.Nil;
         }
 
-        var input = str.ConvertToString();
+        var input = str.ToString();
         var pos = 0;
         if (state.TryGetArgumentAt(1, out var posValue))
         {
@@ -805,7 +805,7 @@ static class StringRegexpMembers
         {
             try
             {
-                regexpData = new MRubyRegexpData(patternStr.ConvertToString());
+                regexpData = new MRubyRegexpData(patternStr.ToString());
             }
             catch (ArgumentException ex)
             {
@@ -819,7 +819,7 @@ static class StringRegexpMembers
             return MRubyValue.False;
         }
 
-        var input = str.ConvertToString();
+        var input = str.ToString();
         var pos = 0;
         if (state.TryGetArgumentAt(1, out var posValue))
         {
@@ -860,7 +860,7 @@ static class StringRegexpMembers
     {
         var patternArg = state.GetArgumentAt(0);
         var block = state.GetBlockArgument();
-        var input = str.ConvertToString();
+        var input = str.ToString();
 
         // Handle Regexp pattern
         if (RegexpMembers.TryGetRegexpData(patternArg, out var regexpData))
@@ -880,12 +880,12 @@ static class StringRegexpMembers
             {
                 var matchStr = state.NewString(match.Value);
                 var blockResult = state.YieldWithClass(state.StringClass, matchStr, [matchStr], block);
-                replacement = state.Stringify(blockResult).ConvertToString();
+                replacement = state.Stringify(blockResult).ToString();
             }
             else
             {
                 var replacementArg = state.GetArgumentAsStringAt(1);
-                replacement = ProcessReplacementString(replacementArg.ConvertToString(), match, input);
+                replacement = ProcessReplacementString(replacementArg.ToString(), match, input);
             }
 
             var result = input.Substring(0, match.Index) + replacement + input.Substring(match.Index + match.Length);
@@ -903,7 +903,7 @@ static class StringRegexpMembers
         // Handle String pattern
         if (patternArg.Object is RString patternStr)
         {
-            var pattern = patternStr.ConvertToString();
+            var pattern = patternStr.ToString();
             var index = input.IndexOf(pattern, StringComparison.Ordinal);
 
             if (index < 0)
@@ -916,13 +916,13 @@ static class StringRegexpMembers
             {
                 var matchStr = state.NewString(pattern);
                 var blockResult = state.YieldWithClass(state.StringClass, matchStr, [matchStr], block);
-                replacement = state.Stringify(blockResult).ConvertToString();
+                replacement = state.Stringify(blockResult).ToString();
             }
             else
             {
                 var replacementArg = state.GetArgumentAsStringAt(1);
                 // Process replacement string for \0, \&, etc. but without capture groups
-                replacement = ProcessSimpleReplacementString(replacementArg.ConvertToString(), pattern, input, index);
+                replacement = ProcessSimpleReplacementString(replacementArg.ToString(), pattern, input, index);
             }
 
             var result = input.Substring(0, index) + replacement + input.Substring(index + pattern.Length);
@@ -974,7 +974,7 @@ static class StringRegexpMembers
 
         var patternArg = state.GetArgumentAt(0);
         var block = state.GetBlockArgument();
-        var input = str.ConvertToString();
+        var input = str.ToString();
 
         // Check for hash argument
         RHash? hashArg = null;
@@ -1019,14 +1019,14 @@ static class StringRegexpMembers
                     RegexpMembers.UpdateRegexpGlobalVariables(state, matchData);
                     var matchStr = state.NewString(match.Value);
                     var blockResult = state.YieldWithClass(state.StringClass, matchStr, [matchStr], block);
-                    replacement = state.Stringify(blockResult).ConvertToString();
+                    replacement = state.Stringify(blockResult).ToString();
                 }
                 else if (hashArg != null)
                 {
                     var key = state.NewString(match.Value);
                     if (hashArg.TryGetValue(key, out var value))
                     {
-                        replacement = state.Stringify(value).ConvertToString();
+                        replacement = state.Stringify(value).ToString();
                     }
                     else
                     {
@@ -1036,7 +1036,7 @@ static class StringRegexpMembers
                 }
                 else
                 {
-                    replacement = ProcessReplacementString(replacementStr!.ConvertToString(), match, input);
+                    replacement = ProcessReplacementString(replacementStr!.ToString(), match, input);
                 }
 
                 sb.Append(replacement);
@@ -1063,7 +1063,7 @@ static class StringRegexpMembers
         // Handle String pattern
         if (patternArg.Object is RString patternStr)
         {
-            var pattern = patternStr.ConvertToString();
+            var pattern = patternStr.ToString();
 
             // Handle empty pattern - replace between each character
             if (pattern.Length == 0)
@@ -1078,14 +1078,14 @@ static class StringRegexpMembers
                     {
                         var matchStr = state.NewString("");
                         var blockResult = state.YieldWithClass(state.StringClass, matchStr, [matchStr], block);
-                        replacement = state.Stringify(blockResult).ConvertToString();
+                        replacement = state.Stringify(blockResult).ToString();
                     }
                     else if (hashArg != null)
                     {
                         var key = state.NewString("");
                         if (hashArg.TryGetValue(key, out var value))
                         {
-                            replacement = state.Stringify(value).ConvertToString();
+                            replacement = state.Stringify(value).ToString();
                         }
                         else
                         {
@@ -1094,7 +1094,7 @@ static class StringRegexpMembers
                     }
                     else
                     {
-                        replacement = replacementStr?.ConvertToString() ?? "";
+                        replacement = replacementStr?.ToString() ?? "";
                     }
 
                     sb.Append(replacement);
@@ -1128,14 +1128,14 @@ static class StringRegexpMembers
                     {
                         var matchStr = state.NewString(pattern);
                         var blockResult = state.YieldWithClass(state.StringClass, matchStr, [matchStr], block);
-                        replacement = state.Stringify(blockResult).ConvertToString();
+                        replacement = state.Stringify(blockResult).ToString();
                     }
                     else if (hashArg != null)
                     {
                         var key = state.NewString(pattern);
                         if (hashArg.TryGetValue(key, out var value))
                         {
-                            replacement = state.Stringify(value).ConvertToString();
+                            replacement = state.Stringify(value).ToString();
                         }
                         else
                         {
@@ -1144,7 +1144,7 @@ static class StringRegexpMembers
                     }
                     else
                     {
-                        replacement = ProcessSimpleReplacementString(replacementStr!.ConvertToString(), pattern, input, index);
+                        replacement = ProcessSimpleReplacementString(replacementStr!.ToString(), pattern, input, index);
                     }
 
                     sb.Append(replacement);
@@ -1286,7 +1286,7 @@ static class StringRegexpMembers
         var str = self.As<RString>();
         var patternArg = state.GetArgumentAt(0);
         var block = state.GetBlockArgument();
-        var input = str.ConvertToString();
+        var input = str.ToString();
 
         MRubyRegexpData regexpData;
         if (RegexpMembers.TryGetRegexpData(patternArg, out var data))
@@ -1297,7 +1297,7 @@ static class StringRegexpMembers
         {
             try
             {
-                regexpData = new MRubyRegexpData(Regex.Escape(patternStr.ConvertToString()));
+                regexpData = new MRubyRegexpData(Regex.Escape(patternStr.ToString()));
             }
             catch (ArgumentException ex)
             {
@@ -1366,7 +1366,7 @@ static class StringRegexpMembers
         // Check if it's a Regexp
         if (RegexpMembers.TryGetRegexpData(arg, out var regexpData))
         {
-            var input = str.ConvertToString();
+            var input = str.ToString();
             var pos = 0;
             if (state.TryGetArgumentAt(1, out var posValue))
             {
