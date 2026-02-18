@@ -127,7 +127,7 @@ struct ClassPath
 
             if (h == null) return false;
             h = GetOuterClass(state, h);
-            t = GetOuterClass(state, t);
+            t = GetOuterClass(state, t!);
             if (t == h) return true;
         }
     }

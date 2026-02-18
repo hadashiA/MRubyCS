@@ -339,7 +339,7 @@ static class FloatMembers
         {
             return (long)result;
         }
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 
     public static MRubyMethod Inspect = new((state, self) =>
@@ -447,11 +447,8 @@ static class FloatMembers
         }
 
         int bytesWritten;
-        Span<byte> destination = stackalloc byte[8];
-        while (!Utf8Formatter.TryFormat(f, destination, out bytesWritten))
-        {
-            destination = stackalloc byte[destination.Length * 2];
-        }
+        Span<byte> destination = stackalloc byte[64];
+        Utf8Formatter.TryFormat(f, destination, out bytesWritten);
         return state.NewString(destination.Slice(0, bytesWritten));
     }
 

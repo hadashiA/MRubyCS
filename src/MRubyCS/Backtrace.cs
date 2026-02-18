@@ -40,7 +40,6 @@ public class Backtrace
     {
         var array = ToRArray(state);
         var result = "";
-        var first = true;
         foreach (var line in array.AsSpan())
         {
             result += Encoding.UTF8.GetString(line.As<RString>().AsSpan());

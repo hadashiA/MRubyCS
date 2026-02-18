@@ -563,7 +563,7 @@ public class RString : RObject, IEquatable<RString>
                 var slice = span.Slice(elementStart, elementEnd - elementStart);
                 var element = new RString(slice, Class);
 
-                result.Push(MRubyValue.From(element));
+                result.Push(new MRubyValue(element));
                 skip = true;
                 elementStart = i;
             }
@@ -576,7 +576,7 @@ public class RString : RObject, IEquatable<RString>
         if (span.Length > 0 && elementStart < span.Length && (limit < 0 || limit > result.Length))
         {
             var remaining = SubByteSequence(elementStart, span.Length - elementStart)!;
-            result.Push(MRubyValue.From(remaining));
+            result.Push(new MRubyValue(remaining));
         }
     }
 

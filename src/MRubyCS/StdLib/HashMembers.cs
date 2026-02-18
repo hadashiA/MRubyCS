@@ -20,7 +20,7 @@ static class HashMembers
         else if (block != null)
         {
             hash.DefaultProc = block;
-        }
+        
         return self;
     });
 

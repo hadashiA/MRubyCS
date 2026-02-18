@@ -39,7 +39,7 @@ public class VmTest
 
                           fibonacci 10
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(55)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(55)));
     }
 
     [Test]
@@ -72,7 +72,7 @@ public class VmTest
                            end
                            fb.call
                            """u8);
-         Assert.That(result, Is.EqualTo(MRubyValue.From(1)));
+         Assert.That(result, Is.EqualTo(new MRubyValue(1)));
     }
 
     [Test]
@@ -94,7 +94,7 @@ public class VmTest
                           end
                           loops
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(2)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(2)));
     }
 
     [Test]
@@ -113,7 +113,7 @@ public class VmTest
 
                           A.new.foo
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(123)));
     }
 
     [Test]
@@ -127,7 +127,7 @@ public class VmTest
                           end
                           c.new.foo
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(123)));
     }
 
     [Test]
@@ -137,7 +137,7 @@ public class VmTest
                           a = Array.new(1) { 123 }
                           a[0]
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(123)));
     }
 
     [Test]
@@ -146,7 +146,7 @@ public class VmTest
         var result = Exec("""
                           [1,2,3].find{|x| x == 2 }
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(2)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(2)));
     }
 
     [Test]
@@ -163,7 +163,7 @@ public class VmTest
                           Foo.new(123).a
                           """u8);
 
-        Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(123)));
     }
 
     [Test]
@@ -196,7 +196,7 @@ public class VmTest
                           a.instance_eval { foo }
                           a.x
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(123)));
     }
 
     [Test]
@@ -212,7 +212,7 @@ public class VmTest
 
                           A.new.foo
                           """u8);
-        Assert.That(result, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result, Is.EqualTo(new MRubyValue(123)));
     }
 
 
@@ -317,16 +317,16 @@ public class VmTest
         var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
 
         // call class method
-        mrb.Send(classA, mrb.Intern("foo="u8), MRubyValue.From(123));
+        mrb.Send(classA, mrb.Intern("foo="u8), new MRubyValue(123));
         var result1 = mrb.Send(classA, mrb.Intern("foo"u8));
-        Assert.That(result1, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result1, Is.EqualTo(new MRubyValue(123)));
 
         // root instance variable
         var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
-        mrb.Send(instanceB, mrb.Intern("bar="u8), MRubyValue.From(123));
+        mrb.Send(instanceB, mrb.Intern("bar="u8), new MRubyValue(123));
 
         var result2 = mrb.Send(instanceB, mrb.Intern("bar"u8));
-        Assert.That(result2, Is.EqualTo(MRubyValue.From(123)));
+        Assert.That(result2, Is.EqualTo(new MRubyValue(123)));
 
         // find class instance on the hierarchy
         var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"u8), mrb.NewString("M::C"u8));

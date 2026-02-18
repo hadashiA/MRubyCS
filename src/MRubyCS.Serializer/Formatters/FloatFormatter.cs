@@ -6,7 +6,7 @@ public class Float32Formatter : IMRubyValueFormatter<float>
 
     public MRubyValue Serialize(float value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return new MRubyValue(value);
     }
 
     public float Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -27,7 +27,7 @@ public class Float64Formatter : IMRubyValueFormatter<double>
 
     public MRubyValue Serialize(double value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From(value);
+        return new MRubyValue(value);
     }
 
     public double Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)
@@ -47,7 +47,7 @@ public class DecimalFormatter : IMRubyValueFormatter<decimal>
 
     public MRubyValue Serialize(decimal value, MRubyState state, MRubyValueSerializerOptions options)
     {
-        return MRubyValue.From((double)value);
+        return new MRubyValue((double)value);
     }
 
     public decimal Deserialize(MRubyValue value, MRubyState state, MRubyValueSerializerOptions options)

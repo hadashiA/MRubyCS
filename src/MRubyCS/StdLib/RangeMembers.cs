@@ -114,7 +114,7 @@ static class RangeMembers
         var result = range.Exclusive
             ? state.NewString($"{b}...{e}")
             : state.NewString($"{b}..{e}");
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 
     public static MRubyMethod Inspect = new((state, self) =>
@@ -130,7 +130,7 @@ static class RangeMembers
         {
             result.Concat(state.Inspect(range.End));
         }
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 
     [MRubyMethod(RequiredArguments = 1)]

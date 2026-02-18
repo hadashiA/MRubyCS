@@ -8,9 +8,6 @@ static class NamingRule
 {
     static readonly byte[] DigitTable = "0123456789abcdefghijklmnopqrstuvwxyz"u8.ToArray();
 
-    [ThreadStatic]
-    static ArrayBufferWriter<byte>? bufferWriterStatic;
-
     public static bool IsConstName(ReadOnlySpan<byte> name)
     {
         return name.Length > 0 && AsciiCode.IsUpper(name[0]) &&

@@ -97,7 +97,7 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
                 var result = new object?[array.Length];
                 for (var i = 0; i < array.Length; i++)
                 {
-                    var elementValue = mrb.Send(value, Names.OpAref, [MRubyValue.From(i)]);
+                    var elementValue = mrb.Send(value, Names.OpAref, [new MRubyValue(i)]);
                     var element = options.Resolver.GetFormatterWithVerify<object?>()
                         .Deserialize(elementValue, mrb, options);
                     result[i] = element;
@@ -106,7 +106,7 @@ public class PrimitiveObjectFormatter : IMRubyValueFormatter<object?>
             }
             case MRubyVType.Hash:
             {
-                var dict = new Dictionary<object?, object?>();
+                var dict = new Dictionary<object, object?>();
                 foreach (var x in value.As<RHash>())
                 {
                     var k = options.Resolver.GetFormatterWithVerify<string>()

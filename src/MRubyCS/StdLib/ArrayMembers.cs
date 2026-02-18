@@ -459,7 +459,7 @@ static class ArrayMembers
         }
 
         var array = self.As<RArray>();
-        var result = JoinArray(state, array, separator, new Stack<RArray>());
+        var result = JoinArray(state, array, separator!, new Stack<RArray>());
         return result;
     });
 
@@ -549,7 +549,7 @@ static class ArrayMembers
             }
             else if (x.Object is RArray nested)
             {
-                var joinedValue = JoinArray(state, nested, separator, stack);
+                var joinedValue = JoinArray(state, nested, separator!, stack);
                 result.Concat(joinedValue);
             }
             else

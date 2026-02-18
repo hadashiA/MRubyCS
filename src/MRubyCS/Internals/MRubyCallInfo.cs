@@ -405,7 +405,7 @@ class MRubyContext
         if (callInfo.KeywordArgumentPacked)
         {
             var kdict = Stack[callInfo.StackPointer + offset].As<RHash>();
-            return kdict.TryGetValue(MRubyValue.From(key), out value);
+            return kdict.TryGetValue(new MRubyValue(key), out value);
         }
 
         for (var i = 0; i < callInfo.KeywordArgumentCount; i++)
@@ -450,7 +450,7 @@ class MRubyContext
         if (callInfo.KeywordArgumentPacked)
         {
             var hash = Stack[callInfo.StackPointer + offset].As<RHash>();
-            return hash[MRubyValue.From(key)];
+            return hash[new MRubyValue(key)];
         }
 
         for (var i = 0; i < callInfo.KeywordArgumentCount; i++)
