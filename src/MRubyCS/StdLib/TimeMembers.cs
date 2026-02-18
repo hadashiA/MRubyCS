@@ -19,15 +19,17 @@ class MRubyTimeData(DateTimeOffset dateTimeOffset) :
     IEquatable<MRubyTimeData>,
     IComparable<MRubyTimeData>
 {
+    readonly TimeSpan offset = dateTimeOffset.Offset;
+
     public DateTimeOffset DateTimeOffset { get; set; } = dateTimeOffset;
 
     public long Ticks
     {
         get => DateTimeOffset.Ticks;
-        set => DateTimeOffset = new DateTimeOffset(value, dateTimeOffset.Offset);
+        set => DateTimeOffset = new DateTimeOffset(value, offset);
     }
 
-    public MRubyTimeZone TimeZone => dateTimeOffset.Offset.Ticks > 0
+    public MRubyTimeZone TimeZone => offset.Ticks > 0
         ? MRubyTimeZone.Local
         : MRubyTimeZone.Utc;
 

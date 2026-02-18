@@ -4,8 +4,8 @@ namespace MRubyCS.Serializer.Tests;
 partial class NestedFieldObject
 {
     public int IntField { get; set; }
-    public string[] ArrayField { get; set; }
-    public Dictionary<string, Struct1> DictField { get; set; }
+    public string[] ArrayField { get; set; } = [];
+    public Dictionary<string, Struct1> DictField { get; set; } = new();
 
     [MRubyMember("alias_of_y")]
     public int Y { get; set; }

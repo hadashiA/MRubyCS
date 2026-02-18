@@ -10,19 +10,19 @@ static class FalseClassMembers
     [MRubyMethod]
     public static MRubyMethod Or = new((state, self) =>
     {
-        return MRubyValue.From(state.GetArgumentAt(0).Truthy);
+        return new MRubyValue(state.GetArgumentAt(0).Truthy);
     });
 
     [MRubyMethod]
     public static MRubyMethod Xor = new((state, self) =>
     {
-        return MRubyValue.From(state.GetArgumentAt(0).Truthy);
+        return new MRubyValue(state.GetArgumentAt(0).Truthy);
     });
 
     public static MRubyMethod ToS = new((state, self) =>
     {
         var result = state.NewStringOwned(FalseString);
         result.MarkAsFrozen();
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 }

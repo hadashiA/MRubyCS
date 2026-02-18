@@ -6,7 +6,7 @@ static class TrueClassMembers
 
     public static MRubyMethod And = new((state, self) =>
     {
-        return MRubyValue.From(state.GetArgumentAt(0).Truthy);
+        return new MRubyValue(state.GetArgumentAt(0).Truthy);
     });
 
     public static MRubyMethod Or = new((state, self) =>
@@ -16,13 +16,13 @@ static class TrueClassMembers
 
     public static MRubyMethod Xor = new((state, self) =>
     {
-        return MRubyValue.From(!state.GetArgumentAt(0).Truthy);
+        return new MRubyValue(!state.GetArgumentAt(0).Truthy);
     });
 
     public static MRubyMethod ToS = new((state, self) =>
     {
         var result = state.NewStringOwned(TrueString);
         result.MarkAsFrozen();
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 }

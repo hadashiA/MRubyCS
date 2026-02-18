@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using MRubyCS.Internals;
 using Utf8StringInterpolation;
 
@@ -36,6 +37,7 @@ public class MRubyRaiseException(
 
 partial class MRubyState
 {
+    [DoesNotReturn]
     public void Raise(RException ex)
     {
         var typeName = NameOf(ex.Class);
@@ -48,6 +50,7 @@ partial class MRubyState
         throw Exception;
     }
 
+    [DoesNotReturn]
     public void Raise(RClass exceptionClass, RString message)
     {
         var backtrace = Backtrace.Capture(Context);
@@ -58,27 +61,32 @@ partial class MRubyState
         Raise(ex);
     }
 
+    [DoesNotReturn]
     public void Raise(RClass exceptionClass, ReadOnlySpan<byte> message)
     {
         Raise(exceptionClass, NewString(message));
     }
 
+    [DoesNotReturn]
     public void Raise(RClass exceptionClass, ref Utf8StringWriter<ArrayBufferWriter<byte>> format)
     {
         format.Flush();
         Raise(exceptionClass, NewString(format.GetBufferWriter().WrittenSpan));
     }
 
+    [DoesNotReturn]
     public void Raise(Symbol errorType, RString message)
     {
         Raise(GetExceptionClass(errorType), message);
     }
 
+    [DoesNotReturn]
     public void Raise(Symbol errorType, ReadOnlySpan<byte> message)
     {
         Raise(GetExceptionClass(errorType), NewString(message));
     }
 
+    [DoesNotReturn]
     public void Raise(Symbol errorType, ref Utf8StringWriter<ArrayBufferWriter<byte>> format)
     {
         format.Flush();
@@ -168,7 +176,7 @@ partial class MRubyState
 
     public void EnsureNotFrozen(MRubyValue value)
     {
-        if (value.IsImmediate || value.Object.IsFrozen)
+        if (value.IsImmediate || value.Object!.IsFrozen)
         {
             RaiseFrozenError(value);
         }
@@ -178,7 +186,7 @@ partial class MRubyState
     {
         if (o.IsFrozen)
         {
-            RaiseFrozenError(MRubyValue.From(o));
+            RaiseFrozenError(new MRubyValue(o));
         }
     }
 
@@ -217,7 +225,7 @@ partial class MRubyState
                 NewString($"wrong constant name {NameOf(constName)}"),
                 GetExceptionClass(Names.NameError));
 
-            ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(constName));
+            ex.InstanceVariables.Set(Names.NameVariable, new MRubyValue(constName));
             Raise(ex);
         }
     }
@@ -230,7 +238,7 @@ partial class MRubyState
                 NewString($"'{NameOf(instanceVariableName)}' is not allowed as an instance variable name."),
                 GetExceptionClass(Names.NameError));
 
-            ex.InstanceVariables.Set(Names.NameVariable, MRubyValue.From(instanceVariableName));
+            ex.InstanceVariables.Set(Names.NameVariable, new MRubyValue(instanceVariableName));
             Raise(ex);
         }
     }

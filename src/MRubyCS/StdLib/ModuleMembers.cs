@@ -149,7 +149,7 @@ static class ModuleMembers
             state.DefineMethod(mod, methodId, (s, _) =>
             {
                 var runtimeSelf = s.GetSelf();
-                return state.GetInstanceVariable(runtimeSelf.Object, name);
+                return state.GetInstanceVariable(runtimeSelf.Object!, name);
             });
         }
         return MRubyValue.Nil;

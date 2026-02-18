@@ -26,7 +26,6 @@ static class IntegerMembers
         state.Raise(Names.TypeError, Utf8String.Format($"can't convert {state.TypeNameOf(value)} into Integer"));
     }
 
-
     internal static MRubyValue IntPow(MRubyState state, MRubyValue x, MRubyValue y)
     {
         var a = state.AsInteger(x);

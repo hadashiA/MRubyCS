@@ -186,6 +186,7 @@ public class MRubyCompiler : IDisposable
     public void Dispose(bool disposing)
     {
         if (disposed) return;
+        disposed = true;
         compileStateHandle.Dispose();
     }
 

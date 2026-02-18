@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MRubyCS.Internals;
@@ -49,7 +50,7 @@ public sealed class RFiber : RObject
         return result;
     }
 
-    public async IAsyncEnumerable<MRubyValue> AsAsyncEnumerable(CancellationToken cancellation = default)
+    public async IAsyncEnumerable<MRubyValue> AsAsyncEnumerable([EnumeratorCancellation] CancellationToken cancellation = default)
     {
         while (IsAlive)
         {

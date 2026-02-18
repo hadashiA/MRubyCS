@@ -8,12 +8,12 @@ static class SymbolMembers
     public static MRubyMethod ToS = new((state, self) =>
     {
         var name = state.NameOf(self.SymbolValue);
-        return MRubyValue.From(state.NewString(name.AsSpan()));
+        return new MRubyValue(state.NewString(name.AsSpan()));
     });
 
     public static MRubyMethod Name = new((state, self) =>
     {
-        return MRubyValue.From(state.NameOf(self.SymbolValue));
+        return new MRubyValue(state.NameOf(self.SymbolValue));
     });
 
     public static MRubyMethod Inspect = new((state, self) =>
@@ -24,7 +24,7 @@ static class SymbolMembers
             Span<byte> buffer = stackalloc byte[name.Length + 1];
             buffer[0] = (byte)':';
             name.AsSpan().CopyTo(buffer[1..]);
-            return MRubyValue.From(state.NewString(buffer));
+            return new MRubyValue(state.NewString(buffer));
         }
 
         Span<byte> escapeBuffer = stackalloc byte[name.Length * 2 + 4];
@@ -37,7 +37,7 @@ static class SymbolMembers
             escapeBuffer = stackalloc byte[escapeBuffer.Length * 2];
 #pragma warning restore CA2014
         }
-        return MRubyValue.From(state.NewString(escapeBuffer[..(escapedSize + 1)]));
+        return new MRubyValue(state.NewString(escapeBuffer[..(escapedSize + 1)]));
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -50,13 +50,13 @@ static class SymbolMembers
         var sym2 = other.SymbolValue;
         if (sym1 == sym2)
         {
-            return MRubyValue.From(0);
+            return new MRubyValue(0);
         }
 
         var str1 = state.NameOf(sym1);
         var str2 = state.NameOf(sym2);
         var result = str1.AsSpan().SequenceCompareTo(str2.AsSpan());
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 
 

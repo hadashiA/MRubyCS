@@ -9,6 +9,6 @@ static class EnumerableMembers
         var index = (int)state.GetArgumentAsIntegerAt(1);
         var hv = (int)state.GetArgumentAsIntegerAt(2);
         hash ^= hv << (index % 16);
-        return MRubyValue.From(hash);
+        return new MRubyValue(hash);
     });
 }

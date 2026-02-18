@@ -19,13 +19,20 @@ public class EnumAsStringFormatter<T> : IMRubyValueFormatter<T> where T : Enum
 
             var csharpNames = Enum.GetNames(typeof(T));
             var csharpValues = (T[])Enum.GetValues(typeof(T));
+            var maxNameLength = 0;
+            foreach (var n in csharpNames)
+            {
+                if (n.Length > maxNameLength) maxNameLength = n.Length;
+            }
+            Span<byte> nameUtf8 = stackalloc byte[maxNameLength];
+            Span<byte> underscoreNameUtf8 = stackalloc byte[maxNameLength * 2];
             for (var i = 0; i < csharpNames.Length; i++)
             {
                 var csharpName = csharpNames[i];
-                Span<byte> nameUtf8 = stackalloc byte[csharpName.Length];
-                System.Text.Encoding.UTF8.GetBytes(csharpName, nameUtf8);
-                Span<byte> underscoreNameUtf8 = stackalloc byte[csharpName.Length * 2];
-                NamingConventionMutator.SnakeCase.TryMutate(nameUtf8, underscoreNameUtf8, out var written);
+                var nameSpan = nameUtf8[..csharpName.Length];
+                System.Text.Encoding.UTF8.GetBytes(csharpName, nameSpan);
+                var underscoreSpan = underscoreNameUtf8[..(csharpName.Length * 2)];
+                NamingConventionMutator.SnakeCase.TryMutate(nameSpan, underscoreSpan, out var written);
 
                 var symbol = mrb.Intern(underscoreNameUtf8[..written]);
                 values.Add(symbol, csharpValues[i]);

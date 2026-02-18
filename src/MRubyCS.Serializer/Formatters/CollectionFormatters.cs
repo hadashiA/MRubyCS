@@ -304,7 +304,7 @@ public class DictionaryFormatter<TKey, TValue> : IMRubyValueFormatter<Dictionary
     }
 }
 
-class SortedDictionaryFormatter<TKey, TValue> : IMRubyValueFormatter<SortedDictionary<TKey, TValue>?>
+class SortedDictionaryFormatter<TKey, TValue> : IMRubyValueFormatter<SortedDictionary<TKey, TValue>?> where TKey : notnull
 {
     public MRubyValue Serialize(SortedDictionary<TKey, TValue>? value, MRubyState state, MRubyValueSerializerOptions options)
     {
@@ -341,7 +341,7 @@ class SortedDictionaryFormatter<TKey, TValue> : IMRubyValueFormatter<SortedDicti
     }
 }
 
-class ConcurrentDictionaryFormatter<TKey, TValue> : IMRubyValueFormatter<ConcurrentDictionary<TKey, TValue>?>
+class ConcurrentDictionaryFormatter<TKey, TValue> : IMRubyValueFormatter<ConcurrentDictionary<TKey, TValue>?> where TKey : notnull
 {
     public MRubyValue Serialize(ConcurrentDictionary<TKey, TValue>? value, MRubyState state, MRubyValueSerializerOptions options)
     {

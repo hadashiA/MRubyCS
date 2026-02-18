@@ -7,7 +7,7 @@ static class NilClassMembers
     {
         var result = state.NewString(0);
         result.MarkAsFrozen();
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 
     [MRubyMethod]
@@ -15,6 +15,6 @@ static class NilClassMembers
     {
         var result = state.NewString("nil"u8);
         result.MarkAsFrozen();
-        return MRubyValue.From(result);
+        return new MRubyValue(result);
     });
 }
