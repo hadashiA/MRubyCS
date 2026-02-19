@@ -16,7 +16,7 @@ var compiler = MRubyCompiler.Create(mRubyDState);
 var arrayBufferWriter = new ArrayBufferWriter<byte>();
 
 using var compilation = compiler.Compile(ReadBytes("test.rb"));
-var fileIrep = compilation.ToIrep(mRubyDState);
+var fileIrep = compilation.ToIrep();
 
 Dump(fileIrep);
 
