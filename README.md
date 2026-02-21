@@ -1,37 +1,26 @@
 # MRubyCS
 
-MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine implemented in pure C#. The name "mruby/cs" stands for *mruby implemented in C#*. Designed with seamless integration in mind for C#-based game engines, and emphasize ruby level compatibility. MRubyCS leverages the latest C# features for high performance and high extensibility.
+MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine designed for seamless integration with C# game engines. It combines high Ruby-level compatibility with the performance and extensibility of modern C#.
 
-Embed a scripting language into your Unity game or .NET application — let users or designers write game logic in Ruby while your core engine stays in C#.
+Easily embed Ruby into Unity or .NET—empowering users to script game logic while keeping your core engine in C#.
 
-## Features
+> [!NOTE]
+> [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) provides a high-level framework for integrating MRubyCS with Unity (and .NET, including command routing and script lifecycle management.
 
-- **Pure C#**
-  Seamless integration with Unity and .NET applications.
+## Why MRubyCS?
 
-- **High Performance**
-  Leverages modern C# features (`Span<T>`, managed pointers) and .NET JIT for speed.
-
-- **Ruby Compatibility**
-  All opcodes implemented; passes mruby's official tests.
+- **Zero native dependencies** — runs anywhere Unity/.NET runs. No per-platform native builds to maintain.
+- **High performance** — leverages modern C# optimization, and .NET JIT.
+- **Ruby compatible** — all opcodes implemented; passes mruby's official test suite.
   - Supported: [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb), [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb), [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb), [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb), [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb), [Proc](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/proc.rb), [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb), [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb), [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb), [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb), [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
-
-- **Portability**
-  Runs anywhere Unity/.NET runs—no native mruby build required. Easy to call C# libraries from Ruby.
-
-- **Fiber & async/await**
-  Communicate between Ruby and C# without blocking threads. Suspend Ruby execution and await C# async methods.
+- **Fiber & async/await** — suspend Ruby execution and await C# async methods without blocking threads.
 
 ## Limitations
 
 - As of mruby 3.3, almost all bundled classes/methods are supported.
     - Support for extensions split into [mrbgems](https://github.com/mruby/mruby/tree/master/mrbgems) remains limited.
     - Some methods/specs added in 3.4 are not yet covered.
-- However, basic private/protected visibility is already supported. 
-
-### Most recent roadmap
-
-- [x] [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) for the new version.
+- However, basic private/protected visibility is already supported.
 
 ## Table of Contents
 
@@ -39,6 +28,7 @@ Embed a scripting language into your Unity game or .NET application — let user
     - [NuGet](#nuget)
     - [Unity](#unity)
 - [Basic Usage](#basic-usage)
+    - [MRubyState Lifecycle](#mrubystate-lifecycle)
     - [MRubyValue](#mrubyvalue)
         - [Symbol/String](#symbolstring)
         - [Embedded custom C# data into MRubyValue](#embedded-custom-c-data-into-mrubyvalue)
@@ -74,6 +64,28 @@ Embed a scripting language into your Unity game or .NET application — let user
 3. (Optional) To install utilities for generating mrb bytecode, refer to the [Compiling Ruby source code](#compiling-ruby-source-code) section.
 
 ## Basic Usage
+
+### MRubyState Lifecycle
+
+`MRubyState` is the central object that holds the entire Ruby VM — symbol table, built-in classes, call stack, and all runtime state.
+
+```cs
+// Create a new VM instance.
+var mrb = MRubyState.Create();
+
+// Or, with additional configuration.
+var mrb = MRubyState.Create(state =>
+{
+    state.DefineMethod(state.KernelModule, state.Intern("puts"u8), (s, self) =>
+    {
+        Console.WriteLine(s.GetArgumentAt(0));
+        return MRubyValue.Nil;
+    });
+});
+```
+
+- **No `Dispose` needed** — `MRubyState` is fully managed by .NET GC. No native resources to release.
+- **Not thread-safe** — each `MRubyState` instance must be used from a single thread. For multi-threaded scenarios, create a separate instance per thread.
 
 > [!TIP]
 > Option A is recommended for production. Option B is convenient for development and prototyping.
