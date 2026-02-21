@@ -132,7 +132,7 @@ static class StringMembers
 
         var str = self.As<RString>();
         str.SetPartial(state, index, rangeLength, value);
-        return self;
+        return value;
     });
 
     [MRubyMethod]
