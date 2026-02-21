@@ -2,6 +2,8 @@
 
 MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine implemented in pure C#. The name "mruby/cs" stands for *mruby implemented in C#*. Designed with seamless integration in mind for C#-based game engines, and emphasize ruby level compatibility. MRubyCS leverages the latest C# features for high performance and high extensibility.
 
+Embed a scripting language into your Unity game or .NET application — let users or designers write game logic in Ruby while your core engine stays in C#.
+
 ## Features
 
 - **Pure C#**
@@ -39,7 +41,7 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 - [Basic Usage](#basic-usage)
     - [MRubyValue](#mrubyvalue)
         - [Symbol/String](#symbolstring)
-        - [Embeded custom C# data into MRubyValue](#embedded-custom-c-data-into-mrubyvalue)
+        - [Embedded custom C# data into MRubyValue](#embedded-custom-c-data-into-mrubyvalue)
     - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
@@ -65,13 +67,16 @@ MRubyCS is a new [mruby](https://github.com/mruby/mruby) virtual machine impleme
 > Requirements: Unity 2021.3 or later.
 
 1. Install [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity).
-2. Install following pacakges via NugetForUnity
+2. Install following packages via NugetForUnity
     - Utf8StringInterpolation
     - MRubyCS
     - (Optional) MRubyCS.Serializer
 3. (Optional) To install utilities for generating mrb bytecode, refer to the [Compiling Ruby source code](#compiling-ruby-source-code) section.
 
 ## Basic Usage
+
+> [!TIP]
+> Option A is recommended for production. Option B is convenient for development and prototyping.
 
 ### Option A: Using CLI tool (pre-compile)
 
@@ -145,7 +150,7 @@ result.IntegerValue //=> 55
 
 ### Irep
 
-You can also parse bytecode in advance. The result is called `Irep` in mruby terminology.
+You can also parse bytecode in advance. The result is called `Irep` in mruby terminology. Pre-parsing is useful when you want to execute the same bytecode multiple times without re-parsing overhead.
 
 ```cs
 Irep irep = mrb.ParseBytecode(bytecode);
@@ -160,7 +165,7 @@ Above `result` is `MRubyValue`. This represents a Ruby value.
 
 ```cs
 value.IsNil //=> true if `nil`
-value.IsInteger //=> true if integrr
+value.IsInteger //=> true if integer
 value.IsFloat //=> true if float
 value.IsSymbol //=> true if Symbol
 value.IsObject //=> true if any allocated object type
@@ -176,12 +181,12 @@ value.As<RArray>() //=> get as internal Array representation
 value.As<RHash>() //=> get as internal Hash representation
 
 // pattern matching
-if (vlaue.Object is RString str)
+if (value.Object is RString str)
 {
     // ...
 }
 
-swtich (value)
+switch (value)
 {
     case { IsInteger: true }:
         // ...
@@ -242,7 +247,7 @@ var sym2 = mrb.AsSymbol(mrb.NewString($"hoge"));
 > [!NOTE]
 > Both `Intern(“str”)` and `Intern(“str”u8)` are valid, but the u8 literal is faster. We recommend using the u8 literal whenever possible.
 
-#### Embeded custom C# data into MRubyValue
+#### Embedded custom C# data into MRubyValue
 
 You can stuff any C# object into an MRubyValue.
 
@@ -270,7 +275,7 @@ mrb.DefineMethod(mrb.ObjectClass, mrb.Intern("from_csharp_data"), (_, self) =>
 });
 ```
 
-#### Embeded custom C# data with ruby class
+#### Embedded custom C# data with ruby class
 
 ```cs
 // Instances of classes that specify `MRubyVType.CSharpData` have `self` as RData.
@@ -284,7 +289,6 @@ mrb.DefineMethod(yourClass, "initialize", (s, self) =>
         x.Data = new YourCustomClass { Value = "abcde" };
     }
     return self;
-)
 });
 
 // Use custom C# data
@@ -296,7 +300,6 @@ mrb.DefineMethod(yourClass, "foo_method", (s, self) =>
         csharpInstance.Value = "fghij";
     }
     // ...
-)
 });
 
 ```
@@ -333,7 +336,7 @@ var classA = mrb.DefineClass(Intern("A"), c =>
         Console.WriteLine($"foo: {keywordArg}");
 
         // argument type checking
-        mrb.EnsureValueType(keywordArg, MrubyVType.Integer);
+        mrb.EnsureValueType(keywordArg, MRubyVType.Integer);
 
         var restArguments = mrb.GetRestArgumentsAfter(0);
         for (var i = 0; i < restArguments.Length; i++)
@@ -353,7 +356,7 @@ var classA = mrb.DefineClass(Intern("A"), c =>
 classA.DefineMethod(mrb.Intern("additional_method1"u8), (_, self) => { /* ... */ });
 
 // Define module
-var moduleA = mrb.DefineModule(mrb.Intern("ModuleA");)
+var moduleA = mrb.DefineModule(mrb.Intern("ModuleA"));
 mrb.DefineMethod(moduleA, mrb.Intern("additional_method2"), (_, self) => new MRubyValue(123));
 
 mrb.IncludeModule(classA, moduleA);
@@ -367,7 +370,7 @@ a.plus100(123) #=> 223
 
 a.method2(1) { |a| a } #=> 1
 
-a.additionoa_method2 #=> 123
+a.additional_method2 #=> 123
 
 A.classmethod1 #=> "hoge fuga"
 ```
@@ -434,7 +437,7 @@ graph TB
         D[mruby VM]
         E[byte-code<br>.mrb files]
 
-        E -->|exucute byte-cose| D
+        E -->|execute bytecode| D
     end
 ```
 
@@ -526,7 +529,7 @@ var irep = compiler.Compile(source);
 // irep can be used later..
 var result = mrb.Execute(irep); // => 100
 
-// Compile to bytecode (mruby called this format is "Rite")
+// Compile to bytecode (mruby calls this format "Rite")
 using var bin = compiler.CompileToBytecode(source);
 
 // bytecode can be save a file or any other storage
@@ -614,7 +617,7 @@ var code = """
   y = 2
   Fiber.yield (x + y) * 100
   Fiber.yield (x + y) * 200
-"""u8);
+"""u8;
 
 var fiber = compiler.LoadSourceCodeAsFiber(code);
 
@@ -789,7 +792,7 @@ MRubyValue result1 = mrb.LoadSourceCode("111 + 222");
 MRubyValueSerializer.Deserialize<int>(result1, mrb); //=> 333
 
 MRubyValue result2 = mrb.LoadSourceCode("'hoge'.upcase");
-MRubyValueSerialize.Deserialize<string>(result2, mrb); //=> "HOGE"
+MRubyValueSerializer.Deserialize<string>(result2, mrb); //=> "HOGE"
 ```
 
 ```cs
@@ -806,7 +809,7 @@ mrubyArray[2] //=> 333
 ```
 
 ```cs
-MRubyValue mrubyStringValue = MRubyValueSerialize.Serialize("hoge fuga", mrb);
+MRubyValue mrubyStringValue = MRubyValueSerializer.Serialize("hoge fuga", mrb);
 
 // Use the serialized value...
 mrb.Send(mrubyStringValue, mrb.Intern("upcase")); //=> MRubyValue("UPCASE")
@@ -818,7 +821,7 @@ The following C# types and MRubyValue type conversions are supported natively:
 
 | mruby     | C#                                                                                                                                                                                                                                                                                                                                                                                      |
 |-----------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Integer` | `int`, `uint`, `long`, `ulong`, `shot`, `ushot`, `byte`, `sbyte`, `char`                                                                                                                                                                                                                                                                                                                |
+| `Integer` | `int`, `uint`, `long`, `ulong`, `short`, `ushort`, `byte`, `sbyte`, `char`                                                                                                                                                                                                                                                                                                                |
 | `Float`   | `float`, `double`, `decimal`                                                                                                                                                                                                                                                                                                                                                            |
 | `Array`   | `T`, `List<>`, `T[,]`, `T[,]`, `T[,,]`, <br />`Tuple<...>`, `ValueTuple<...>`, <br />, `Stack<>`, `Queue<>`, `LinkedList<>`, `HashSet<>`, `SortedSet<>`, <br />`Collection<>`, `BlockingCollection<>`, <br />`ConcurrentQueue<>`, `ConcurrentStack<>`, `ConcurrentBag<>`, <br />`IEnumerable<>`, `ICollection<>`, `IReadOnlyCollection<>`, <br />`IList<>`, `IReadOnlyList<>`, `ISet<>` |
 | `Hash`    | `Dictionary<,>`, `SortedDictionary<,>`, `ConcurrentDictionary<,>`, <br />`IDictionary<,>`, `IReadOnlyDictionary<,>`                                                                                                                                                                                                                                                                     |
@@ -895,7 +898,7 @@ deserialized.Z      //=> 8901
 ```
 
 ```cs
-// Serialize (C# -> MRubyVAlue)
+// Serialize (C# -> MRubyValue)
 var value = MRubyValueSerializer.Serialize(new SerializeExample { Id = "aiueo", X = 1234, FooBar = 4567 });
 
 var props = value.As<RHash>();
@@ -929,7 +932,7 @@ Also, you can receive data from Ruby via any constructor by using the `[MRubyCon
 [MRubyObject]
 partial class Foo
 {
-    public int X { ge; }
+    public int X { get; }
 
     [MRubyConstructor]
     public Foo(int x)
@@ -969,11 +972,11 @@ struct Vector3
 
 ```cs
 // Implement `IMRubyValueFormatter`
-class CustomVector3Formatter : IMRubyValueFormatter<A>
+class CustomVector3Formatter : IMRubyValueFormatter<Vector3>
 {
-    public static readonly CustomAFormatter Instance = new();
+    public static readonly CustomVector3Formatter Instance = new();
 
-    public MRubyValue Serialize(A value, MRubyState mrb, MRubyValueSerializerOptions options)
+    public MRubyValue Serialize(Vector3 value, MRubyState mrb, MRubyValueSerializerOptions options)
     {
         var array = mrb.NewArray();
         array.Push(value.X);
@@ -981,13 +984,13 @@ class CustomVector3Formatter : IMRubyValueFormatter<A>
         array.Push(value.Z);
         return array;
     }
-    public A Deserialize(MRubyValue value, MRubyState mrb, MRubyValueSerializerOptions options)
+    public Vector3 Deserialize(MRubyValue value, MRubyState mrb, MRubyValueSerializerOptions options)
     {
         // validation
         MRubySerializationException.ThrowIfTypeMismatch(value, MRubyVType.Array);
         MRubySerializationException.ThrowIfNotEnoughArrayLength(value, 3);
 
-        var array = mrb.As<RArray>();
+        var array = value.As<RArray>();
         return new Vector3
         {
             X = array[0].IntegerValue,
@@ -1006,7 +1009,7 @@ Specify the enumeration of Formatter and Formatter's Resolver instances.
 ```cs
 // Create a new formatter resolver.
 var resolver = CompositeResolver.Create(
-    [CustomAFormatter.Instance],
+    [CustomVector3Formatter.Instance],
     [StandardResolver.Instance]
     );
 
@@ -1016,7 +1019,7 @@ var options = new MRubyValueSerializerOptions
 };
 
 var value = mrb.LoadSourceCode("[111, 222, 333]");
-Vectro3 deserialized = MRubyValueSerializer.Deserialize<Vector3>(value, mrb, options);
+Vector3 deserialized = MRubyValueSerializer.Deserialize<Vector3>(value, mrb, options);
 deserialized.X //=> 111
 deserialized.Y //=> 222
 deserialized.Z //=> 333
@@ -1028,5 +1031,5 @@ MIT
 
 ## Contact
 
-[@hadahsiA](https://x.com/hadashiA)
+[@hadashiA](https://x.com/hadashiA)
 
