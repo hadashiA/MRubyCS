@@ -14,8 +14,7 @@ end
 MRuby::CrossBuild.new("macos-x64") do |conf|
   conf.toolchain :clang
 
-  conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '6fd10da354fe0dc6232fc0651bc233410cad2d93'
+  conf.gem github: 'hadashiA/mruby-compiler2'
   conf.gem './mrbgems/mrubycs-compiler'
 
   conf.disable_presym
