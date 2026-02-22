@@ -223,7 +223,7 @@ public class VmTest
         {
             Exec("""
                                   a = 9223372036854775807
-                                   a += 8
+                                  a += 8
                                   return a
                  """u8);
         }, "Integer overflow in add (RangeError)");
@@ -232,7 +232,7 @@ public class VmTest
         {
             Exec("""
                                   a = 9223372036854775807
-                                   a += 8000
+                                  a += 8000
                                   return a
                  """u8);
         }, "Integer overflow in add (RangeError)");
@@ -245,7 +245,7 @@ public class VmTest
         {
             Exec("""
                                   a = -9223372036854775806
-                                   a -= 8
+                                  a -= 8
                                   return a
                  """u8);
         }, "Integer overflow in sub (RangeError)");
@@ -254,7 +254,7 @@ public class VmTest
         {
             Exec("""
                                   a = -9223372036854775806
-                                   a -= 8000
+                                  a -= 8000
                                   return a
                  """u8);
         }, "Integer overflow in sub (RangeError)");
@@ -335,7 +335,7 @@ public class VmTest
 
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
-        var irep = compiler.Compile(code);
-        return mrb.Execute(irep);
+        using var compilation = compiler.Compile(code);
+        return mrb.LoadBytecode(compilation.AsBytecode());
     }
 }

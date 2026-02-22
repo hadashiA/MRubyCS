@@ -5,8 +5,50 @@ using System.Runtime.InteropServices;
 
 namespace MRubyCS.Compiler
 {
+[StructLayout(LayoutKind.Explicit)]
+struct MrbState { }
+
+[StructLayout(LayoutKind.Explicit)]
+struct MrcIrep { }
+
 [StructLayout(LayoutKind.Sequential)]
-struct MrbStateNative {}
+unsafe struct MrcCContext
+{
+    public MrbState* Mrb;
+    public void* Jmp;
+    public void* P;
+    public void* Options;
+    public int SLen;
+    public byte* Filename;
+    public ushort LineNo;
+    public void* TargetClass;
+    public byte CaptureErrors;
+    public byte DumpResult;
+    public byte NoExec;
+    public byte KeepLv;
+    public byte NoOptimize;
+    public byte NoExtOps;
+    public void* Upper;
+    public MrcDiagnosticList* DiagnosticList;
+}
+
+enum MrcDiagnosticCode
+{
+    Warning = 0,
+    Error = 1,
+    GeneratorWarning = 2,
+    GeneratorError = 3,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+unsafe struct MrcDiagnosticList
+{
+    public MrcDiagnosticCode DiagnosticCode;
+    public byte* Message;
+    public int Line;
+    public int Column;
+    public MrcDiagnosticList* Next;
+}
 
 unsafe class NativeMethods
 {
@@ -63,23 +105,41 @@ unsafe class NativeMethods
         return IntPtr.Zero;
     }
 #endif
-
     [DllImport(DllName, EntryPoint = "mrb_open", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    public static extern MrbStateNative* MrbOpen();
+    public static extern MrbState* MrbOpen();
 
     [DllImport(DllName, EntryPoint = "mrb_close", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    public static extern void MrbClose(MrbStateNative* mrb);
+    public static extern void MrbClose(MrbState* mrb);
 
-    [DllImport(DllName, EntryPoint = "mrb_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    public static extern void MrbFree(MrbStateNative* mrb, void *ptr);
+    [DllImport(DllName, EntryPoint = "free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern void MrcFree(void* ptr);
 
-    [DllImport(DllName, EntryPoint = "mrbcs_compile", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    public static extern int MrbcsCompile(
-        MrbStateNative* mrb,
-        byte* source,
-        int sourceLength,
+    [DllImport(DllName, EntryPoint = "mrc_ccontext_new", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern MrcCContext* MrcCContextNew(MrbState* mrb);
+
+    [DllImport(DllName, EntryPoint = "mrc_ccontext_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern MrcCContext* MrcCContextFree(MrcCContext* c);
+
+    [DllImport(DllName, EntryPoint = "mrc_load_string_cxt", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern MrcIrep* MrcLoadStringCxt(
+        MrcCContext* c,
+        byte** source,
+        nint sourceLength);
+
+    // int mrc_dump_irep(mrc_ccontext *c, const mrc_irep *irep, uint8_t flags, uint8_t **bin, size_t *bin_size);
+    [DllImport(DllName, EntryPoint = "mrc_dump_irep", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern void MrcDumpIrep(
+        MrcCContext* c,
+        MrcIrep* irep,
+        byte flags,
         byte** bin,
-        int* binLength,
-        byte** errorMessage);
+        nint* binSize);
+
+    [DllImport(DllName, EntryPoint = "mrc_irep_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern void MrcIrepFree(MrcCContext* c, MrcIrep* irep);
+
+    [DllImport(DllName, EntryPoint = "mrc_diagnostic_list_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern void MrcDiagnosticListFree(MrcCContext* c);
+
 }
 }

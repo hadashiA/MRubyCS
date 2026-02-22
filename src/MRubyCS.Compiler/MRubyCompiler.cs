@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,17 +48,20 @@ public class MRubyCompiler : IDisposable
 
     public MRubyValue LoadSourceCodeFile(string path)
     {
-        return mruby.Execute(CompileFile(path));
+        using var compilation = CompileFile(path);
+        return mruby.LoadBytecode(compilation.AsBytecode());
     }
 
     public async Task<MRubyValue> LoadSourceCodeFileAsync(string path, CancellationToken cancellationToken = default)
     {
-        return mruby.Execute(await CompileFileAsync(path, cancellationToken));
+        using var compilation = await CompileFileAsync(path, cancellationToken);
+        return mruby.LoadBytecode(compilation.AsBytecode());
     }
 
     public MRubyValue LoadSourceCode(ReadOnlySpan<byte> utf8Source)
     {
-        return mruby.Execute(Compile(utf8Source));
+        using var compilation = Compile(utf8Source);
+        return mruby.LoadBytecode(compilation.AsBytecode());
     }
 
     public MRubyValue LoadSourceCode(string source)
@@ -70,8 +72,8 @@ public class MRubyCompiler : IDisposable
 
     public RFiber LoadSourceCodeAsFiber(ReadOnlySpan<byte> utf8Source)
     {
-        var irep = Compile(utf8Source);
-        var proc = mruby.CreateProc(irep);
+        using var compilation = Compile(utf8Source);
+        var proc = mruby.CreateProc(compilation.ToIrep());
         return mruby.CreateFiber(proc);
     }
 
@@ -81,57 +83,22 @@ public class MRubyCompiler : IDisposable
         return LoadSourceCodeAsFiber(utf8Source);
     }
 
-    [Obsolete("Use CompileToBytecode instead")]
-    public MrbNativeBytesHandle CompileToBinaryFormat(ReadOnlySpan<byte> utf8Source) =>
-        CompileToBytecode(utf8Source);
-
-    public unsafe MrbNativeBytesHandle CompileToBytecode(string source) =>
-        CompileToBytecode(Encoding.UTF8.GetBytes(source));
-
-    public unsafe MrbNativeBytesHandle CompileToBytecode(ReadOnlySpan<byte> utf8Source)
-    {
-        var mrbPtr = compileStateHandle.DangerousGetPtr();
-        byte* bin = null;
-        var binLength = 0;
-        byte* errorMessageCStr = null;
-        int resultCode;
-        fixed (byte* sourcePtr = utf8Source)
-        {
-            resultCode = NativeMethods.MrbcsCompile(
-                mrbPtr,
-                sourcePtr,
-                utf8Source.Length,
-                &bin,
-                &binLength,
-                &errorMessageCStr);
-        }
-
-        if (resultCode != NativeMethods.Ok)
-        {
-            if (errorMessageCStr != null)
-            {
-                var errorMessage = Marshal.PtrToStringUTF8((IntPtr)errorMessageCStr)!;
-                throw new MRubyCompileException(errorMessage);
-            }
-        }
-        return new MrbNativeBytesHandle(compileStateHandle, (IntPtr)bin, binLength);
-    }
-
-    public Irep CompileFile(string filePath)
+    public CompilationResult CompileFile(string filePath)
     {
         var bytes = File.ReadAllBytes(filePath);
         return Compile(bytes);
     }
 
-    public async Task<Irep> CompileFileAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<CompilationResult> CompileFileAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
         return Compile(bytes);
     }
 
-    public Irep Compile(string sourceCode) => Compile(Encoding.UTF8.GetBytes(sourceCode));
+    public CompilationResult Compile(string sourceCode) =>
+        Compile(Encoding.UTF8.GetBytes(sourceCode));
 
-    public unsafe Irep Compile(ReadOnlySpan<byte> utf8Source)
+    public unsafe CompilationResult Compile(ReadOnlySpan<byte> utf8Source)
     {
         if (BomHelper.TryDetectEncoding(utf8Source, out var encoding))
         {
@@ -145,41 +112,20 @@ public class MRubyCompiler : IDisposable
             }
         }
 
-        var mrbPtr = compileStateHandle.DangerousGetPtr();
+        var context = MrcCContextHandle.Create(compileStateHandle);
         byte* bin = null;
-        var binLength = 0;
-        byte* errorMessageCStr = null;
-        int resultCode;
-        fixed (byte* codePtr = utf8Source)
+        nint binLength = 0;
+        fixed (byte* sourcePtr = utf8Source)
         {
-            resultCode = NativeMethods.MrbcsCompile(
-                mrbPtr,
-                codePtr,
-                utf8Source.Length,
-                &bin,
-                &binLength,
-                &errorMessageCStr);
-        }
-
-        try
-        {
-            if (resultCode != NativeMethods.Ok)
+            var irepPtr = NativeMethods.MrcLoadStringCxt(context.DangerousGetPtr(), &sourcePtr, utf8Source.Length);
+            if (irepPtr == null || context.HasError)
             {
-                if (errorMessageCStr != null)
-                {
-                    var errorMessage = Marshal.PtrToStringUTF8((IntPtr)errorMessageCStr)!;
-                    throw new MRubyCompileException(errorMessage);
-                }
+                // error
+                return new CompilationResult(mruby, compileStateHandle, context);
             }
-            var span = new ReadOnlySpan<byte>(bin, binLength);
-            return mruby.RiteParser.Parse(span);
-        }
-        finally
-        {
-            if (bin != null)
-            {
-                NativeMethods.MrbFree(mrbPtr, bin);
-            }
+            NativeMethods.MrcDumpIrep(context.DangerousGetPtr(), irepPtr, 0, &bin, &binLength);
+            NativeMethods.MrcIrepFree(context.DangerousGetPtr(), irepPtr);
+            return new CompilationResult(mruby, compileStateHandle, context, (IntPtr)bin, (int)binLength);
         }
     }
 
@@ -188,6 +134,7 @@ public class MRubyCompiler : IDisposable
         if (disposed) return;
         disposed = true;
         compileStateHandle.Dispose();
+        disposed = true;
     }
 
     public void Dispose()
