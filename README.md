@@ -1,4 +1,4 @@
-# MRubyCS
+# mruby/cs
 
 MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine designed for seamless integration with C# game engines. It combines high Ruby-level compatibility with the performance and extensibility of modern C#.
 
