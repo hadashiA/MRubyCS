@@ -9,5 +9,4 @@ EXPORTS
     mrc_dump_irep
     mrc_irep_free
     mrc_diagnostic_list_free
-    mrubycs_compiler_prism_xallocator_init
 
