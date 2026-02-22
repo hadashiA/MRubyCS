@@ -3,7 +3,7 @@ MRuby::CrossBuild.new("linux-x64") do |conf|
   conf.toolchain :gcc
 
   conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '375f6d8914399ff88a86dcac8e3104760f8a8c58'
+           checksum_hash: '3baee4b79cd4b6b83e6b72813a15a7b629455aff'
   conf.gem './mrbgems/mrubycs-compiler'
 
   conf.disable_presym
@@ -33,7 +33,7 @@ MRuby::CrossBuild.new("linux-arm64") do |conf|
   conf.toolchain :gcc
 
   conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '375f6d8914399ff88a86dcac8e3104760f8a8c58'           
+           checksum_hash: '3baee4b79cd4b6b83e6b72813a15a7b629455aff'
   conf.gem './mrbgems/mrubycs-compiler'
   
   conf.cc.command = 'aarch64-linux-gnu-gcc'
