@@ -2,14 +2,13 @@
 MRuby::CrossBuild.new("linux-x64") do |conf|
   conf.toolchain :gcc
 
-  conf.gem github: 'picoruby/mruby-compiler2'
-  conf.gem core: 'mruby-string-ext'
+  conf.gem github: 'hadashiA/mruby-compiler2'
   conf.gem './mrbgems/mrubycs-compiler'
 
   conf.disable_presym
 
   conf.compilers.each do |cc|
-    cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY)
+    cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY MRC_ALLOC_LIBC)
     cc.flags << '-fPIC'
   end
 
@@ -32,8 +31,7 @@ end
 MRuby::CrossBuild.new("linux-arm64") do |conf|
   conf.toolchain :gcc
 
-  conf.gem github: 'picoruby/mruby-compiler2'
-  conf.gem core: 'mruby-string-ext'
+  conf.gem github: 'hadashiA/mruby-compiler2'
   conf.gem './mrbgems/mrubycs-compiler'
   
   conf.cc.command = 'aarch64-linux-gnu-gcc'
@@ -43,7 +41,7 @@ MRuby::CrossBuild.new("linux-arm64") do |conf|
   conf.disable_presym
 
   conf.compilers.each do |cc|
-    cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY)
+    cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY MRC_ALLOC_LIBC)
     cc.flags << '-fPIC'
   end
 
