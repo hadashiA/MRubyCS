@@ -2,7 +2,7 @@ MRuby::CrossBuild.new("windows") do |conf|
   conf.toolchain
 
   conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '3baee4b79cd4b6b83e6b72813a15a7b629455aff'
+           checksum_hash: '375f6d8914399ff88a86dcac8e3104760f8a8c58'
   conf.gem './mrbgems/mrubycs-compiler'
 
   conf.disable_presym
