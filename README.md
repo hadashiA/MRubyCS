@@ -535,17 +535,18 @@ f 100
 var mrb = MRubyState.Create();
 var compiler = MRubyCompiler.Create(mrb);
 
-// Compile to irep (internal executable representation)
-var irep = compiler.Compile(source);
+// Compile source code (returns CompilationResult)
+using var compilation = compiler.Compile(source);
+
+// Convert to irep (internal executable representation)
+var irep = compilation.ToIrep();
 
 // irep can be used later..
 var result = mrb.Execute(irep); // => 100
 
-// Compile to bytecode (mruby calls this format "Rite")
-using var bin = compiler.CompileToBytecode(source);
-
-// bytecode can be save a file or any other storage
-File.WriteAllBytes("compiled.mrb", bin.AsSpan());
+// Or, get bytecode (mruby calls this format "Rite")
+// bytecode can be saved to a file or any other storage
+File.WriteAllBytes("compiled.mrb", compilation.AsBytecode());
 
 // Can be used later from file
 mrb.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
@@ -634,8 +635,8 @@ var code = """
 var fiber = compiler.LoadSourceCodeAsFiber(code);
 
 // `LoadSourceCodeAsFiber` is same as:
-// var irep = compiler.Compile(code);
-// var proc = mrb.CreateProc(irep);
+// using var compilation = compiler.Compile(code);
+// var proc = mrb.CreateProc(compilation.ToIrep());
 // var fiber = mrb.CreateFiber(proc);
 
 fiber.Resume(); //=> 300
