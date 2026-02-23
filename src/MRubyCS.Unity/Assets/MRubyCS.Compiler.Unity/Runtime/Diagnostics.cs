@@ -1,27 +1,28 @@
-namespace MRubyCS.Compiler;
-
-public enum DiagnosticSeverity
+namespace MRubyCS.Compiler
 {
-    Warning,
-    Error,
-    GeneratorWarning,
-    GeneratorError,
-}
-
-public class DiagnosticsDescriptor
-{
-    public DiagnosticSeverity Severity { get; }
-    public int Line { get; }
-    public int Column { get; }
-    public string? Message { get; }
-
-    public DiagnosticsDescriptor(DiagnosticSeverity severity, int line, int column, string? message)
+    public enum DiagnosticSeverity
     {
-        Severity = severity;
-        Line = line;
-        Column = column;
-        Message = message;
+        Warning,
+        Error,
+        GeneratorWarning,
+        GeneratorError,
     }
 
-    public override string ToString() => $"{Severity}: {Message} ({Line}:{Column})";
+    public class DiagnosticsDescriptor
+    {
+        public DiagnosticSeverity Severity { get; }
+        public int Line { get; }
+        public int Column { get; }
+        public string? Message { get; }
+
+        public DiagnosticsDescriptor(DiagnosticSeverity severity, int line, int column, string? message)
+        {
+            Severity = severity;
+            Line = line;
+            Column = column;
+            Message = message;
+        }
+
+        public override string ToString() => $"{Severity}: {Message} ({Line}:{Column})";
+    }
 }
