@@ -30,11 +30,11 @@ namespace MRubyCS.Compiler.Editor
             {
                 if (x.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.GeneratorError)
                 {
-                    ctx.LogImportError(x.ToString(), rbAsset);
+                    ctx.LogImportError($"[MRubyCS.Compiler] {ctx.assetPath}: {x}", rbAsset);
                 }
                 else
                 {
-                    ctx.LogImportWarning(x.ToString(), rbAsset);
+                    ctx.LogImportWarning($"[MRubyCS.Compiler] {ctx.assetPath}: {x}", rbAsset);
                 }
             }
             if (compilationResult.HasError)
