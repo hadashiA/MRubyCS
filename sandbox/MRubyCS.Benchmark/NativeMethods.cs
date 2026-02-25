@@ -156,7 +156,7 @@ unsafe class RProcHandle(MrbStateNative* mrbStatePtr, RProcNative* procPtr) : Sa
 
 unsafe class NativeMethods
 {
-    const string DllName = "libmruby";
+    const string DllName = "libmrubycs_benchmark_helper";
 
     static NativeMethods()
     {
@@ -214,7 +214,7 @@ unsafe class NativeMethods
     [DllImport(DllName, EntryPoint = "mrb_load_proc", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern MrbValueNative MrbLoadProc(MrbStateNative* mrb, RProcNative *proc);
 
-    [DllImport(DllName, EntryPoint = "mrbcs_compile_to_proc", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [DllImport(DllName, EntryPoint = "mrubycs_mrbc_compile_to_proc", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int MrbcsCompileToProc(
         MrbStateNative* mrb,
         byte* source,
@@ -222,6 +222,6 @@ unsafe class NativeMethods
         RProcNative** proc,
         byte** errorMessage);
 
-    [DllImport(DllName, EntryPoint = "mrbcs_release_proc", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [DllImport(DllName, EntryPoint = "mrubycs_mrbc_release_proc", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int MrbcsReleaseProc(MrbStateNative* mrb, RProcNative* procPtr);
 }
