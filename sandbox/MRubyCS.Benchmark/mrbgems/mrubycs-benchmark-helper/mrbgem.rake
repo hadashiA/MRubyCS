@@ -25,7 +25,7 @@ MRuby.each_target do
     is_vc = primary_toolchain == 'visualcpp'
     is_mingw = ENV['OS'] == 'Windows_NT' && cc.command.start_with?('gcc')
 
-    deffile = "#{File.dirname(__FILE__)}/mrubycs-compiler.def"
+    deffile = "#{File.dirname(__FILE__)}/mrubycs-benchmark-helper.def"
 
     flags = []
     flags_after_libraries = []
