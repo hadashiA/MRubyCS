@@ -4,7 +4,7 @@ MRuby::Gem::Specification.new('mrubycs-benchmark-helper') do |spec|
 end
 
 MRuby.each_target do
-  next unless name.match(/^(windows|macOS|android)/i)
+  next unless name.match(/^(windows|macOS|linux)/i)
 
   sharedlib_ext =
     if RUBY_PLATFORM.match(/darwin/i)

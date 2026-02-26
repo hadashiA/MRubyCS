@@ -6,7 +6,9 @@ on:
 env:
   MRUBY_DIR: ${{ github.workspace }}/src/MRubyCS.Compiler/mruby
   CONFIG_DIR: ${{ github.workspace }}/src/MRubyCS.Compiler
-    
+  BENCHMARK_MRUBY_DIR: ${{ github.workspace }}/sandbox/MRubyCS.Benchmark/mruby
+  BENCHMARK_CONFIG_DIR: ${{ github.workspace }}/sandbox/MRubyCS.Benchmark
+
 jobs:
   build-macOS:
     runs-on: macos-latest
@@ -27,9 +29,23 @@ jobs:
         rake clean
         rm -fr ./build
         MRUBY_CONFIG=${{ env.CONFIG_DIR }}/build_config.macOS.rb rake
-        
+
     - uses: actions/upload-artifact@v4
       id: upload-build
       with:
         name: macOS-build
         path: ${{ env.MRUBY_DIR }}/build
+
+    - name: Build mruby for benchmark (macOS)
+      working-directory: ${{ env.BENCHMARK_MRUBY_DIR }}
+      shell: bash
+      run: |
+        rake clean
+        rm -fr ./build
+        MRUBY_CONFIG=${{ env.BENCHMARK_CONFIG_DIR }}/build_config.macOS.rb rake
+
+    - uses: actions/upload-artifact@v4
+      id: upload-benchmark-build
+      with:
+        name: macOS-benchmark-build
+        path: ${{ env.BENCHMARK_MRUBY_DIR }}/build
