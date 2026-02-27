@@ -1412,6 +1412,22 @@ partial class MRubyState
                         registerA = ref Unsafe.Add(ref registers, a);
                         var rhs = Unsafe.Add(ref registerA, 1);
 
+                        // Float fast path: bit check only (bits & 0b11 == 0b10), avoids VType call
+                        if (registerA.IsFloat && rhs.IsFloat)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+
                         // Fixnum fast path: avoid VType switch expression, use bit check + shift only
                         if (registerA.IsFixnum && rhs.IsFixnum)
                         {
@@ -1443,6 +1459,36 @@ partial class MRubyState
                             {
                                 IntegerMembers.RaiseDivideByZeroError(this);
                             }
+                            goto Next;
+                        }
+
+                        // Float + Fixnum mixed fast path: bit checks only, no VType call
+                        if (registerA.IsFloat && rhs.IsFixnum)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = (double)rhs.FixnumValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+                        if (registerA.IsFixnum && rhs.IsFloat)
+                        {
+                            var leftVal = (double)registerA.FixnumValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
                             goto Next;
                         }
 
@@ -1517,6 +1563,13 @@ partial class MRubyState
                     {
                         var rV = opcode == OpCode.AddI ? bb.B : -bb.B;
 
+                        // Float fast path: bit check only, avoids VType call
+                        if (registerA.IsFloat)
+                        {
+                            registerA = new MRubyValue(registerA.FloatValue + rV);
+                            goto Next;
+                        }
+
                         // Fixnum fast path
                         if (registerA.IsFixnum)
                         {
@@ -1544,7 +1597,7 @@ partial class MRubyState
                                 }
                                 goto Next;
                             case MRubyVType.Float:
-                                registerA = registerA.FloatValue + rV;
+                                registerA = new MRubyValue(registerA.FloatValue + rV);
                                 goto Next;
                         }
 
@@ -1579,6 +1632,24 @@ partial class MRubyState
                                 registerA = MRubyValue.False;
                                 goto Next;
                             }
+                        }
+
+                        // Float fast path: bit check only, avoids VType call
+                        if (registerA.IsFloat && rhs.IsFloat)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                // ReSharper disable once CompareOfFloatsByEqualityOperator
+                                OpCode.EQ => leftVal == rightVal,
+                                OpCode.LT => leftVal < rightVal,
+                                OpCode.LE => leftVal <= rightVal,
+                                OpCode.GT => leftVal > rightVal,
+                                OpCode.GE => leftVal >= rightVal,
+                                _ => false
+                            });
+                            goto Next;
                         }
 
                         // Fixnum fast path
