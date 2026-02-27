@@ -93,7 +93,11 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
         _ => default
     };
 
-    public bool IsNil => bits == 0 && Object == null;
+    public bool IsNil
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits == 0 && Object == null;
+    }
     public bool IsFalse => bits == FalseBits;
     public bool IsTrue => bits == TrueBits;
     public bool IsUndef => bits == UndefBits;
@@ -102,7 +106,11 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     public bool IsObject => Object != null;
     public bool IsImmediate => Object == null;
 
-    public bool Truthy => !IsFalse && !IsNil;
+    public bool Truthy
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => !IsFalse && !IsNil;
+    }
     public bool Falsy => IsNil || IsFalse;
 
     public bool IsInteger => IsFixnum ||
@@ -132,6 +140,7 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
 
     public double FloatValue
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
             var fbits = bits & ~0b11;
@@ -153,16 +162,19 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(bool value)
     {
         bits = value ? TrueBits : FalseBits;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(int value)
     {
         bits = (value << 1) | 1;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(long value)
     {
         if (value > FixnumMax || value < FixnumMin)
@@ -172,17 +184,20 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
         bits = (value << 1) | 1;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(Symbol symbol)
     {
         bits = ((long)symbol.Value << SymbolShift) | 0b1_1100;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(double value)
     {
         var n = Unsafe.As<double, long>(ref value);
         bits = (n & ~0b11) | 0b10;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(RObject value)
     {
         Object = value;
