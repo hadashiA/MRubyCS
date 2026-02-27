@@ -11,6 +11,9 @@ public class NumericOperationBenchmark() : MRubyBenchmarkBase("bm_numeric_op.rb"
 [Config(typeof(BenchmarkConfig))]
 public class FibBenchmark() : MRubyBenchmarkBase("bm_fib.rb");
 
+[Config(typeof(BenchmarkConfig))]
+public class MandelbrotBenchmark() : MRubyBenchmarkBase("bm_so_mandelbrot.rb");
+
 
 // ---
 // using var loader = new RubyScriptLoader();
