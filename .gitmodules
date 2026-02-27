@@ -1,3 +1,6 @@
 [submodule "src/MRubyCS.Compiler/mruby"]
 	path = src/MRubyCS.Compiler/mruby
 	url = https://github.com/mruby/mruby.git
+[submodule "sandbox/MRubyCS.Benchmark/mruby"]
+	path = sandbox/MRubyCS.Benchmark/mruby
+	url = https://github.com/mruby/mruby.git
