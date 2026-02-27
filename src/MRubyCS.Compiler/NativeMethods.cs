@@ -111,7 +111,7 @@ unsafe class NativeMethods
     [DllImport(DllName, EntryPoint = "mrb_close", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern void MrbClose(MrbState* mrb);
 
-    [DllImport(DllName, EntryPoint = "free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [DllImport(DllName, EntryPoint = "mrubycs_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern void MrcFree(void* ptr);
 
     [DllImport(DllName, EntryPoint = "mrc_ccontext_new", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

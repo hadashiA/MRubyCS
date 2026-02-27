@@ -3,6 +3,7 @@ EXPORTS
     mrb_open
     mrb_close
     mrb_free
+    mrubycs_free
     mrc_ccontext_new
     mrc_ccontext_free
     mrc_load_string_cxt
