@@ -143,6 +143,22 @@ public class MRubyCSSourceGenerator : IIncrementalGenerator
         new("FloatDomainError", "FloatDomainError"),
         new("KeyError", "KeyError"),
         new("FiberError", "FiberError"),
+        new("RegexpError", "RegexpError"),
+
+        new("GvMatch", "$~"),
+        new("GvMatchedString", "$&"),
+        new("GvPreMatch", "$`"),
+        new("GvPostMatch", "$'"),
+        new("GvLastCapture", "$+"),
+        new("Gv1", "$1"),
+        new("Gv2", "$2"),
+        new("Gv3", "$3"),
+        new("Gv4", "$4"),
+        new("Gv5", "$5"),
+        new("Gv6", "$6"),
+        new("Gv7", "$7"),
+        new("Gv8", "$8"),
+        new("Gv9", "$9"),
     ];
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
