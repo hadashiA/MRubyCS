@@ -1,7 +1,11 @@
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Utf8StringInterpolation;
+#if NET8_0_OR_GREATER
+using MRubyCS.Internals;
+#endif
 
 namespace MRubyCS;
 
@@ -47,20 +51,281 @@ public static class MRubyVTypeExtensions
     public static bool IsClass(this MRubyVType vType) => vType is MRubyVType.Class or MRubyVType.SClass or MRubyVType.Module;
 }
 
-// mrb_value representation:
-//
-// 64-bit word with inline float:
-//   nil   : ...0000 0000 (all bits are 0)
-//   false : ...0000 0100 (mrb_fixnum(v) != 0)
-//   true  : ...0000 1100
-//   undef : ...0001 0100
-//   symbol: ...0001 1100 (use only upper 32-bit as symbol value with MRB_64BIT)
-//   fixnum: ...IIII III1
-//   float : ...FFFF FF10 (51 bit significands; require MRB_64BIT)
-//   object: ...PPPP P000
+#if NET8_0_OR_GREATER
+[StructLayout(LayoutKind.Sequential)]
+#endif
 public readonly struct MRubyValue : IEquatable<MRubyValue>
 {
     public static MRubyValue Nil => default;
+
+#if NET8_0_OR_GREATER
+    // --- TypeObjectUnion path (NET8+) ---
+
+    public static MRubyValue False => new(new TypeObjectUnion(MRubyVType.False), 0);
+    public static MRubyValue True => new(new TypeObjectUnion(MRubyVType.True), 0);
+    public static MRubyValue Undef => new(new TypeObjectUnion(MRubyVType.Undef), 0);
+
+    internal static readonly long FixnumMin = long.MinValue;
+    internal static readonly long FixnumMax = long.MaxValue;
+
+    readonly long bits;
+    readonly TypeObjectUnion union;
+
+    public RObject? Object
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.Object;
+    }
+
+    public MRubyVType VType
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsObject ? union.RawObject.VType : union.TypeValue;
+    }
+
+    public bool IsNil
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue == 0;
+    }
+
+    public bool IsFalse
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue == (nint)MRubyVType.False;
+    }
+
+    public bool IsTrue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue == (nint)MRubyVType.True;
+    }
+
+    public bool IsUndef
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue == (nint)MRubyVType.Undef;
+    }
+
+    public bool IsSymbol
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue == (nint)MRubyVType.Symbol;
+    }
+
+    public bool IsFixnum
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue == (nint)MRubyVType.Integer;
+    }
+
+    public bool IsObject
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsObject;
+    }
+
+    public bool IsImmediate
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsType;
+    }
+
+    public bool Truthy
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue > 1; // Nil=0, False=1
+    }
+
+    public bool Falsy
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue <= 1; // Nil=0, False=1
+    }
+
+    public bool IsInteger
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => IsFixnum || (union.IsObject && union.RawObject.VType == MRubyVType.Integer);
+    }
+
+    public bool IsFloat
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.RawValue == (nint)MRubyVType.Float;
+    }
+
+    internal bool IsNumeric
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => IsFixnum || IsFloat || (union.IsObject && union.RawObject.VType == MRubyVType.Integer);
+    }
+
+    public bool IsBreak
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsObject && union.RawObject.VType == MRubyVType.Break;
+    }
+
+    public bool IsProc
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsObject && union.RawObject.VType == MRubyVType.Proc;
+    }
+
+    public bool IsClass
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsObject && union.RawObject.VType is MRubyVType.Class or MRubyVType.SClass or MRubyVType.Module;
+    }
+
+    public bool IsNamespace
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsObject && union.RawObject.VType is MRubyVType.Class or MRubyVType.Module;
+    }
+
+    public bool BoolValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Truthy;
+    }
+
+    public long FixnumValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits;
+    }
+
+    public Symbol SymbolValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => new((uint)bits);
+    }
+
+    public long IntegerValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => union.IsType ? bits : As<RInteger>().Value;
+    }
+
+    public double FloatValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get
+        {
+            var fbits = bits;
+            return Unsafe.As<long, double>(ref fbits);
+        }
+    }
+
+    public unsafe long ObjectId
+    {
+        get
+        {
+            if (union.IsObject)
+            {
+                var obj = union.RawObject;
+                return (nint)Unsafe.AsPointer(ref obj);
+            }
+            if (IsInteger) return IntegerValue;
+            if (IsFloat) return (long)FloatValue;
+            return bits;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MRubyValue(bool value)
+    {
+        union = new TypeObjectUnion(value ? MRubyVType.True : MRubyVType.False);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MRubyValue(int value)
+    {
+        union = new TypeObjectUnion(MRubyVType.Integer);
+        bits = value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MRubyValue(long value)
+    {
+        union = new TypeObjectUnion(MRubyVType.Integer);
+        bits = value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MRubyValue(Symbol symbol)
+    {
+        union = new TypeObjectUnion(MRubyVType.Symbol);
+        bits = symbol.Value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MRubyValue(double value)
+    {
+        union = new TypeObjectUnion(MRubyVType.Float);
+        bits = Unsafe.As<double, long>(ref value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MRubyValue(RObject value)
+    {
+        union = new TypeObjectUnion(value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    MRubyValue(TypeObjectUnion union, long bits)
+    {
+        this.union = union;
+        this.bits = bits;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Equals(MRubyValue other) => union == other.union && bits == other.bits;
+
+    public override int GetHashCode()
+    {
+        if (union.IsObject) return union.RawObject.GetHashCode();
+        return bits.GetHashCode();
+    }
+
+    // Raw write methods that bypass GC write barriers for immediate values.
+    // Layout: [offset 0] bits (long), [offset 8] union (TypeObjectUnion / nint).
+    // For immediate values (Float/Integer/Bool), the union field holds a small integer (MRubyVType enum, 0-255),
+    // not a real object reference, so skipping the write barrier is GC-safe.
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct RawMRubyValue(long bits, nint typeTag)
+    {
+        public readonly long Bits = bits;
+        public readonly nint TypeTag = typeTag;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFloat(ref MRubyValue target, double value)
+    {
+        Unsafe.As<MRubyValue, RawMRubyValue>(ref target) =
+            new(Unsafe.BitCast<double, long>(value), (nint)MRubyVType.Float);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFixnum(ref MRubyValue target, long value)
+    {
+        Unsafe.As<MRubyValue, RawMRubyValue>(ref target) =
+            new(value, (nint)MRubyVType.Integer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteBool(ref MRubyValue target, bool value)
+    {
+        Unsafe.As<MRubyValue, RawMRubyValue>(ref target) =
+            new(0, value ? (nint)MRubyVType.True : (nint)MRubyVType.False);
+    }
+
+#else
+    // --- Bit-manipulation path (netstandard2.1 / Unity) ---
+
     public static MRubyValue False => new(FalseBits, null);
     public static MRubyValue True => new(TrueBits, null);
     public static MRubyValue Undef => new(UndefBits, null);
@@ -93,30 +358,125 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
         _ => default
     };
 
-    public bool IsNil => bits == 0 && Object == null;
-    public bool IsFalse => bits == FalseBits;
-    public bool IsTrue => bits == TrueBits;
-    public bool IsUndef => bits == UndefBits;
-    public bool IsSymbol => (bits & 0b1_1111) == 0b1_1100;
-    public bool IsFixnum => (bits & 1) == 1;
-    public bool IsObject => Object != null;
-    public bool IsImmediate => Object == null;
+    public bool IsNil
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits == 0 && Object == null;
+    }
 
-    public bool Truthy => !IsFalse && !IsNil;
-    public bool Falsy => IsNil || IsFalse;
+    public bool IsFalse
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits == FalseBits;
+    }
 
-    public bool IsInteger => IsFixnum ||
-                             Object?.VType == MRubyVType.Integer;
-    public bool IsFloat => (bits & 0b11) == 0b10;
-    internal bool IsNumeric => IsFixnum || IsFloat || Object?.VType == MRubyVType.Integer;
-    public bool IsBreak => Object?.VType == MRubyVType.Break;
-    public bool IsProc => Object?.VType == MRubyVType.Proc;
-    public bool IsClass => Object?.VType is MRubyVType.Class or MRubyVType.SClass or  MRubyVType.Module;
-    public bool IsNamespace => Object?.VType is MRubyVType.Class or MRubyVType.Module;
+    public bool IsTrue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits == TrueBits;
+    }
 
-    public bool BoolValue => (bits & ~False.bits) != 0;
-    public long FixnumValue => bits >> 1;
-    public Symbol SymbolValue => new((uint)(bits >> SymbolShift));
+    public bool IsUndef
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits == UndefBits;
+    }
+
+    public bool IsSymbol
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (bits & 0b1_1111) == 0b1_1100;
+    }
+
+    public bool IsFixnum
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (bits & 1) == 1;
+    }
+
+    public bool IsObject
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Object != null;
+    }
+
+    public bool IsImmediate
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Object == null;
+    }
+
+    public bool Truthy
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => !IsFalse && !IsNil;
+    }
+
+    public bool Falsy
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => IsNil || IsFalse;
+    }
+
+    public bool IsInteger
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => IsFixnum || Object?.VType == MRubyVType.Integer;
+    }
+
+    public bool IsFloat
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (bits & 0b11) == 0b10;
+    }
+
+    internal bool IsNumeric
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => IsFixnum || IsFloat || Object?.VType == MRubyVType.Integer;
+    }
+
+    public bool IsBreak
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Object?.VType == MRubyVType.Break;
+    }
+
+    public bool IsProc
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Object?.VType == MRubyVType.Proc;
+    }
+
+    public bool IsClass
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Object?.VType is MRubyVType.Class or MRubyVType.SClass or MRubyVType.Module;
+    }
+
+    public bool IsNamespace
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Object?.VType is MRubyVType.Class or MRubyVType.Module;
+    }
+
+    public bool BoolValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (bits & ~False.bits) != 0;
+    }
+
+    public long FixnumValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits >> 1;
+    }
+
+    public Symbol SymbolValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => new((uint)(bits >> SymbolShift));
+    }
 
     public long IntegerValue
     {
@@ -132,6 +492,7 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
 
     public double FloatValue
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
             var fbits = bits & ~0b11;
@@ -153,16 +514,19 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(bool value)
     {
         bits = value ? TrueBits : FalseBits;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(int value)
     {
         bits = (value << 1) | 1;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(long value)
     {
         if (value > FixnumMax || value < FixnumMin)
@@ -172,35 +536,69 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
         bits = (value << 1) | 1;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(Symbol symbol)
     {
         bits = ((long)symbol.Value << SymbolShift) | 0b1_1100;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(double value)
     {
         var n = Unsafe.As<double, long>(ref value);
         bits = (n & ~0b11) | 0b10;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue(RObject value)
     {
         Object = value;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     MRubyValue(long bits, RObject? obj)
     {
         this.bits = bits;
         Object = obj;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Equals(MRubyValue other) => bits == other.bits &&
+                                            Object == other.Object;
+
+    public override int GetHashCode()
+    {
+        return Object?.GetHashCode() ?? bits.GetHashCode();
+    }
+
+    // Fallback implementations for netstandard2.1 — no write barrier concern here
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFloat(ref MRubyValue target, double value) => target = new MRubyValue(value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFixnum(ref MRubyValue target, long value) => target = new MRubyValue(value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteBool(ref MRubyValue target, bool value) => target = new MRubyValue(value);
+
+#endif
+
+    // --- Common API ---
+
     // Implicit conversion operators
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator MRubyValue(bool value) => new(value);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator MRubyValue(RObject obj) => new(obj);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator MRubyValue(long value) => new(value);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator MRubyValue(int value) => new(value);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator MRubyValue(Symbol symbol) => new(symbol);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator MRubyValue(double value) => new(value);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator MRubyValue(float value) => new(value);
 
     // Obsolete factory methods (kept for backward compatibility)
@@ -219,22 +617,17 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     [Obsolete("Use constructor instead: new MRubyValue(value)")]
     public static MRubyValue From(double value) => new(value);
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T As<T>() where T : RObject => (T)Object!;
 
-    public bool Equals(MRubyValue other) => bits == other.bits &&
-                                            Object == other.Object;
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(MRubyValue a, MRubyValue b) => a.Equals(b);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator !=(MRubyValue a, MRubyValue b) => !a.Equals(b);
 
     public override bool Equals(object? obj)
     {
         return obj is MRubyValue other && Equals(other);
-    }
-
-    public override int GetHashCode()
-    {
-        return Object?.GetHashCode() ?? bits.GetHashCode();
     }
 
     public override string ToString()

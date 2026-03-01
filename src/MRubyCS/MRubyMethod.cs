@@ -27,44 +27,55 @@ public readonly struct MRubyMethod : IEquatable<MRubyMethod>
     public static readonly MRubyMethod False = new((_, _) => MRubyValue.False);
     public static readonly MRubyMethod Identity = new((_, self) => self);
 
-    public readonly RProc? Proc;
-    public readonly MRubyFunc? Func;
-    // readonly delegate* managed<MRubyState, MRubyValue, MRubyValue> funcPtr = default;
-    public readonly MRubyMethodVisibility Visibility;
-    public readonly MRubyMethodKind Kind;
+    // Union: stores either RProc or MRubyFunc depending on Kind
+    readonly object? procOrFunc;
+
+    // Bit-packed flags: bits 0-1 = Visibility (4 values), bit 2 = Kind (2 values)
+    readonly byte flags;
+
+    public RProc? Proc
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Kind == MRubyMethodKind.RProc ? Unsafe.As<object, RProc>(ref Unsafe.AsRef(in procOrFunc)!) : null;
+    }
+
+    public MRubyMethodVisibility Visibility
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (MRubyMethodVisibility)(flags & 0x3);
+    }
+
+    public MRubyMethodKind Kind
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (MRubyMethodKind)((flags >> 2) & 0x1);
+    }
 
     public MRubyMethod(RProc proc, MRubyMethodVisibility visibility = MRubyMethodVisibility.Default)
     {
-        Proc = proc;
-        Kind = MRubyMethodKind.RProc;
-        Visibility = visibility;
+        procOrFunc = proc;
+        flags = (byte)((int)visibility | ((int)MRubyMethodKind.RProc << 2));
     }
 
     public MRubyMethod(MRubyFunc? func, MRubyMethodVisibility visibility = MRubyMethodVisibility.Default)
     {
-        Func = func;
-        Kind = MRubyMethodKind.CSharpFunc;
-        Visibility = visibility;
+        procOrFunc = func;
+        flags = (byte)((int)visibility | ((int)MRubyMethodKind.CSharpFunc << 2));
     }
 
-    public MRubyMethod WithVisibility(MRubyMethodVisibility visibility) => Proc != null
-        ? new MRubyMethod(Proc, visibility)
-        : new MRubyMethod(Func, visibility);
-
-    // internal MRubyMethod(delegate* managed<MRubyState, MRubyValue, MRubyValue> funcPtr)
-    // {
-    //     this.funcPtr = funcPtr;
-    // }
+    public MRubyMethod WithVisibility(MRubyMethodVisibility visibility) => Kind == MRubyMethodKind.RProc
+        ? new MRubyMethod((RProc)procOrFunc!, visibility)
+        : new MRubyMethod((MRubyFunc?)procOrFunc, visibility);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue Invoke(MRubyState state, MRubyValue self)
     {
-        return Func!.Invoke(state, self);
+        return Unsafe.As<object, MRubyFunc>(ref Unsafe.AsRef(in procOrFunc)!).Invoke(state, self);
     }
 
     public bool Equals(MRubyMethod other)
     {
-        return Proc == other.Proc && Func == other.Func;
+        return procOrFunc == other.procOrFunc;
     }
 
     public override bool Equals(object? obj)
@@ -74,11 +85,7 @@ public readonly struct MRubyMethod : IEquatable<MRubyMethod>
 
     public override int GetHashCode()
     {
-        if (Proc != null)
-        {
-            return Proc.GetHashCode();
-        }
-        return Func!.GetHashCode();
+        return procOrFunc?.GetHashCode() ?? 0;
     }
 
     public static bool operator ==(MRubyMethod left, MRubyMethod right)

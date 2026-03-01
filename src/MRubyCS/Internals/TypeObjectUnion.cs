@@ -1,3 +1,4 @@
+#if NET8_0_OR_GREATER
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -24,6 +25,7 @@ readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TypeObjectUnion(RObject obj) => RawObject = obj;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TypeObjectUnion(MRubyVType type) => Unsafe.As<TypeObjectUnion, nint>(ref this) = (nint)type;
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
@@ -69,3 +71,4 @@ readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
 
     public static bool operator !=(TypeObjectUnion left, TypeObjectUnion right) => !ReferenceEquals(left.RawObject,right.RawObject);
 }
+#endif
