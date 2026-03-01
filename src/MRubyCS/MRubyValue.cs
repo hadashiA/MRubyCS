@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Utf8StringInterpolation;
 #if NET8_0_OR_GREATER
 using MRubyCS.Internals;
@@ -50,6 +51,9 @@ public static class MRubyVTypeExtensions
     public static bool IsClass(this MRubyVType vType) => vType is MRubyVType.Class or MRubyVType.SClass or MRubyVType.Module;
 }
 
+#if NET8_0_OR_GREATER
+[StructLayout(LayoutKind.Sequential)]
+#endif
 public readonly struct MRubyValue : IEquatable<MRubyValue>
 {
     public static MRubyValue Nil => default;
@@ -64,8 +68,8 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     internal static readonly long FixnumMin = long.MinValue;
     internal static readonly long FixnumMax = long.MaxValue;
 
-    readonly TypeObjectUnion union;
     readonly long bits;
+    readonly TypeObjectUnion union;
 
     public RObject? Object
     {
@@ -284,6 +288,39 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     {
         if (union.IsObject) return union.RawObject.GetHashCode();
         return bits.GetHashCode();
+    }
+
+    // Raw write methods that bypass GC write barriers for immediate values.
+    // Layout: [offset 0] bits (long), [offset 8] union (TypeObjectUnion / nint).
+    // For immediate values (Float/Integer/Bool), the union field holds a small integer (MRubyVType enum, 0-255),
+    // not a real object reference, so skipping the write barrier is GC-safe.
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct RawMRubyValue(long bits, nint typeTag)
+    {
+        public readonly long Bits = bits;
+        public readonly nint TypeTag = typeTag;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFloat(ref MRubyValue target, double value)
+    {
+        Unsafe.As<MRubyValue, RawMRubyValue>(ref target) =
+            new(Unsafe.BitCast<double, long>(value), (nint)MRubyVType.Float);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFixnum(ref MRubyValue target, long value)
+    {
+        Unsafe.As<MRubyValue, RawMRubyValue>(ref target) =
+            new(value, (nint)MRubyVType.Integer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteBool(ref MRubyValue target, bool value)
+    {
+        Unsafe.As<MRubyValue, RawMRubyValue>(ref target) =
+            new(0, value ? (nint)MRubyVType.True : (nint)MRubyVType.False);
     }
 
 #else
@@ -533,6 +570,16 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     {
         return Object?.GetHashCode() ?? bits.GetHashCode();
     }
+
+    // Fallback implementations for netstandard2.1 — no write barrier concern here
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFloat(ref MRubyValue target, double value) => target = new MRubyValue(value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteFixnum(ref MRubyValue target, long value) => target = new MRubyValue(value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteBool(ref MRubyValue target, bool value) => target = new MRubyValue(value);
 
 #endif
 

@@ -25,6 +25,7 @@ readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TypeObjectUnion(RObject obj) => RawObject = obj;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TypeObjectUnion(MRubyVType type) => Unsafe.As<TypeObjectUnion, nint>(ref this) = (nint)type;
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]

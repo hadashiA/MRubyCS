@@ -1417,7 +1417,7 @@ partial class MRubyState
                         {
                             var leftVal = registerA.FloatValue;
                             var rightVal = rhs.FloatValue;
-                            registerA = new MRubyValue(opcode switch
+                            MRubyValue.WriteFloat(ref registerA, opcode switch
                             {
                                 OpCode.Add => leftVal + rightVal,
                                 OpCode.Sub => leftVal - rightVal,
@@ -1435,7 +1435,7 @@ partial class MRubyState
                             var rightInt = rhs.FixnumValue;
                             try
                             {
-                                registerA = new MRubyValue(opcode switch
+                                MRubyValue.WriteFixnum(ref registerA, opcode switch
                                 {
                                     OpCode.Add => checked(leftInt + rightInt),
                                     OpCode.Sub => checked(leftInt - rightInt),
@@ -1467,7 +1467,7 @@ partial class MRubyState
                         {
                             var leftVal = registerA.FloatValue;
                             var rightVal = (double)rhs.FixnumValue;
-                            registerA = new MRubyValue(opcode switch
+                            MRubyValue.WriteFloat(ref registerA, opcode switch
                             {
                                 OpCode.Add => leftVal + rightVal,
                                 OpCode.Sub => leftVal - rightVal,
@@ -1481,7 +1481,7 @@ partial class MRubyState
                         {
                             var leftVal = (double)registerA.FixnumValue;
                             var rightVal = rhs.FloatValue;
-                            registerA = new MRubyValue(opcode switch
+                            MRubyValue.WriteFloat(ref registerA, opcode switch
                             {
                                 OpCode.Add => leftVal + rightVal,
                                 OpCode.Sub => leftVal - rightVal,
@@ -1500,7 +1500,7 @@ partial class MRubyState
                             var rightInt = rhs.IntegerValue;
                             try
                             {
-                                registerA = new MRubyValue(opcode switch
+                                MRubyValue.WriteFixnum(ref registerA, opcode switch
                                 {
                                     OpCode.Add => checked(leftInt + rightInt),
                                     OpCode.Sub => checked(leftInt - rightInt),
@@ -1533,7 +1533,7 @@ partial class MRubyState
                             var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : registerA.FloatValue;
                             var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : rhs.FloatValue;
 
-                            registerA = new MRubyValue(opcode switch
+                            MRubyValue.WriteFloat(ref registerA, opcode switch
                             {
                                 OpCode.Add => leftVal + rightVal,
                                 OpCode.Sub => leftVal - rightVal,
@@ -1566,7 +1566,7 @@ partial class MRubyState
                         // Float fast path: bit check only, avoids VType call
                         if (registerA.IsFloat)
                         {
-                            registerA = new MRubyValue(registerA.FloatValue + rV);
+                            MRubyValue.WriteFloat(ref registerA, registerA.FloatValue + rV);
                             goto Next;
                         }
 
@@ -1575,7 +1575,7 @@ partial class MRubyState
                         {
                             try
                             {
-                                registerA = checked(registerA.FixnumValue + rV);
+                                MRubyValue.WriteFixnum(ref registerA, checked(registerA.FixnumValue + rV));
                             }
                             catch (OverflowException)
                             {
@@ -1589,7 +1589,7 @@ partial class MRubyState
                             case MRubyVType.Integer:
                                 try
                                 {
-                                    registerA = checked(registerA.IntegerValue + rV);
+                                    MRubyValue.WriteFixnum(ref registerA, checked(registerA.IntegerValue + rV));
                                 }
                                 catch (OverflowException)
                                 {
@@ -1597,7 +1597,7 @@ partial class MRubyState
                                 }
                                 goto Next;
                             case MRubyVType.Float:
-                                registerA = new MRubyValue(registerA.FloatValue + rV);
+                                MRubyValue.WriteFloat(ref registerA, registerA.FloatValue + rV);
                                 goto Next;
                         }
 
@@ -1639,7 +1639,7 @@ partial class MRubyState
                         {
                             var leftVal = registerA.FloatValue;
                             var rightVal = rhs.FloatValue;
-                            registerA = new MRubyValue(opcode switch
+                            MRubyValue.WriteBool(ref registerA, opcode switch
                             {
                                 // ReSharper disable once CompareOfFloatsByEqualityOperator
                                 OpCode.EQ => leftVal == rightVal,
@@ -1657,7 +1657,7 @@ partial class MRubyState
                         {
                             var leftInt = registerA.FixnumValue;
                             var rightInt = rhs.FixnumValue;
-                            registerA = new MRubyValue(opcode switch
+                            MRubyValue.WriteBool(ref registerA, opcode switch
                             {
                                 OpCode.EQ => leftInt == rightInt,
                                 OpCode.LT => leftInt < rightInt,
@@ -1676,7 +1676,7 @@ partial class MRubyState
                         {
                             var leftVal = registerA.FloatValue;
                             var rightVal = rhs.FloatValue;
-                            registerA = new MRubyValue(opcode switch
+                            MRubyValue.WriteBool(ref registerA, opcode switch
                             {
                                 // ReSharper disable once CompareOfFloatsByEqualityOperator
                                 OpCode.EQ => leftVal == rightVal,
@@ -1695,7 +1695,7 @@ partial class MRubyState
                             var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : (long)registerA.FloatValue;
                             var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : (long)rhs.FloatValue;
                             {
-                                registerA = new MRubyValue(opcode switch
+                                MRubyValue.WriteBool(ref registerA, opcode switch
                                 {
                                     OpCode.EQ => leftVal == rightVal,
                                     OpCode.LT => leftVal < rightVal,
