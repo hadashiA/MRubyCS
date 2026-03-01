@@ -14,14 +14,5 @@ public class FibBenchmark() : MRubyBenchmarkBase("bm_fib.rb");
 [Config(typeof(BenchmarkConfig))]
 public class MandelbrotBenchmark() : MRubyBenchmarkBase("bm_so_mandelbrot.rb");
 
-
-// ---
-// using var loader = new RubyScriptLoader();
-//
-// loader.PreloadScriptFromFile("bm_fib.rb");
-//
-// var result = loader.RunMRubyCS();
-// Console.WriteLine(result);
-//
-// var result2 = loader.RunMRubyNative();
-// Console.WriteLine(result2.IntValue);
+[Config(typeof(BenchmarkConfig))]
+public class AoRenderBenchmark() : MRubyBenchmarkBase("bm_ao_render.rb");
