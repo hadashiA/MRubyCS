@@ -1,3 +1,4 @@
+#if NET8_0_OR_GREATER
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -69,3 +70,4 @@ readonly struct TypeObjectUnion : IEquatable<TypeObjectUnion>
 
     public static bool operator !=(TypeObjectUnion left, TypeObjectUnion right) => !ReferenceEquals(left.RawObject,right.RawObject);
 }
+#endif
