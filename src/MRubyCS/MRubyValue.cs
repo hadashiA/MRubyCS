@@ -70,8 +70,8 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     const long UndefBits = 0b0001_0100;
     const int SymbolShift = 32;
 
-    internal static readonly long FixnumMin = long.MinValue >> 1;
-    internal static readonly long FixnumMax = long.MaxValue >> 1;
+    internal const long FixnumMin = long.MinValue >> 1;
+    internal const long FixnumMax = long.MaxValue >> 1;
 
     readonly long bits;
 

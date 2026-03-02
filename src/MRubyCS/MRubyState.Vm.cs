@@ -1412,8 +1412,30 @@ partial class MRubyState
                         registerA = ref Unsafe.Add(ref registers, a);
                         var rhs = Unsafe.Add(ref registerA, 1);
 
+                        var lhsIsFloat = registerA.IsFloat;
+                        var rhsIsFloat = rhs.IsFloat;
+
+                        // Float fast path: bit check only (bits & 0b11 == 0b10), avoids VType call
+                        if (lhsIsFloat && rhsIsFloat)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+
+                        var lhsIsFixnum = registerA.IsFixnum;
+                        var rhsIsFixnum = rhs.IsFixnum;
+
                         // Fixnum fast path: avoid VType switch expression, use bit check + shift only
-                        if (registerA.IsFixnum && rhs.IsFixnum)
+                        if (lhsIsFixnum && rhsIsFixnum)
                         {
                             var leftInt = registerA.FixnumValue;
                             var rightInt = rhs.FixnumValue;
@@ -1446,9 +1468,39 @@ partial class MRubyState
                             goto Next;
                         }
 
-                        var lhsVType = registerA.VType;
-                        var rhsVType = rhs.VType;
-                        if (lhsVType == MRubyVType.Integer && rhsVType == MRubyVType.Integer)
+                        // Float + Fixnum mixed fast path: bit checks only, no VType call
+                        if (lhsIsFloat && rhsIsFixnum)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = (double)rhs.FixnumValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+                        if (lhsIsFixnum && rhsIsFloat)
+                        {
+                            var leftVal = (double)registerA.FixnumValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+
+                        var lhsIsInteger = lhsIsFixnum || registerA.Object?.VType == MRubyVType.Integer;
+                        var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
+                        if (lhsIsInteger && rhsIsInteger)
                         {
                             var leftInt = registerA.IntegerValue;
                             var rightInt = rhs.IntegerValue;
@@ -1481,11 +1533,11 @@ partial class MRubyState
                             goto Next;
                         }
 
-                        if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
-                            rhsVType is MRubyVType.Integer or MRubyVType.Float)
+                        if ((lhsIsInteger || lhsIsFloat) &&
+                            (rhsIsInteger || rhsIsFloat))
                         {
-                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : registerA.FloatValue;
-                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : rhs.FloatValue;
+                            var leftVal = lhsIsInteger ? registerA.IntegerValue : registerA.FloatValue;
+                            var rightVal = rhsIsInteger ? rhs.IntegerValue : rhs.FloatValue;
 
                             registerA = new MRubyValue(opcode switch
                             {
@@ -1498,7 +1550,9 @@ partial class MRubyState
                             goto Next;
                         }
 
-                        if (lhsVType == MRubyVType.String && rhsVType == MRubyVType.String && opcode == OpCode.Add)
+                        if (registerA.Object?.VType == MRubyVType.String &&
+                            rhs.Object?.VType == MRubyVType.String &&
+                            opcode == OpCode.Add)
                         {
                             registerA = registerA.As<RString>() + rhs.As<RString>();
                             goto Next;
@@ -1516,6 +1570,13 @@ partial class MRubyState
                         registerA = ref Unsafe.Add(ref registers, bb.A);
                     {
                         var rV = opcode == OpCode.AddI ? bb.B : -bb.B;
+
+                        // Float fast path: bit check only, avoids VType call
+                        if (registerA.IsFloat)
+                        {
+                            registerA = new MRubyValue(registerA.FloatValue + rV);
+                            goto Next;
+                        }
 
                         // Fixnum fast path
                         if (registerA.IsFixnum)
@@ -1544,7 +1605,7 @@ partial class MRubyState
                                 }
                                 goto Next;
                             case MRubyVType.Float:
-                                registerA = registerA.FloatValue + rV;
+                                registerA = new MRubyValue(registerA.FloatValue + rV);
                                 goto Next;
                         }
 
@@ -1581,27 +1642,10 @@ partial class MRubyState
                             }
                         }
 
-                        // Fixnum fast path
-                        if (registerA.IsFixnum && rhs.IsFixnum)
-                        {
-                            var leftInt = registerA.FixnumValue;
-                            var rightInt = rhs.FixnumValue;
-                            registerA = new MRubyValue(opcode switch
-                            {
-                                OpCode.EQ => leftInt == rightInt,
-                                OpCode.LT => leftInt < rightInt,
-                                OpCode.LE => leftInt <= rightInt,
-                                OpCode.GT => leftInt > rightInt,
-                                OpCode.GE => leftInt >= rightInt,
-                                _ => false
-                            });
-                            goto Next;
-                        }
-
-                        lhsVType = registerA.VType;
-                        rhsVType = rhs.VType;
-
-                        if (lhsVType == MRubyVType.Float && rhsVType == MRubyVType.Float)
+                        // Float fast path: bit check only, avoids VType call
+                        lhsIsFloat = registerA.IsFloat;
+                        rhsIsFloat = rhs.IsFloat;
+                        if (lhsIsFloat && rhsIsFloat)
                         {
                             var leftVal = registerA.FloatValue;
                             var rightVal = rhs.FloatValue;
@@ -1618,11 +1662,33 @@ partial class MRubyState
                             goto Next;
                         }
 
-                        if (lhsVType is MRubyVType.Integer or MRubyVType.Float &&
-                            rhsVType is MRubyVType.Integer or MRubyVType.Float)
+                        // Fixnum fast path
+                        lhsIsFixnum = registerA.IsFixnum;
+                        rhsIsFixnum = rhs.IsFixnum;
+                        if (lhsIsFixnum && rhsIsFixnum)
                         {
-                            var leftVal = lhsVType == MRubyVType.Integer ? registerA.IntegerValue : (long)registerA.FloatValue;
-                            var rightVal = rhsVType == MRubyVType.Integer ? rhs.IntegerValue : (long)rhs.FloatValue;
+                            var leftInt = registerA.FixnumValue;
+                            var rightInt = rhs.FixnumValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.EQ => leftInt == rightInt,
+                                OpCode.LT => leftInt < rightInt,
+                                OpCode.LE => leftInt <= rightInt,
+                                OpCode.GT => leftInt > rightInt,
+                                OpCode.GE => leftInt >= rightInt,
+                                _ => false
+                            });
+                            goto Next;
+                        }
+
+                        lhsIsInteger = lhsIsFixnum || registerA.Object?.VType == MRubyVType.Integer;
+                        rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
+
+                        if ((lhsIsInteger || lhsIsFloat) &&
+                            (rhsIsInteger || rhsIsFloat))
+                        {
+                            var leftVal = lhsIsInteger ? registerA.IntegerValue : (long)registerA.FloatValue;
+                            var rightVal = rhsIsInteger ? rhs.IntegerValue : (long)rhs.FloatValue;
                             {
                                 registerA = new MRubyValue(opcode switch
                                 {
