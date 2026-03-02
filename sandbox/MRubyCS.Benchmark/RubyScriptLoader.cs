@@ -20,9 +20,34 @@ unsafe class RubyScriptLoader : IDisposable
     public RubyScriptLoader()
     {
         mrubyCSState = MRubyState.Create();
+        RegisterMathModule(mrubyCSState);
         mrubyCSCompiler = MRubyCompiler.Create(mrubyCSState);
 
         mrbStateNative = NativeMethods.MrbOpen();
+    }
+
+    static void RegisterMathModule(MRubyState state)
+    {
+        state.DefineModule(state.Intern("Math"u8), mod =>
+        {
+            mod.DefineClassMethod(state.Intern("sqrt"u8), new MRubyMethod((s, self) =>
+            {
+                var value = s.GetArgumentAsFloatAt(0);
+                return System.Math.Sqrt(value);
+            }));
+
+            mod.DefineClassMethod(state.Intern("cos"u8), new MRubyMethod((s, self) =>
+            {
+                var value = s.GetArgumentAsFloatAt(0);
+                return System.Math.Cos(value);
+            }));
+
+            mod.DefineClassMethod(state.Intern("sin"u8), new MRubyMethod((s, self) =>
+            {
+                var value = s.GetArgumentAsFloatAt(0);
+                return System.Math.Sin(value);
+            }));
+        });
     }
 
     public void PreloadScript(ReadOnlySpan<byte> source)
