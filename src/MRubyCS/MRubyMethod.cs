@@ -27,44 +27,43 @@ public readonly struct MRubyMethod : IEquatable<MRubyMethod>
     public static readonly MRubyMethod False = new((_, _) => MRubyValue.False);
     public static readonly MRubyMethod Identity = new((_, self) => self);
 
-    public readonly RProc? Proc;
-    public readonly MRubyFunc? Func;
-    // readonly delegate* managed<MRubyState, MRubyValue, MRubyValue> funcPtr = default;
+    readonly object? body;
     public readonly MRubyMethodVisibility Visibility;
     public readonly MRubyMethodKind Kind;
 
+    public RProc? Proc
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Kind == MRubyMethodKind.RProc ? Unsafe.As<RProc>(body!) : null;
+    }
+
     public MRubyMethod(RProc proc, MRubyMethodVisibility visibility = MRubyMethodVisibility.Default)
     {
-        Proc = proc;
+        body = proc;
         Kind = MRubyMethodKind.RProc;
         Visibility = visibility;
     }
 
     public MRubyMethod(MRubyFunc? func, MRubyMethodVisibility visibility = MRubyMethodVisibility.Default)
     {
-        Func = func;
+        body = func;
         Kind = MRubyMethodKind.CSharpFunc;
         Visibility = visibility;
     }
 
-    public MRubyMethod WithVisibility(MRubyMethodVisibility visibility) => Proc != null
-        ? new MRubyMethod(Proc, visibility)
-        : new MRubyMethod(Func, visibility);
-
-    // internal MRubyMethod(delegate* managed<MRubyState, MRubyValue, MRubyValue> funcPtr)
-    // {
-    //     this.funcPtr = funcPtr;
-    // }
+    public MRubyMethod WithVisibility(MRubyMethodVisibility visibility) => Kind == MRubyMethodKind.RProc
+        ? new MRubyMethod(Unsafe.As<RProc>(body!), visibility)
+        : new MRubyMethod(Unsafe.As<MRubyFunc>(body!), visibility);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue Invoke(MRubyState state, MRubyValue self)
     {
-        return Func!.Invoke(state, self);
+        return Unsafe.As<MRubyFunc>(body!).Invoke(state, self);
     }
 
     public bool Equals(MRubyMethod other)
     {
-        return Proc == other.Proc && Func == other.Func;
+        return body == other.body;
     }
 
     public override bool Equals(object? obj)
@@ -74,11 +73,7 @@ public readonly struct MRubyMethod : IEquatable<MRubyMethod>
 
     public override int GetHashCode()
     {
-        if (Proc != null)
-        {
-            return Proc.GetHashCode();
-        }
-        return Func!.GetHashCode();
+        return body?.GetHashCode() ?? 0;
     }
 
     public static bool operator ==(MRubyMethod left, MRubyMethod right)
