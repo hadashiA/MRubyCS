@@ -3,6 +3,7 @@ MRuby::CrossBuild.new("windows") do |conf|
 
   conf.gem core: 'mruby-compiler'
   conf.gem core: 'mruby-string-ext'
+  conf.gem core: 'mruby-math'
   conf.gem './mrbgems/mrubycs-benchmark-helper'
 
   conf.disable_presym

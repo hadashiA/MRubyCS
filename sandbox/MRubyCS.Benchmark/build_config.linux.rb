@@ -3,6 +3,7 @@ MRuby::CrossBuild.new("linux-x64") do |conf|
 
   conf.gem core: 'mruby-compiler'
   conf.gem core: 'mruby-string-ext'
+  conf.gem core: 'mruby-math'
   conf.gem './mrbgems/mrubycs-benchmark-helper'
 
   conf.disable_presym
@@ -15,6 +16,7 @@ MRuby::CrossBuild.new("linux-arm64") do |conf|
 
   conf.gem core: 'mruby-compiler'
   conf.gem core: 'mruby-string-ext'
+  conf.gem core: 'mruby-math'  
   conf.gem './mrbgems/mrubycs-benchmark-helper'
 
   conf.cc.command = 'aarch64-linux-gnu-gcc'
