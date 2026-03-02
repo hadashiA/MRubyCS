@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace MRubyCS.Internals;
@@ -76,6 +76,7 @@ struct OperandBB
     [FieldOffset(1)]
     public byte B;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static OperandBB Read(ref byte sequence, ref int pc)
     {
         pc += 3;
@@ -131,6 +132,7 @@ struct OperandBBB
     [FieldOffset(2)]
     public byte C;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static OperandBBB Read(ref byte sequence, ref int pc)
     {
         pc += 4;
