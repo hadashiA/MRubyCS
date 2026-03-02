@@ -41,6 +41,7 @@ class REnv() : RBasic(MRubyVType.Env, default!), ICallScope
         if (StackSize == 0)
         {
             capturedStack = Memory<MRubyValue>.Empty;
+            return;
         }
 
         capturedStack = new Memory<MRubyValue>(Stack.ToArray());
