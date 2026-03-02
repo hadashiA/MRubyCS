@@ -3,6 +3,11 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET7_0_OR_GREATER
+using static System.Runtime.InteropServices.MemoryMarshal;
+#else
+using static MRubyCS.Internal.MemoryMarshalEx;
+#endif
 using System.Threading;
 
 namespace MRubyCS.Internals;
@@ -203,7 +208,7 @@ class MRubyContext
     public ref MRubyCallInfo CurrentCallInfo
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => ref CallStack[CallDepth];
+        get => ref Unsafe.Add(ref GetArrayDataReference(CallStack), CallDepth);
     }
 
     public Span<MRubyValue> CurrentStack
@@ -250,7 +255,7 @@ class MRubyContext
         {
             Array.Resize(ref CallStack, CallStack.Length * 2);
         }
-        return ref CallStack[++CallDepth];
+        return ref Unsafe.Add(ref GetArrayDataReference(CallStack), ++CallDepth);
     }
 
     public void PopCallStack()
@@ -260,8 +265,8 @@ class MRubyContext
             throw new InvalidOperationException();
         }
 
-        ref var currentCallInfo = ref CallStack[CallDepth];
-        ref var parentCallInfo = ref CallStack[CallDepth - 1];
+        ref var currentCallInfo = ref Unsafe.Add(ref GetArrayDataReference(CallStack), CallDepth);
+        ref var parentCallInfo = ref Unsafe.Add(ref GetArrayDataReference(CallStack), CallDepth - 1);
 
         var currentBlock = Stack[currentCallInfo.StackPointer + currentCallInfo.BlockArgumentOffset];
         if (currentBlock.Object is RProc b &&
