@@ -769,6 +769,78 @@ partial class MRubyState
                         // fallthrough to Send
                         callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool ArithmeticSlowPath(MRubyState state, ref MRubyValue registerA, int a, MRubyValue lhs, MRubyValue rhs, bool lhsIsFixnum, bool lhsIsFloat, bool rhsIsFixnum, bool rhsIsFloat, OpCode opcode)
+                        {
+                            var lhsIsInteger = lhsIsFixnum || lhs.Object?.VType == MRubyVType.Integer;
+                            var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
+                            if (lhsIsInteger && rhsIsInteger)
+                            {
+                                var leftInt = lhs.IntegerValue;
+                                var rightInt = rhs.IntegerValue;
+                                long result;
+                                switch (opcode)
+                                {
+                                    case OpCode.Add:
+                                        result = leftInt + rightInt;
+                                        if (((leftInt ^ result) & (rightInt ^ result)) < 0)
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "add"u8);
+                                        break;
+                                    case OpCode.Sub:
+                                        result = leftInt - rightInt;
+                                        if (((leftInt ^ rightInt) & (leftInt ^ result)) < 0)
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "sub"u8);
+                                        break;
+                                    case OpCode.Mul:
+                                        result = leftInt * rightInt;
+                                        if (leftInt != 0 && (leftInt == -1
+                                                ? rightInt == long.MinValue
+                                                : result / leftInt != rightInt))
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "mul"u8);
+                                        break;
+                                    case OpCode.Div:
+                                        if (rightInt == 0)
+                                            IntegerMembers.RaiseDivideByZeroError(state);
+                                        if (leftInt == long.MinValue && rightInt == -1)
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "div"u8);
+                                        result = leftInt / rightInt;
+                                        break;
+                                    default:
+                                        result = 0;
+                                        break;
+                                }
+                                registerA = new MRubyValue(result);
+                                return true;
+                            }
+
+                            if ((lhsIsInteger || lhsIsFloat) &&
+                                (rhsIsInteger || rhsIsFloat))
+                            {
+                                var leftVal = lhsIsInteger ? lhs.IntegerValue : lhs.FloatValue;
+                                var rightVal = rhsIsInteger ? rhs.IntegerValue : rhs.FloatValue;
+                                registerA = new MRubyValue(opcode switch
+                                {
+                                    OpCode.Add => leftVal + rightVal,
+                                    OpCode.Sub => leftVal - rightVal,
+                                    OpCode.Mul => leftVal * rightVal,
+                                    OpCode.Div => leftVal / rightVal,
+                                    _ => default
+                                });
+                                return true;
+                            }
+
+                            if (lhs.Object?.VType == MRubyVType.String &&
+                                rhs.Object?.VType == MRubyVType.String &&
+                                opcode == OpCode.Add)
+                            {
+                                registerA = lhs.As<RString>() + rhs.As<RString>();
+                                return true;
+                            }
+
+                            return false; // fallthrough to Send
+                        }
+
                     case OpCode.AddI:
                     case OpCode.SubI:
                         Markers.AddI();
@@ -797,6 +869,27 @@ partial class MRubyState
                         Unsafe.Add(ref registerA, 1) = new MRubyValue(bb.B);
                         callInfo = ref GetNextCallInfo(callInfo.StackPointer + bb.A, opcode, 1);
                         goto case OpCode.SendInternal;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool AddISubISlowPath(MRubyState state, ref MRubyValue registerA, MRubyValue lhs, int rV, OpCode opcode)
+                        {
+                            switch (lhs.VType)
+                            {
+                                case MRubyVType.Integer:
+                                {
+                                    var intVal = lhs.IntegerValue;
+                                    var result = intVal + rV;
+                                    if (((intVal ^ result) & ((long)rV ^ result)) < 0)
+                                        IntegerMembers.RaiseIntegerOverflowError(state, opcode == OpCode.AddI ? "add"u8 : "sub"u8);
+                                    registerA = result;
+                                    return true;
+                                }
+                                case MRubyVType.Float:
+                                    registerA = new MRubyValue(lhs.FloatValue + rV);
+                                    return true;
+                            }
+                            return false; // fallthrough to Send
+                        }
                     }
                     case OpCode.EQ:
                     case OpCode.LT:
@@ -870,6 +963,32 @@ partial class MRubyState
                         // fallthrough to Send
                         callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool ComparisonSlowPath(ref MRubyValue registerA, MRubyValue lhs, MRubyValue rhs, bool lhsIsFixnum, bool lhsIsFloat, bool rhsIsFixnum, bool rhsIsFloat, OpCode opcode)
+                        {
+                            var lhsIsInteger = lhsIsFixnum || lhs.Object?.VType == MRubyVType.Integer;
+                            var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
+
+                            if ((lhsIsInteger || lhsIsFloat) &&
+                                (rhsIsInteger || rhsIsFloat))
+                            {
+                                var leftVal = lhsIsInteger ? lhs.IntegerValue : (long)lhs.FloatValue;
+                                var rightVal = rhsIsInteger ? rhs.IntegerValue : (long)rhs.FloatValue;
+                                registerA = new MRubyValue(opcode switch
+                                {
+                                    OpCode.EQ => leftVal == rightVal,
+                                    OpCode.LT => leftVal < rightVal,
+                                    OpCode.LE => leftVal <= rightVal,
+                                    OpCode.GT => leftVal > rightVal,
+                                    OpCode.GE => leftVal >= rightVal,
+                                    _ => false
+                                });
+                                return true;
+                            }
+
+                            return false; // fallthrough to Send
+                        }
                     case OpCode.Return:
                     {
                         Markers.Return();
@@ -888,6 +1007,26 @@ partial class MRubyState
                         Markers.JmpUw();
                         JmpUw(this, ref callInfo, ref sequence, irep);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void JmpUw(MRubyState state, ref MRubyCallInfo callInfo, ref byte sequence, Irep irep)
+                        {
+                            var s = (short)ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
+                            var newProgramCounter = callInfo.ProgramCounter + s;
+                            if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
+                            {
+                                // avoiding a jump from a catch handler into the same handler
+                                if (newProgramCounter < catchHandler.Begin ||
+                                    newProgramCounter > catchHandler.End)
+                                {
+                                    state.PrepareTaggedBreak(BreakTag.Jump, state.Context.CallDepth, newProgramCounter);
+                                    callInfo.ProgramCounter = (int)catchHandler.Target;
+                                    return;
+                                }
+                            }
+                            state.Exception = null;
+                            callInfo.ProgramCounter = newProgramCounter;
+                        }
                     }
                     case OpCode.Except:
                         Markers.Except();
@@ -903,9 +1042,36 @@ partial class MRubyState
                     case OpCode.Rescue:
                     {
                         Markers.Rescue();
-                        if (Rescue(this, ref callInfo, ref registers, ref sequence))
+                        if (TryRescue(this, ref callInfo, ref registers, ref sequence))
                             goto JumpAndNext;
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool TryRescue(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence)
+                        {
+                            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                            var exceptionObjectValue = Unsafe.Add(ref registers, bb.A);
+                            var exceptionClassValue = Unsafe.Add(ref registers, bb.B);
+                            switch (exceptionClassValue.VType)
+                            {
+                                case MRubyVType.Class:
+                                case MRubyVType.Module:
+                                    break;
+                                default:
+                                    var ex = new RException(
+                                        state.NewString("class or module required for rescue clause"u8),
+                                        state.GetExceptionClass(Names.TypeError));
+                                    state.Exception = new MRubyRaiseException(state, ex, state.Context.CallDepth);
+                                    if (state.TryRaiseJump(ref callInfo))
+                                    {
+                                        return true; // signal JumpAndNext
+                                    }
+                                    throw state.Exception;
+                            }
+
+                            Unsafe.Add(ref registers, bb.B) = state.KindOf(exceptionObjectValue, exceptionClassValue.As<RClass>());
+                            return false; // signal Next
+                        }
                     }
                     case OpCode.RaiseIf:
                     {
@@ -917,6 +1083,70 @@ partial class MRubyState
                             case VmSignal.Return: return retVal;
                         }
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static VmSignal RaiseIf(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, Irep irep, out MRubyValue retVal)
+                        {
+                            retVal = default;
+                            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                            var exceptionValue = Unsafe.Add(ref registers, a);
+                            switch (exceptionValue.Object)
+                            {
+                                case RBreak breakObject:
+                                    state.Exception = new MRubyBreakException(state, breakObject);
+                                    switch (breakObject.Tag)
+                                    {
+                                        case BreakTag.Break:
+                                        {
+                                            if (state.TryReturnJump(ref callInfo, breakObject.BreakIndex, breakObject.Value))
+                                            {
+                                                return VmSignal.JumpAndNext;
+                                            }
+                                            retVal = breakObject.Value;
+                                            return VmSignal.Return;
+                                        }
+                                        case BreakTag.Jump:
+                                        {
+                                            var newProgramCounter = (int)breakObject.Value.IntegerValue;
+                                            if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
+                                            {
+                                                // avoiding a jump from a catch handler into the same handler
+                                                if (newProgramCounter < catchHandler.Begin || newProgramCounter > catchHandler.End)
+                                                {
+                                                    state.PrepareTaggedBreak(BreakTag.Jump, state.Context.CallDepth, newProgramCounter);
+                                                    callInfo.ProgramCounter = (int)catchHandler.Target;
+                                                    return VmSignal.Next;
+                                                }
+                                            }
+                                            state.Exception = null;
+                                            callInfo.ProgramCounter = newProgramCounter;
+                                            return VmSignal.Next;
+                                        }
+                                        case BreakTag.Stop:
+                                        {
+                                            if (state.TryUnwindEnsureJump(ref callInfo, state.Context.CallDepth, BreakTag.Stop, breakObject.Value))
+                                            {
+                                                return VmSignal.JumpAndNext;
+                                            }
+                                            if (state.Exception != null) throw state.Exception;
+                                            retVal = Unsafe.Add(ref registers, irep.LocalVariables.Length);
+                                            return VmSignal.Return;
+                                        }
+                                    }
+                                    break;
+                                case RException exceptionObject:
+                                    state.Exception = new MRubyRaiseException(state, exceptionObject, state.Context.CallDepth);
+                                    if (state.TryRaiseJump(ref callInfo))
+                                    {
+                                        return VmSignal.JumpAndNext;
+                                    }
+                                    throw state.Exception;
+                                default:
+                                    state.Exception = null;
+                                    break;
+                            }
+                            return VmSignal.Next;
+                        }
                     }
                     case OpCode.SSend:
                     case OpCode.SSendB:
@@ -1184,9 +1414,9 @@ partial class MRubyState
                             !callInfo.ArgumentPacked &&
                             callInfo.Proc?.HasFlag(MRubyObjectFlags.ProcStrict) == true)
                         {
-                            FastPass(this, irep, ref callInfo, argc, m1);
+                            EnterFastPass(this, irep, ref callInfo, argc, m1);
 
-                            static void FastPass(MRubyState state, Irep irep, ref MRubyCallInfo callInfo, byte argc, byte m1)
+                            static void EnterFastPass(MRubyState state, Irep irep, ref MRubyCallInfo callInfo, byte argc, byte m1)
                             {
                                 if (argc + (callInfo.KeywordArgumentPacked ? 1 : 0) != m1)
                                 {
@@ -1205,11 +1435,11 @@ partial class MRubyState
 
                             goto Next;
                         }
-                        SlowPath(ref callInfo, argv, Context.Stack.AsSpan(callInfo.StackPointer));
+                        EnterSlowPath(ref callInfo, argv, Context.Stack.AsSpan(callInfo.StackPointer));
 
                         goto Next;
 
-                        void SlowPath(ref MRubyCallInfo callInfo, Span<MRubyValue> argv, Span<MRubyValue> registers)
+                        void EnterSlowPath(ref MRubyCallInfo callInfo, Span<MRubyValue> argv, Span<MRubyValue> registers)
                         {
                             var o = aspec.OptionalArgumentsCount;
                             var r = aspec.TakeRestArguments ? 1 : 0;
@@ -1440,6 +1670,34 @@ partial class MRubyState
                             case VmSignal.Return: return retVal;
                         }
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static VmSignal ReturnBlk(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, out MRubyValue retVal)
+                        {
+                            retVal = default;
+                            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                            var dest = callInfo.Proc!.FindReturningDestination(out var env);
+                            if (dest.Scope is not REnv destEnv || destEnv.Context == state.Context)
+                            {
+                                // check jump destination
+                                for (var i = state.Context.CallDepth; i >= 0; i--)
+                                {
+                                    if (state.Context.CallStack[i].Scope == env)
+                                    {
+                                        var returnValue = Unsafe.Add(ref registers, a);
+                                        if (state.TryReturnJump(ref callInfo, i, returnValue))
+                                        {
+                                            return VmSignal.JumpAndNext;
+                                        }
+                                        retVal = returnValue;
+                                        return VmSignal.Return;
+                                    }
+                                }
+                            }
+                            // no jump destination
+                            state.Raise(Names.LocalJumpError, "unexpected return"u8);
+                            return VmSignal.Next; // not reached
+                        }
                     }
                     case OpCode.Break:
                     {
@@ -1455,6 +1713,34 @@ partial class MRubyState
                             case VmSignal.Return: return retVal;
                         }
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static VmSignal Break(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, out MRubyValue retVal)
+                        {
+                            retVal = default;
+                            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                            if (callInfo.Proc is { } proc &&
+                                !proc.HasFlag(MRubyObjectFlags.ProcOrphan) &&
+                                proc.Scope is REnv env && env.Context == state.Context)
+                            {
+                                var dest = proc.Upper;
+                                for (var i = state.Context.CallDepth; i > 0; i--)
+                                {
+                                    if (state.Context.CallStack[i - 1].Proc == dest)
+                                    {
+                                        var returnValue = Unsafe.Add(ref registers, a);
+                                        if (state.TryReturnJump(ref callInfo, i, returnValue))
+                                        {
+                                            return VmSignal.JumpAndNext;
+                                        }
+                                        retVal = returnValue;
+                                        return VmSignal.Return;
+                                    }
+                                }
+                            }
+                            state.Raise(Names.LocalJumpError, "break from proc-closure"u8);
+                            return VmSignal.Next; // not reached
+                        }
                     }
                     case OpCode.BlkPush:
                     {
@@ -1833,6 +2119,40 @@ partial class MRubyState
                         Markers.Module();
                         Module(this, ref callInfo, ref registers, ref sequence, ref symbols);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Module(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, ref Symbol symbols)
+                        {
+                            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                            ref var registerA = ref Unsafe.Add(ref registers, bb.A);
+                            var id = Unsafe.Add(ref symbols, bb.B);
+                            RClass outerClass;
+                            if (registerA.IsNil)
+                            {
+                                outerClass = callInfo.Proc?.Scope?.TargetClass ?? state.ObjectClass;
+                            }
+                            else
+                            {
+                                state.EnsureClassOrModule(registerA);
+                                outerClass = registerA.As<RClass>();
+                            }
+
+                            RClass definedModule;
+                            if (state.ConstDefinedAt(id, outerClass))
+                            {
+                                var old = state.GetConst(id, outerClass);
+                                if (old.VType != MRubyVType.Module)
+                                {
+                                    state.Raise(Names.TypeError, $"{state.StringifyAny(old)} is not a module");
+                                }
+                                definedModule = old.As<RClass>();
+                            }
+                            else
+                            {
+                                definedModule = state.DefineModule(id, outerClass);
+                            }
+                            registerA = definedModule;
+                        }
                     }
                     case OpCode.Exec:
                     {
@@ -1844,6 +2164,34 @@ partial class MRubyState
                         symbols = ref GetArrayDataReference(irep.Symbols);
                         registers = ref Unsafe.Add(ref GetArrayDataReference(Context.Stack), callInfo.StackPointer);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Exec(MRubyState state, ref MRubyCallInfo callInfo, ref byte sequence, ref MRubyValue registers)
+                        {
+                            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                            var receiver = Unsafe.Add(ref registers, bb.A);
+                            var irep = callInfo.Proc!.Irep;
+                            var targetIrep = irep.Children[bb.B];
+
+                            // prepare closure
+                            var proc = state.NewProc(targetIrep, receiver.As<RClass>());
+                            proc.SetFlag(MRubyObjectFlags.ProcScope);
+
+                            // prepare callstack
+                            ref var nextCallInfo = ref state.Context.PushCallStack();
+                            nextCallInfo.StackPointer = callInfo.StackPointer + bb.A;
+                            nextCallInfo.CallerType = CallerType.InVmLoop;
+                            nextCallInfo.Scope = receiver.As<RClass>();
+                            nextCallInfo.Proc = proc;
+                            nextCallInfo.MethodId = default;
+                            nextCallInfo.ArgumentCount = 0;
+                            nextCallInfo.KeywordArgumentCount = 0;
+                            nextCallInfo.ProgramCounter = 0;
+
+                            var newIrep = proc.Irep;
+                            state.Context.ExtendStack(nextCallInfo.StackPointer + newIrep.RegisterVariableCount + 1);
+                            state.Context.ClearStack(nextCallInfo.StackPointer + 1, newIrep.RegisterVariableCount - 1);
+                        }
                     }
                     case OpCode.Def:
                     {
@@ -1966,353 +2314,6 @@ partial class MRubyState
             callInfo.ArgumentCount = argCount;
             callInfo.KeywordArgumentCount = 0;
             return ref callInfo;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static void JmpUw(MRubyState state, ref MRubyCallInfo callInfo, ref byte sequence, Irep irep)
-        {
-            var s = (short)ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
-            var newProgramCounter = callInfo.ProgramCounter + s;
-            if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
-            {
-                // avoiding a jump from a catch handler into the same handler
-                if (newProgramCounter < catchHandler.Begin ||
-                    newProgramCounter > catchHandler.End)
-                {
-                    state.PrepareTaggedBreak(BreakTag.Jump, state.Context.CallDepth, newProgramCounter);
-                    callInfo.ProgramCounter = (int)catchHandler.Target;
-                    return;
-                }
-            }
-            state.Exception = null;
-            callInfo.ProgramCounter = newProgramCounter;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static bool Rescue(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence)
-        {
-            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-            var exceptionObjectValue = Unsafe.Add(ref registers, bb.A);
-            var exceptionClassValue = Unsafe.Add(ref registers, bb.B);
-            switch (exceptionClassValue.VType)
-            {
-                case MRubyVType.Class:
-                case MRubyVType.Module:
-                    break;
-                default:
-                    var ex = new RException(
-                        state.NewString("class or module required for rescue clause"u8),
-                        state.GetExceptionClass(Names.TypeError));
-                    state.Exception = new MRubyRaiseException(state, ex, state.Context.CallDepth);
-                    if (state.TryRaiseJump(ref callInfo))
-                    {
-                        return true; // signal JumpAndNext
-                    }
-                    throw state.Exception;
-            }
-
-            Unsafe.Add(ref registers, bb.B) = state.KindOf(exceptionObjectValue, exceptionClassValue.As<RClass>());
-            return false; // signal Next
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static void Module(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, ref Symbol symbols)
-        {
-            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-            ref var registerA = ref Unsafe.Add(ref registers, bb.A);
-            var id = Unsafe.Add(ref symbols, bb.B);
-            RClass outerClass;
-            if (registerA.IsNil)
-            {
-                outerClass = callInfo.Proc?.Scope?.TargetClass ?? state.ObjectClass;
-            }
-            else
-            {
-                state.EnsureClassOrModule(registerA);
-                outerClass = registerA.As<RClass>();
-            }
-
-            RClass definedModule;
-            if (state.ConstDefinedAt(id, outerClass))
-            {
-                var old = state.GetConst(id, outerClass);
-                if (old.VType != MRubyVType.Module)
-                {
-                    state.Raise(Names.TypeError, $"{state.StringifyAny(old)} is not a module");
-                }
-                definedModule = old.As<RClass>();
-            }
-            else
-            {
-                definedModule = state.DefineModule(id, outerClass);
-            }
-            registerA = definedModule;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static void Exec(MRubyState state, ref MRubyCallInfo callInfo, ref byte sequence, ref MRubyValue registers)
-        {
-            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-            var receiver = Unsafe.Add(ref registers, bb.A);
-            var irep = callInfo.Proc!.Irep;
-            var targetIrep = irep.Children[bb.B];
-
-            // prepare closure
-            var proc = state.NewProc(targetIrep, receiver.As<RClass>());
-            proc.SetFlag(MRubyObjectFlags.ProcScope);
-
-            // prepare callstack
-            ref var nextCallInfo = ref state.Context.PushCallStack();
-            nextCallInfo.StackPointer = callInfo.StackPointer + bb.A;
-            nextCallInfo.CallerType = CallerType.InVmLoop;
-            nextCallInfo.Scope = receiver.As<RClass>();
-            nextCallInfo.Proc = proc;
-            nextCallInfo.MethodId = default;
-            nextCallInfo.ArgumentCount = 0;
-            nextCallInfo.KeywordArgumentCount = 0;
-            nextCallInfo.ProgramCounter = 0;
-
-            var newIrep = proc.Irep;
-            state.Context.ExtendStack(nextCallInfo.StackPointer + newIrep.RegisterVariableCount + 1);
-            state.Context.ClearStack(nextCallInfo.StackPointer + 1, newIrep.RegisterVariableCount - 1);
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static bool ArithmeticSlowPath(MRubyState state, ref MRubyValue registerA, int a, MRubyValue lhs, MRubyValue rhs, bool lhsIsFixnum, bool lhsIsFloat, bool rhsIsFixnum, bool rhsIsFloat, OpCode opcode)
-        {
-            var lhsIsInteger = lhsIsFixnum || lhs.Object?.VType == MRubyVType.Integer;
-            var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
-            if (lhsIsInteger && rhsIsInteger)
-            {
-                var leftInt = lhs.IntegerValue;
-                var rightInt = rhs.IntegerValue;
-                long result;
-                switch (opcode)
-                {
-                    case OpCode.Add:
-                        result = leftInt + rightInt;
-                        if (((leftInt ^ result) & (rightInt ^ result)) < 0)
-                            IntegerMembers.RaiseIntegerOverflowError(state, "add"u8);
-                        break;
-                    case OpCode.Sub:
-                        result = leftInt - rightInt;
-                        if (((leftInt ^ rightInt) & (leftInt ^ result)) < 0)
-                            IntegerMembers.RaiseIntegerOverflowError(state, "sub"u8);
-                        break;
-                    case OpCode.Mul:
-                        result = leftInt * rightInt;
-                        if (leftInt != 0 && (leftInt == -1
-                            ? rightInt == long.MinValue
-                            : result / leftInt != rightInt))
-                            IntegerMembers.RaiseIntegerOverflowError(state, "mul"u8);
-                        break;
-                    case OpCode.Div:
-                        if (rightInt == 0)
-                            IntegerMembers.RaiseDivideByZeroError(state);
-                        if (leftInt == long.MinValue && rightInt == -1)
-                            IntegerMembers.RaiseIntegerOverflowError(state, "div"u8);
-                        result = leftInt / rightInt;
-                        break;
-                    default:
-                        result = 0;
-                        break;
-                }
-                registerA = new MRubyValue(result);
-                return true;
-            }
-
-            if ((lhsIsInteger || lhsIsFloat) &&
-                (rhsIsInteger || rhsIsFloat))
-            {
-                var leftVal = lhsIsInteger ? lhs.IntegerValue : lhs.FloatValue;
-                var rightVal = rhsIsInteger ? rhs.IntegerValue : rhs.FloatValue;
-                registerA = new MRubyValue(opcode switch
-                {
-                    OpCode.Add => leftVal + rightVal,
-                    OpCode.Sub => leftVal - rightVal,
-                    OpCode.Mul => leftVal * rightVal,
-                    OpCode.Div => leftVal / rightVal,
-                    _ => default
-                });
-                return true;
-            }
-
-            if (lhs.Object?.VType == MRubyVType.String &&
-                rhs.Object?.VType == MRubyVType.String &&
-                opcode == OpCode.Add)
-            {
-                registerA = lhs.As<RString>() + rhs.As<RString>();
-                return true;
-            }
-
-            return false; // fallthrough to Send
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static bool ComparisonSlowPath(ref MRubyValue registerA, MRubyValue lhs, MRubyValue rhs, bool lhsIsFixnum, bool lhsIsFloat, bool rhsIsFixnum, bool rhsIsFloat, OpCode opcode)
-        {
-            var lhsIsInteger = lhsIsFixnum || lhs.Object?.VType == MRubyVType.Integer;
-            var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
-
-            if ((lhsIsInteger || lhsIsFloat) &&
-                (rhsIsInteger || rhsIsFloat))
-            {
-                var leftVal = lhsIsInteger ? lhs.IntegerValue : (long)lhs.FloatValue;
-                var rightVal = rhsIsInteger ? rhs.IntegerValue : (long)rhs.FloatValue;
-                registerA = new MRubyValue(opcode switch
-                {
-                    OpCode.EQ => leftVal == rightVal,
-                    OpCode.LT => leftVal < rightVal,
-                    OpCode.LE => leftVal <= rightVal,
-                    OpCode.GT => leftVal > rightVal,
-                    OpCode.GE => leftVal >= rightVal,
-                    _ => false
-                });
-                return true;
-            }
-
-            return false; // fallthrough to Send
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static bool AddISubISlowPath(MRubyState state, ref MRubyValue registerA, MRubyValue lhs, int rV, OpCode opcode)
-        {
-            switch (lhs.VType)
-            {
-                case MRubyVType.Integer:
-                {
-                    var intVal = lhs.IntegerValue;
-                    var result = intVal + rV;
-                    if (((intVal ^ result) & ((long)rV ^ result)) < 0)
-                        IntegerMembers.RaiseIntegerOverflowError(state, opcode == OpCode.AddI ? "add"u8 : "sub"u8);
-                    registerA = result;
-                    return true;
-                }
-                case MRubyVType.Float:
-                    registerA = new MRubyValue(lhs.FloatValue + rV);
-                    return true;
-            }
-            return false; // fallthrough to Send
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static VmSignal RaiseIf(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, Irep irep, out MRubyValue retVal)
-        {
-            retVal = default;
-            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-            var exceptionValue = Unsafe.Add(ref registers, a);
-            switch (exceptionValue.Object)
-            {
-                case RBreak breakObject:
-                    state.Exception = new MRubyBreakException(state, breakObject);
-                    switch (breakObject.Tag)
-                    {
-                        case BreakTag.Break:
-                        {
-                            if (state.TryReturnJump(ref callInfo, breakObject.BreakIndex, breakObject.Value))
-                            {
-                                return VmSignal.JumpAndNext;
-                            }
-                            retVal = breakObject.Value;
-                            return VmSignal.Return;
-                        }
-                        case BreakTag.Jump:
-                        {
-                            var newProgramCounter = (int)breakObject.Value.IntegerValue;
-                            if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
-                            {
-                                // avoiding a jump from a catch handler into the same handler
-                                if (newProgramCounter < catchHandler.Begin || newProgramCounter > catchHandler.End)
-                                {
-                                    state.PrepareTaggedBreak(BreakTag.Jump, state.Context.CallDepth, newProgramCounter);
-                                    callInfo.ProgramCounter = (int)catchHandler.Target;
-                                    return VmSignal.Next;
-                                }
-                            }
-                            state.Exception = null;
-                            callInfo.ProgramCounter = newProgramCounter;
-                            return VmSignal.Next;
-                        }
-                        case BreakTag.Stop:
-                        {
-                            if (state.TryUnwindEnsureJump(ref callInfo, state.Context.CallDepth, BreakTag.Stop, breakObject.Value))
-                            {
-                                return VmSignal.JumpAndNext;
-                            }
-                            if (state.Exception != null) throw state.Exception;
-                            retVal = Unsafe.Add(ref registers, irep.LocalVariables.Length);
-                            return VmSignal.Return;
-                        }
-                    }
-                    break;
-                case RException exceptionObject:
-                    state.Exception = new MRubyRaiseException(state, exceptionObject, state.Context.CallDepth);
-                    if (state.TryRaiseJump(ref callInfo))
-                    {
-                        return VmSignal.JumpAndNext;
-                    }
-                    throw state.Exception;
-                default:
-                    state.Exception = null;
-                    break;
-            }
-            return VmSignal.Next;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static VmSignal ReturnBlk(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, out MRubyValue retVal)
-        {
-            retVal = default;
-            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-            var dest = callInfo.Proc!.FindReturningDestination(out var env);
-            if (dest.Scope is not REnv destEnv || destEnv.Context == state.Context)
-            {
-                // check jump destination
-                for (var i = state.Context.CallDepth; i >= 0; i--)
-                {
-                    if (state.Context.CallStack[i].Scope == env)
-                    {
-                        var returnValue = Unsafe.Add(ref registers, a);
-                        if (state.TryReturnJump(ref callInfo, i, returnValue))
-                        {
-                            return VmSignal.JumpAndNext;
-                        }
-                        retVal = returnValue;
-                        return VmSignal.Return;
-                    }
-                }
-            }
-            // no jump destination
-            state.Raise(Names.LocalJumpError, "unexpected return"u8);
-            return VmSignal.Next; // not reached
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static VmSignal Break(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, out MRubyValue retVal)
-        {
-            retVal = default;
-            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-            if (callInfo.Proc is { } proc &&
-                !proc.HasFlag(MRubyObjectFlags.ProcOrphan) &&
-                proc.Scope is REnv env && env.Context == state.Context)
-            {
-                var dest = proc.Upper;
-                for (var i = state.Context.CallDepth; i > 0; i--)
-                {
-                    if (state.Context.CallStack[i - 1].Proc == dest)
-                    {
-                        var returnValue = Unsafe.Add(ref registers, a);
-                        if (state.TryReturnJump(ref callInfo, i, returnValue))
-                        {
-                            return VmSignal.JumpAndNext;
-                        }
-                        retVal = returnValue;
-                        return VmSignal.Return;
-                    }
-                }
-            }
-            state.Raise(Names.LocalJumpError, "break from proc-closure"u8);
-            return VmSignal.Next; // not reached
         }
     }
 
