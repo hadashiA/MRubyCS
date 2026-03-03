@@ -38,6 +38,7 @@ public partial class MRubyState
         state.InitObjectExt();
         state.InitTime();
         state.InitRandom();
+        state.DefineRegexp();
 
         return state;
     }
@@ -77,6 +78,10 @@ public partial class MRubyState
     readonly VariableTable globalVariables = new();
 
     RiteParser? riteParser;
+
+    public MRubyValue GetGlobalVariable(Symbol symbol) => globalVariables.Get(symbol);
+
+    public void SetGlobalVariable(Symbol symbol, MRubyValue value) => globalVariables.Set(symbol, value);
 
     // TODO:
     // readonly (RClass, MRubyMethod)[] methodCacheEntries = new (RClass, MRubyMethod)[MethodCacheSize];
@@ -496,6 +501,16 @@ public partial class MRubyState
         DefineMethod(StringClass, Intern("bytesplice"u8), StringMembers.ByteSplice);
 
         DefineMethod(StringClass, Intern("__sub_replace"u8), StringMembers.InternalSubReplace);
+
+        // Regexp-related String methods (registered in DefineRegexp)
+        // DefineMethod(StringClass, Intern("=~"u8), StringRegexpMembers.OpMatch);
+        // DefineMethod(StringClass, Names.Match, StringRegexpMembers.Match);
+        // DefineMethod(StringClass, Names.QMatch, StringRegexpMembers.QMatch);
+        // DefineMethod(StringClass, Names.Sub, StringRegexpMembers.Sub);
+        // DefineMethod(StringClass, Names.SubBang, StringRegexpMembers.SubBang);
+        // DefineMethod(StringClass, Names.Gsub, StringRegexpMembers.Gsub);
+        // DefineMethod(StringClass, Names.GsubBang, StringRegexpMembers.GsubBang);
+        // DefineMethod(StringClass, Names.Scan, StringRegexpMembers.Scan);
     }
 
     void InitArray()
@@ -621,6 +636,7 @@ public partial class MRubyState
         DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
 
         DefineClass(Intern("FiberError"u8), StandardErrorClass);
+        DefineClass(Names.RegexpError, StandardErrorClass);
     }
 
     void InitObjectExt()
