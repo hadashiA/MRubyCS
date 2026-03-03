@@ -36,12 +36,12 @@ public class Irep
 {
     public byte Flags { get; init; }
     public ushort RegisterVariableCount { get; init; }
-    public byte[] Sequence { get; init; } = [];
-    public Symbol[] Symbols { get; init; } = [];
-    public Symbol[] LocalVariables { get; init; } = [];
-    public MRubyValue[] PoolValues { get; init; } = [];
-    public Irep[] Children { get; init; } = [];
-    public CatchHandler[] CatchHandlers { get; init; } = [];
+    public byte[] Sequence { [MethodImpl(MethodImplOptions.AggressiveInlining)] get; init; } = [];
+    public Symbol[] Symbols { [MethodImpl(MethodImplOptions.AggressiveInlining)] get; init; } = [];
+    public Symbol[] LocalVariables { [MethodImpl(MethodImplOptions.AggressiveInlining)] get; init; } = [];
+    public MRubyValue[] PoolValues { [MethodImpl(MethodImplOptions.AggressiveInlining)] get; init; } = [];
+    public Irep[] Children { [MethodImpl(MethodImplOptions.AggressiveInlining)] get; init; } = [];
+    public CatchHandler[] CatchHandlers { [MethodImpl(MethodImplOptions.AggressiveInlining)] get; init; } = [];
 
     public bool TryFindCatchHandler(int pc, CatchHandlerType filter, out CatchHandler handler)
     {

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using MRubyCS.Internals;
 
 namespace MRubyCS;
@@ -57,8 +58,8 @@ public class RProc(Irep irep, int programCounter, RClass procClass) : RObject(MR
         init => scope = value;
     }
 
-    public Irep Irep => irep;
-    public int ProgramCounter => programCounter;
+    public Irep Irep { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => irep; }
+    public int ProgramCounter { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => programCounter; }
 
     ICallScope? scope;
 

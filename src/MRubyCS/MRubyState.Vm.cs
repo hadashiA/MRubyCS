@@ -1248,23 +1248,7 @@ partial class MRubyState
                         // Validate method visibility
                         if (opcode is OpCode.Send or OpCode.SendB)
                         {
-                            if (method.Visibility == MRubyMethodVisibility.Private)
-                            {
-                                var args = callInfo.ArgumentPacked
-                                    ? Context.Stack[callInfo.StackPointer + 1]
-                                    : NewArray(Context.Stack.AsSpan(callInfo.StackPointer + 1, callInfo.ArgumentCount));
-
-                                RaiseMethodVisibilityVioration(methodId, self, args, MRubyMethodVisibility.Private);
-                            }
-                            else if (method.Visibility == MRubyMethodVisibility.Protected &&
-                                     KindOf(self, callInfo.Scope.TargetClass))
-                            {
-                                var args = callInfo.ArgumentPacked
-                                    ? Context.Stack[callInfo.StackPointer + 1]
-                                    : NewArray(Context.Stack.AsSpan(callInfo.StackPointer + 1, callInfo.ArgumentCount));
-
-                                RaiseMethodVisibilityVioration(methodId, self, args, MRubyMethodVisibility.Protected);
-                            }
+                            ValidateMethodVisibility(this, ref callInfo, method, methodId, self);
                         }
 
                         if (method.Kind == MRubyMethodKind.CSharpFunc)
@@ -1316,6 +1300,27 @@ partial class MRubyState
                         symbols = ref GetArrayDataReference(irep.Symbols);
 
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void ValidateMethodVisibility(MRubyState state, ref MRubyCallInfo callInfo,
+                            MRubyMethod method, Symbol methodId, MRubyValue self)
+                        {
+                            if (method.Visibility == MRubyMethodVisibility.Private)
+                            {
+                                var args = callInfo.ArgumentPacked
+                                    ? state.Context.Stack[callInfo.StackPointer + 1]
+                                    : state.NewArray(state.Context.Stack.AsSpan(callInfo.StackPointer + 1, callInfo.ArgumentCount));
+                                state.RaiseMethodVisibilityVioration(methodId, self, args, MRubyMethodVisibility.Private);
+                            }
+                            else if (method.Visibility == MRubyMethodVisibility.Protected &&
+                                     state.KindOf(self, callInfo.Scope.TargetClass))
+                            {
+                                var args = callInfo.ArgumentPacked
+                                    ? state.Context.Stack[callInfo.StackPointer + 1]
+                                    : state.NewArray(state.Context.Stack.AsSpan(callInfo.StackPointer + 1, callInfo.ArgumentCount));
+                                state.RaiseMethodVisibilityVioration(methodId, self, args, MRubyMethodVisibility.Protected);
+                            }
+                        }
                         // pop on OpCode.Return
                     }
                     case OpCode.Call: // modify program counter
@@ -1602,58 +1607,65 @@ partial class MRubyState
                     {
                         Markers.KArg();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        // mrb_value k = mrb_symbol_value(irep->syms[b]);
-                        var key = Unsafe.Add(ref symbols, bb.B);
-                        var kargOffset = callInfo.KeywordArgumentOffset;
-                        if (kargOffset < 0)
-                        {
-                            RaiseMissingKeywordError(key);
-                        }
-                        var kdict = Unsafe.Add(ref registers, kargOffset);
-                        var value = default(MRubyValue);
-                        if (kdict.VType != MRubyVType.Hash ||
-                            !Unsafe.Add(ref registers, kargOffset).As<RHash>().TryGetValue(key, out value))
-                        {
-                            RaiseMissingKeywordError(key);
-                        }
-
-                        Unsafe.Add(ref registers, bb.A) = value;
-                        kdict.As<RHash>().TryDelete(key, out _);
+                        KArg(this, ref registers, ref symbols, ref callInfo, bb);
                         goto Next;
 
                         [MethodImpl(MethodImplOptions.NoInlining)]
-                        void RaiseMissingKeywordError(MRubyValue keyValue)
+                        static void KArg(MRubyState state, ref MRubyValue registers, ref Symbol symbols,
+                            ref MRubyCallInfo callInfo, OperandBB bb)
                         {
-                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(keyValue)}");
+                            var key = Unsafe.Add(ref symbols, bb.B);
+                            var kargOffset = callInfo.KeywordArgumentOffset;
+                            if (kargOffset < 0)
+                            {
+                                state.Raise(Names.ArgumentError, $"missing keyword: {state.Stringify(key)}");
+                            }
+                            var kdict = Unsafe.Add(ref registers, kargOffset);
+                            var value = default(MRubyValue);
+                            if (kdict.VType != MRubyVType.Hash ||
+                                !Unsafe.Add(ref registers, kargOffset).As<RHash>().TryGetValue(key, out value))
+                            {
+                                state.Raise(Names.ArgumentError, $"missing keyword: {state.Stringify(key)}");
+                            }
+                            Unsafe.Add(ref registers, bb.A) = value;
+                            kdict.As<RHash>().TryDelete(key, out _);
                         }
                     }
                     case OpCode.KeyP:
                     {
                         Markers.KeyP();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        var key = Unsafe.Add(ref symbols, bb.B);
-                        var kdict = Unsafe.Add(ref registers, callInfo.KeywordArgumentOffset);
-                        Unsafe.Add(ref registers, bb.A) = kdict.As<RHash>().TryGetValue(key, out _);
+                        KeyP(ref registers, ref symbols, ref callInfo, bb);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void KeyP(ref MRubyValue registers, ref Symbol symbols,
+                            ref MRubyCallInfo callInfo, OperandBB bb)
+                        {
+                            var key = Unsafe.Add(ref symbols, bb.B);
+                            var kdict = Unsafe.Add(ref registers, callInfo.KeywordArgumentOffset);
+                            Unsafe.Add(ref registers, bb.A) = kdict.As<RHash>().TryGetValue(key, out _);
+                        }
                     }
                     case OpCode.KeyEnd:
                     {
                         Markers.KeyEnd();
                         callInfo.ProgramCounter++;
-                        var kargOffset = callInfo.KeywordArgumentOffset;
-                        if (kargOffset >= 0 &&
-                            Unsafe.Add(ref registers, kargOffset).Object is RHash { Length: > 0 } hash)
-                        {
-                            var key1 = hash.Keys[0];
-                            RaiseUnknownKeyword(key1);
+                        KeyEnd(this, ref registers, ref callInfo);
+                        goto Next;
 
-                            [MethodImpl(MethodImplOptions.NoInlining)]
-                            void RaiseUnknownKeyword(MRubyValue keyValue)
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void KeyEnd(MRubyState state, ref MRubyValue registers,
+                            ref MRubyCallInfo callInfo)
+                        {
+                            var kargOffset = callInfo.KeywordArgumentOffset;
+                            if (kargOffset >= 0 &&
+                                Unsafe.Add(ref registers, kargOffset).Object is RHash { Length: > 0 } hash)
                             {
-                                Raise(Names.ArgumentError, $"unknown keyword: {Stringify(keyValue)}");
+                                var key1 = hash.Keys[0];
+                                state.Raise(Names.ArgumentError, $"unknown keyword: {state.Stringify(key1)}");
                             }
                         }
-                        goto Next;
                     }
                     case OpCode.ReturnBlk:
                     {
@@ -1992,22 +2004,29 @@ partial class MRubyState
                     {
                         Markers.Lambda();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        RProc proc;
-                        if (opcode == OpCode.Method)
+                        LambdaBlockMethod(this, ref registers, irep, bb, opcode);
+                        goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void LambdaBlockMethod(MRubyState state, ref MRubyValue registers,
+                            Irep irep, OperandBB bb, OpCode opcode)
                         {
-                            proc = NewProc(irep.Children[bb.B]);
-                            proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
-                        }
-                        else
-                        {
-                            proc = NewClosure(irep.Children[bb.B]);
-                            if (opcode == OpCode.Lambda)
+                            RProc proc;
+                            if (opcode == OpCode.Method)
                             {
+                                proc = state.NewProc(irep.Children[bb.B]);
                                 proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
                             }
+                            else
+                            {
+                                proc = state.NewClosure(irep.Children[bb.B]);
+                                if (opcode == OpCode.Lambda)
+                                {
+                                    proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
+                                }
+                            }
+                            Unsafe.Add(ref registers, bb.A) = proc;
                         }
-                        Unsafe.Add(ref registers, bb.A) = proc;
-                        goto Next;
                     }
                     case OpCode.RangeInc:
                     case OpCode.RangeExc:

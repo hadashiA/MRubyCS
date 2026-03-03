@@ -68,7 +68,7 @@ public partial class MRubyState
     public MRubyValueEqualityComparer ValueEqualityComparer { get; }
     public MRubyValueHashKeyEqualityComparer HashKeyEqualityComparer { get; }
 
-    internal MRubyContext Context { get; private set; }
+    internal MRubyContext Context { [MethodImpl(MethodImplOptions.AggressiveInlining)] get; private set; }
     internal MRubyContext ContextRoot { get; }= new();
 
     public RiteParser RiteParser => riteParser ??= new RiteParser(this);

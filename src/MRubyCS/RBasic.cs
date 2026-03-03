@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace MRubyCS;
 
@@ -25,6 +26,7 @@ public class RBasic
 
     public MRubyObjectFlags Flags { get; private set; }
     public bool IsFrozen => (Flags & MRubyObjectFlags.Frozen) > 0;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool HasFlag(MRubyObjectFlags flag) => (Flags & flag) > 0;
 
     internal RBasic(MRubyVType vType, RClass c)

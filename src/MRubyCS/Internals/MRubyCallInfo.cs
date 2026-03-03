@@ -77,9 +77,9 @@ struct MRubyCallInfo
     public MRubyMethodVisibility Visibility;
     public bool VisibilityBreak;
 
-    public bool ArgumentPacked => ArgumentCount >= CallMaxArgs;
-    public bool KeywordArgumentPacked => KeywordArgumentCount >= CallMaxArgs;
-    public int KeywordArgumentOffset => CalculateKeywordArgumentOffset(ArgumentCount, KeywordArgumentCount);
+    public bool ArgumentPacked { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => ArgumentCount >= CallMaxArgs; }
+    public bool KeywordArgumentPacked { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => KeywordArgumentCount >= CallMaxArgs; }
+    public int KeywordArgumentOffset { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => CalculateKeywordArgumentOffset(ArgumentCount, KeywordArgumentCount); }
     public int BlockArgumentOffset => CalculateBlockArgumentOffset(ArgumentCount, KeywordArgumentCount);
 
     public int NumberOfRegisters
