@@ -17,6 +17,8 @@ using static MRubyCS.Internal.MemoryMarshalEx;
 
 namespace MRubyCS;
 
+enum VmSignal : byte { Next, JumpAndNext, Return }
+
 partial class MRubyState
 {
     public MRubyValue Send(MRubyValue self, Symbol methodId) =>
@@ -496,6 +498,7 @@ partial class MRubyState
 
                         goto Next;
 
+                        [MethodImpl(MethodImplOptions.NoInlining)]
                         static void GetConstSlowPath(MRubyState state, ref MRubyValue registerA, ref MRubyCallInfo callInfo, Symbol id, RClass c)
                         {
                             var x = c;
@@ -663,25 +666,367 @@ partial class MRubyState
                             callInfo.ProgramCounter += bs.B;
                         }
                         goto Next;
-                    case OpCode.JmpUw:
-                    {
-                        Markers.JmpUw();
-                        s = (short)ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
-                        var newProgramCounter = callInfo.ProgramCounter + s;
-                        if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
+
+                    // --- Hot arithmetic/comparison opcodes placed early for JIT inline budget ---
+                    case OpCode.Add:
+                    case OpCode.Sub:
+                    case OpCode.Mul:
+                    case OpCode.Div:
+                        Markers.Add();
+                        Markers.Sub();
+                        Markers.Mul();
+                        Markers.Div();
+                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                        registerA = ref Unsafe.Add(ref registers, a);
+                        var rhs = Unsafe.Add(ref registerA, 1);
+
+                        var lhsIsFloat = registerA.IsFloat;
+                        var rhsIsFloat = rhs.IsFloat;
+
+                        // Float fast path: bit check only (bits & 0b11 == 0b10), avoids VType call
+                        if (lhsIsFloat && rhsIsFloat)
                         {
-                            // avoiding a jump from a catch handler into the same handler
-                            if (newProgramCounter < catchHandler.Begin ||
-                                newProgramCounter > catchHandler.End)
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
                             {
-                                PrepareTaggedBreak(BreakTag.Jump, Context.CallDepth, newProgramCounter);
-                                callInfo.ProgramCounter = (int)catchHandler.Target;
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+
+                        var lhsIsFixnum = registerA.IsFixnum;
+                        var rhsIsFixnum = rhs.IsFixnum;
+
+                        // Fixnum fast path: avoid VType switch expression, use bit check + shift only
+                        if (lhsIsFixnum && rhsIsFixnum)
+                        {
+                            var leftInt = registerA.FixnumValue;
+                            var rightInt = rhs.FixnumValue;
+                            long result;
+                            switch (opcode)
+                            {
+                                case OpCode.Add:
+                                    result = leftInt + rightInt; // Cannot overflow long: FixnumMax*2 < long.MaxValue
+                                    break;
+                                case OpCode.Sub:
+                                    result = leftInt - rightInt; // Cannot overflow long: same reason
+                                    break;
+                                case OpCode.Mul:
+                                    result = leftInt * rightInt;
+                                    if (leftInt != 0 && result / leftInt != rightInt)
+                                        IntegerMembers.RaiseIntegerOverflowError(this, "mul"u8);
+                                    break;
+                                case OpCode.Div:
+                                    if (rightInt == 0)
+                                        IntegerMembers.RaiseDivideByZeroError(this);
+                                    result = leftInt / rightInt;
+                                    break;
+                                default:
+                                    result = 0;
+                                    break;
+                            }
+                            registerA = new MRubyValue(result);
+                            goto Next;
+                        }
+
+                        // Float + Fixnum mixed fast path: bit checks only, no VType call
+                        if (lhsIsFloat && rhsIsFixnum)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = (double)rhs.FixnumValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+                        if (lhsIsFixnum && rhsIsFloat)
+                        {
+                            var leftVal = (double)registerA.FixnumValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.Add => leftVal + rightVal,
+                                OpCode.Sub => leftVal - rightVal,
+                                OpCode.Mul => leftVal * rightVal,
+                                OpCode.Div => leftVal / rightVal,
+                                _ => default
+                            });
+                            goto Next;
+                        }
+
+                        if (ArithmeticSlowPath(this, ref registerA, a, registerA, rhs, lhsIsFixnum, lhsIsFloat, rhsIsFixnum, rhsIsFloat, opcode))
+                            goto Next;
+                        // fallthrough to Send
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
+                        goto case OpCode.SendInternal;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool ArithmeticSlowPath(MRubyState state, ref MRubyValue registerA, int a, MRubyValue lhs, MRubyValue rhs, bool lhsIsFixnum, bool lhsIsFloat, bool rhsIsFixnum, bool rhsIsFloat, OpCode opcode)
+                        {
+                            var lhsIsInteger = lhsIsFixnum || lhs.Object?.VType == MRubyVType.Integer;
+                            var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
+                            if (lhsIsInteger && rhsIsInteger)
+                            {
+                                var leftInt = lhs.IntegerValue;
+                                var rightInt = rhs.IntegerValue;
+                                long result;
+                                switch (opcode)
+                                {
+                                    case OpCode.Add:
+                                        result = leftInt + rightInt;
+                                        if (((leftInt ^ result) & (rightInt ^ result)) < 0)
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "add"u8);
+                                        break;
+                                    case OpCode.Sub:
+                                        result = leftInt - rightInt;
+                                        if (((leftInt ^ rightInt) & (leftInt ^ result)) < 0)
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "sub"u8);
+                                        break;
+                                    case OpCode.Mul:
+                                        result = leftInt * rightInt;
+                                        if (leftInt != 0 && (leftInt == -1
+                                                ? rightInt == long.MinValue
+                                                : result / leftInt != rightInt))
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "mul"u8);
+                                        break;
+                                    case OpCode.Div:
+                                        if (rightInt == 0)
+                                            IntegerMembers.RaiseDivideByZeroError(state);
+                                        if (leftInt == long.MinValue && rightInt == -1)
+                                            IntegerMembers.RaiseIntegerOverflowError(state, "div"u8);
+                                        result = leftInt / rightInt;
+                                        break;
+                                    default:
+                                        result = 0;
+                                        break;
+                                }
+                                registerA = new MRubyValue(result);
+                                return true;
+                            }
+
+                            if ((lhsIsInteger || lhsIsFloat) &&
+                                (rhsIsInteger || rhsIsFloat))
+                            {
+                                var leftVal = lhsIsInteger ? lhs.IntegerValue : lhs.FloatValue;
+                                var rightVal = rhsIsInteger ? rhs.IntegerValue : rhs.FloatValue;
+                                registerA = new MRubyValue(opcode switch
+                                {
+                                    OpCode.Add => leftVal + rightVal,
+                                    OpCode.Sub => leftVal - rightVal,
+                                    OpCode.Mul => leftVal * rightVal,
+                                    OpCode.Div => leftVal / rightVal,
+                                    _ => default
+                                });
+                                return true;
+                            }
+
+                            if (lhs.Object?.VType == MRubyVType.String &&
+                                rhs.Object?.VType == MRubyVType.String &&
+                                opcode == OpCode.Add)
+                            {
+                                registerA = lhs.As<RString>() + rhs.As<RString>();
+                                return true;
+                            }
+
+                            return false; // fallthrough to Send
+                        }
+
+                    case OpCode.AddI:
+                    case OpCode.SubI:
+                        Markers.AddI();
+                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        registerA = ref Unsafe.Add(ref registers, bb.A);
+                    {
+                        var rV = opcode == OpCode.AddI ? bb.B : -bb.B;
+
+                        // Float fast path: bit check only, avoids VType call
+                        if (registerA.IsFloat)
+                        {
+                            registerA = new MRubyValue(registerA.FloatValue + rV);
+                            goto Next;
+                        }
+
+                        // Fixnum fast path: FixnumMax + 255 < long.MaxValue, cannot overflow long
+                        if (registerA.IsFixnum)
+                        {
+                            registerA = registerA.FixnumValue + rV;
+                            goto Next;
+                        }
+
+                        if (AddISubISlowPath(this, ref registerA, registerA, rV, opcode))
+                            goto Next;
+                        // fallthrough to Send
+                        Unsafe.Add(ref registerA, 1) = new MRubyValue(bb.B);
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + bb.A, opcode, 1);
+                        goto case OpCode.SendInternal;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool AddISubISlowPath(MRubyState state, ref MRubyValue registerA, MRubyValue lhs, int rV, OpCode opcode)
+                        {
+                            switch (lhs.VType)
+                            {
+                                case MRubyVType.Integer:
+                                {
+                                    var intVal = lhs.IntegerValue;
+                                    var result = intVal + rV;
+                                    if (((intVal ^ result) & ((long)rV ^ result)) < 0)
+                                        IntegerMembers.RaiseIntegerOverflowError(state, opcode == OpCode.AddI ? "add"u8 : "sub"u8);
+                                    registerA = result;
+                                    return true;
+                                }
+                                case MRubyVType.Float:
+                                    registerA = new MRubyValue(lhs.FloatValue + rV);
+                                    return true;
+                            }
+                            return false; // fallthrough to Send
+                        }
+                    }
+                    case OpCode.EQ:
+                    case OpCode.LT:
+                    case OpCode.LE:
+                    case OpCode.GT:
+                    case OpCode.GE:
+                        Markers.EQ();
+                        Markers.LT();
+                        Markers.LE();
+                        Markers.GT();
+                        Markers.GE();
+                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                        registerA = ref Unsafe.Add(ref registers, a);
+                        rhs = Unsafe.Add(ref registerA, 1);
+
+                        if (opcode == OpCode.EQ)
+                        {
+                            if (registerA.Equals(rhs))
+                            {
+                                registerA = MRubyValue.True;
+                                goto Next;
+                            }
+                            if (registerA.IsSymbol)
+                            {
+                                registerA = MRubyValue.False;
                                 goto Next;
                             }
                         }
-                        Exception = null;
-                        callInfo.ProgramCounter = newProgramCounter;
+
+                        // Float fast path: bit check only, avoids VType call
+                        lhsIsFloat = registerA.IsFloat;
+                        rhsIsFloat = rhs.IsFloat;
+                        if (lhsIsFloat && rhsIsFloat)
+                        {
+                            var leftVal = registerA.FloatValue;
+                            var rightVal = rhs.FloatValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                // ReSharper disable once CompareOfFloatsByEqualityOperator
+                                OpCode.EQ => leftVal == rightVal,
+                                OpCode.LT => leftVal < rightVal,
+                                OpCode.LE => leftVal <= rightVal,
+                                OpCode.GT => leftVal > rightVal,
+                                OpCode.GE => leftVal >= rightVal,
+                                _ => false
+                            });
+                            goto Next;
+                        }
+
+                        // Fixnum fast path
+                        lhsIsFixnum = registerA.IsFixnum;
+                        rhsIsFixnum = rhs.IsFixnum;
+                        if (lhsIsFixnum && rhsIsFixnum)
+                        {
+                            var leftInt = registerA.FixnumValue;
+                            var rightInt = rhs.FixnumValue;
+                            registerA = new MRubyValue(opcode switch
+                            {
+                                OpCode.EQ => leftInt == rightInt,
+                                OpCode.LT => leftInt < rightInt,
+                                OpCode.LE => leftInt <= rightInt,
+                                OpCode.GT => leftInt > rightInt,
+                                OpCode.GE => leftInt >= rightInt,
+                                _ => false
+                            });
+                            goto Next;
+                        }
+
+                        if (ComparisonSlowPath(ref registerA, registerA, rhs, lhsIsFixnum, lhsIsFloat, rhsIsFixnum, rhsIsFloat, opcode))
+                            goto Next;
+                        // fallthrough to Send
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
+                        goto case OpCode.SendInternal;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool ComparisonSlowPath(ref MRubyValue registerA, MRubyValue lhs, MRubyValue rhs, bool lhsIsFixnum, bool lhsIsFloat, bool rhsIsFixnum, bool rhsIsFloat, OpCode opcode)
+                        {
+                            var lhsIsInteger = lhsIsFixnum || lhs.Object?.VType == MRubyVType.Integer;
+                            var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
+
+                            if ((lhsIsInteger || lhsIsFloat) &&
+                                (rhsIsInteger || rhsIsFloat))
+                            {
+                                var leftVal = lhsIsInteger ? lhs.IntegerValue : (long)lhs.FloatValue;
+                                var rightVal = rhsIsInteger ? rhs.IntegerValue : (long)rhs.FloatValue;
+                                registerA = new MRubyValue(opcode switch
+                                {
+                                    OpCode.EQ => leftVal == rightVal,
+                                    OpCode.LT => leftVal < rightVal,
+                                    OpCode.LE => leftVal <= rightVal,
+                                    OpCode.GT => leftVal > rightVal,
+                                    OpCode.GE => leftVal >= rightVal,
+                                    _ => false
+                                });
+                                return true;
+                            }
+
+                            return false; // fallthrough to Send
+                        }
+                    case OpCode.Return:
+                    {
+                        Markers.Return();
+                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                        var returnValue = Unsafe.Add(ref registers, a);
+                        if (TryReturnJump(ref callInfo, Context.CallDepth, returnValue))
+                        {
+                            goto JumpAndNext;
+                        }
+                        return returnValue;
+                    }
+                    // --- End hot opcodes ---
+
+                    case OpCode.JmpUw:
+                    {
+                        Markers.JmpUw();
+                        JmpUw(this, ref callInfo, ref sequence, irep);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void JmpUw(MRubyState state, ref MRubyCallInfo callInfo, ref byte sequence, Irep irep)
+                        {
+                            var s = (short)ReadOperandS(ref sequence, ref callInfo.ProgramCounter);
+                            var newProgramCounter = callInfo.ProgramCounter + s;
+                            if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
+                            {
+                                // avoiding a jump from a catch handler into the same handler
+                                if (newProgramCounter < catchHandler.Begin ||
+                                    newProgramCounter > catchHandler.End)
+                                {
+                                    state.PrepareTaggedBreak(BreakTag.Jump, state.Context.CallDepth, newProgramCounter);
+                                    callInfo.ProgramCounter = (int)catchHandler.Target;
+                                    return;
+                                }
+                            }
+                            state.Exception = null;
+                            callInfo.ProgramCounter = newProgramCounter;
+                        }
                     }
                     case OpCode.Except:
                         Markers.Except();
@@ -697,88 +1042,111 @@ partial class MRubyState
                     case OpCode.Rescue:
                     {
                         Markers.Rescue();
-                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        var exceptionObjectValue = Unsafe.Add(ref registers, bb.A);
-                        var exceptionClassValue = Unsafe.Add(ref registers, bb.B);
-                        switch (exceptionClassValue.VType)
-                        {
-                            case MRubyVType.Class:
-                            case MRubyVType.Module:
-                                break;
-                            default:
-                                var ex = new RException(
-                                    NewString("class or module required for rescue clause"u8),
-                                    GetExceptionClass(Names.TypeError));
-                                Exception = new MRubyRaiseException(this, ex, Context.CallDepth);
-                                if (TryRaiseJump(ref callInfo))
-                                {
-                                    goto JumpAndNext;
-                                }
-                                throw Exception;
-                        }
-
-                        Unsafe.Add(ref registers, bb.B) = KindOf(exceptionObjectValue, exceptionClassValue.As<RClass>());
+                        if (TryRescue(this, ref callInfo, ref registers, ref sequence))
+                            goto JumpAndNext;
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static bool TryRescue(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence)
+                        {
+                            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                            var exceptionObjectValue = Unsafe.Add(ref registers, bb.A);
+                            var exceptionClassValue = Unsafe.Add(ref registers, bb.B);
+                            switch (exceptionClassValue.VType)
+                            {
+                                case MRubyVType.Class:
+                                case MRubyVType.Module:
+                                    break;
+                                default:
+                                    var ex = new RException(
+                                        state.NewString("class or module required for rescue clause"u8),
+                                        state.GetExceptionClass(Names.TypeError));
+                                    state.Exception = new MRubyRaiseException(state, ex, state.Context.CallDepth);
+                                    if (state.TryRaiseJump(ref callInfo))
+                                    {
+                                        return true; // signal JumpAndNext
+                                    }
+                                    throw state.Exception;
+                            }
+
+                            Unsafe.Add(ref registers, bb.B) = state.KindOf(exceptionObjectValue, exceptionClassValue.As<RClass>());
+                            return false; // signal Next
+                        }
                     }
                     case OpCode.RaiseIf:
                     {
                         Markers.RaiseIf();
-                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        var exceptionValue = Unsafe.Add(ref registers, a);
-                        switch (exceptionValue.Object)
+                        var signal = RaiseIf(this, ref callInfo, ref registers, ref sequence, irep, out var retVal);
+                        switch (signal)
                         {
-                            case RBreak breakObject:
-                                Exception = new MRubyBreakException(this, breakObject);
-                                switch (breakObject.Tag)
-                                {
-                                    case BreakTag.Break:
-                                    {
-                                        if (TryReturnJump(ref callInfo, breakObject.BreakIndex, breakObject.Value))
-                                        {
-                                            goto JumpAndNext;
-                                        }
-                                        return breakObject.Value;
-                                    }
-                                    case BreakTag.Jump:
-                                    {
-                                        var newProgramCounter = (int)breakObject.Value.IntegerValue;
-                                        if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
-                                        {
-                                            // avoiding a jump from a catch handler into the same handler
-                                            if (newProgramCounter < catchHandler.Begin || newProgramCounter > catchHandler.End)
-                                            {
-                                                PrepareTaggedBreak(BreakTag.Jump, Context.CallDepth, newProgramCounter);
-                                                callInfo.ProgramCounter = (int)catchHandler.Target;
-                                                goto Next;
-                                            }
-                                        }
-                                        Exception = null;
-                                        callInfo.ProgramCounter = newProgramCounter;
-                                        goto Next;
-                                    }
-                                    case BreakTag.Stop:
-                                    {
-                                        if (TryUnwindEnsureJump(ref callInfo, Context.CallDepth, BreakTag.Stop, breakObject.Value))
-                                        {
-                                            goto JumpAndNext;
-                                        }
-                                        if (Exception != null) throw Exception;
-                                        return Unsafe.Add(ref registers, irep.LocalVariables.Length);
-                                    }
-                                }
-                                break;
-                            case RException exceptionObject:
-                                Exception = new MRubyRaiseException(this, exceptionObject, Context.CallDepth);
-                                if (TryRaiseJump(ref callInfo))
-                                {
-                                    goto JumpAndNext;
-                                }
-                                throw Exception;
-                            default:
-                                Exception = null;
-                                break;
+                            case VmSignal.JumpAndNext: goto JumpAndNext;
+                            case VmSignal.Return: return retVal;
                         }
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static VmSignal RaiseIf(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, Irep irep, out MRubyValue retVal)
+                        {
+                            retVal = default;
+                            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                            var exceptionValue = Unsafe.Add(ref registers, a);
+                            switch (exceptionValue.Object)
+                            {
+                                case RBreak breakObject:
+                                    state.Exception = new MRubyBreakException(state, breakObject);
+                                    switch (breakObject.Tag)
+                                    {
+                                        case BreakTag.Break:
+                                        {
+                                            if (state.TryReturnJump(ref callInfo, breakObject.BreakIndex, breakObject.Value))
+                                            {
+                                                return VmSignal.JumpAndNext;
+                                            }
+                                            retVal = breakObject.Value;
+                                            return VmSignal.Return;
+                                        }
+                                        case BreakTag.Jump:
+                                        {
+                                            var newProgramCounter = (int)breakObject.Value.IntegerValue;
+                                            if (irep.TryFindCatchHandler(callInfo.ProgramCounter, CatchHandlerType.Ensure, out var catchHandler))
+                                            {
+                                                // avoiding a jump from a catch handler into the same handler
+                                                if (newProgramCounter < catchHandler.Begin || newProgramCounter > catchHandler.End)
+                                                {
+                                                    state.PrepareTaggedBreak(BreakTag.Jump, state.Context.CallDepth, newProgramCounter);
+                                                    callInfo.ProgramCounter = (int)catchHandler.Target;
+                                                    return VmSignal.Next;
+                                                }
+                                            }
+                                            state.Exception = null;
+                                            callInfo.ProgramCounter = newProgramCounter;
+                                            return VmSignal.Next;
+                                        }
+                                        case BreakTag.Stop:
+                                        {
+                                            if (state.TryUnwindEnsureJump(ref callInfo, state.Context.CallDepth, BreakTag.Stop, breakObject.Value))
+                                            {
+                                                return VmSignal.JumpAndNext;
+                                            }
+                                            if (state.Exception != null) throw state.Exception;
+                                            retVal = Unsafe.Add(ref registers, irep.LocalVariables.Length);
+                                            return VmSignal.Return;
+                                        }
+                                    }
+                                    break;
+                                case RException exceptionObject:
+                                    state.Exception = new MRubyRaiseException(state, exceptionObject, state.Context.CallDepth);
+                                    if (state.TryRaiseJump(ref callInfo))
+                                    {
+                                        return VmSignal.JumpAndNext;
+                                    }
+                                    throw state.Exception;
+                                default:
+                                    state.Exception = null;
+                                    break;
+                            }
+                            return VmSignal.Next;
+                        }
                     }
                     case OpCode.SSend:
                     case OpCode.SSendB:
@@ -958,6 +1326,7 @@ partial class MRubyState
                         symbols = ref GetArrayDataReference(irep.Symbols);
                         goto Next;
 
+                        [MethodImpl(MethodImplOptions.NoInlining)]
                         static void CallProc(MRubyState state, out Irep irep, ref MRubyCallInfo callInfo)
                         {
                             callInfo.ProgramCounter += 1; // read opcode
@@ -995,6 +1364,7 @@ partial class MRubyState
                         callInfo = ref Context.CurrentCallInfo;
                         goto case OpCode.SendInternal;
 
+                        [MethodImpl(MethodImplOptions.NoInlining)]
                         static void Super(MRubyState state, ref MRubyCallInfo callInfo, Span<MRubyValue> registers, ref byte sequence)
                         {
                             var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
@@ -1044,9 +1414,9 @@ partial class MRubyState
                             !callInfo.ArgumentPacked &&
                             callInfo.Proc?.HasFlag(MRubyObjectFlags.ProcStrict) == true)
                         {
-                            FastPass(this, irep, ref callInfo, argc, m1);
+                            EnterFastPass(this, irep, ref callInfo, argc, m1);
 
-                            static void FastPass(MRubyState state, Irep irep, ref MRubyCallInfo callInfo, byte argc, byte m1)
+                            static void EnterFastPass(MRubyState state, Irep irep, ref MRubyCallInfo callInfo, byte argc, byte m1)
                             {
                                 if (argc + (callInfo.KeywordArgumentPacked ? 1 : 0) != m1)
                                 {
@@ -1065,11 +1435,11 @@ partial class MRubyState
 
                             goto Next;
                         }
-                        SlowPath(ref callInfo, argv, Context.Stack.AsSpan(callInfo.StackPointer));
+                        EnterSlowPath(ref callInfo, argv, Context.Stack.AsSpan(callInfo.StackPointer));
 
                         goto Next;
 
-                        void SlowPath(ref MRubyCallInfo callInfo, Span<MRubyValue> argv, Span<MRubyValue> registers)
+                        void EnterSlowPath(ref MRubyCallInfo callInfo, Span<MRubyValue> argv, Span<MRubyValue> registers)
                         {
                             var o = aspec.OptionalArgumentsCount;
                             var r = aspec.TakeRestArguments ? 1 : 0;
@@ -1285,17 +1655,6 @@ partial class MRubyState
                         }
                         goto Next;
                     }
-                    case OpCode.Return:
-                    {
-                        Markers.Return();
-                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        var returnValue = Unsafe.Add(ref registers, a);
-                        if (TryReturnJump(ref callInfo, Context.CallDepth, returnValue))
-                        {
-                            goto JumpAndNext;
-                        }
-                        return returnValue;
-                    }
                     case OpCode.ReturnBlk:
                     {
                         Markers.ReturnBlk();
@@ -1304,28 +1663,41 @@ partial class MRubyState
                         {
                             goto case OpCode.Return;
                         }
-
-                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        var dest = callInfo.Proc.FindReturningDestination(out var env);
-                        if (dest.Scope is not REnv destEnv || destEnv.Context == Context)
+                        var signal = ReturnBlk(this, ref callInfo, ref registers, ref sequence, out var retVal);
+                        switch (signal)
                         {
-                            // check jump destination
-                            for (var i = Context.CallDepth; i >= 0; i--)
+                            case VmSignal.JumpAndNext: goto JumpAndNext;
+                            case VmSignal.Return: return retVal;
+                        }
+                        goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static VmSignal ReturnBlk(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, out MRubyValue retVal)
+                        {
+                            retVal = default;
+                            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                            var dest = callInfo.Proc!.FindReturningDestination(out var env);
+                            if (dest.Scope is not REnv destEnv || destEnv.Context == state.Context)
                             {
-                                if (Context.CallStack[i].Scope == env)
+                                // check jump destination
+                                for (var i = state.Context.CallDepth; i >= 0; i--)
                                 {
-                                    var returnValue = Unsafe.Add(ref registers, a);
-                                    if (TryReturnJump(ref callInfo, i, returnValue))
+                                    if (state.Context.CallStack[i].Scope == env)
                                     {
-                                        goto JumpAndNext;
+                                        var returnValue = Unsafe.Add(ref registers, a);
+                                        if (state.TryReturnJump(ref callInfo, i, returnValue))
+                                        {
+                                            return VmSignal.JumpAndNext;
+                                        }
+                                        retVal = returnValue;
+                                        return VmSignal.Return;
                                     }
-                                    return returnValue;
                                 }
                             }
+                            // no jump destination
+                            state.Raise(Names.LocalJumpError, "unexpected return"u8);
+                            return VmSignal.Next; // not reached
                         }
-                        // no jump destination
-                        Raise(Names.LocalJumpError, "unexpected return"u8);
-                        goto Next; // not reached
                     }
                     case OpCode.Break:
                     {
@@ -1334,34 +1706,48 @@ partial class MRubyState
                         {
                             goto case OpCode.Return;
                         }
-
-                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        if (callInfo.Proc is { } proc &&
-                            !proc.HasFlag(MRubyObjectFlags.ProcOrphan) &&
-                            proc.Scope is REnv env && env.Context == Context)
+                        var signal = Break(this, ref callInfo, ref registers, ref sequence, out var retVal);
+                        switch (signal)
                         {
-                            var dest = proc.Upper;
-                            for (var i = Context.CallDepth; i > 0; i--)
+                            case VmSignal.JumpAndNext: goto JumpAndNext;
+                            case VmSignal.Return: return retVal;
+                        }
+                        goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static VmSignal Break(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, out MRubyValue retVal)
+                        {
+                            retVal = default;
+                            var a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                            if (callInfo.Proc is { } proc &&
+                                !proc.HasFlag(MRubyObjectFlags.ProcOrphan) &&
+                                proc.Scope is REnv env && env.Context == state.Context)
                             {
-                                if (Context.CallStack[i - 1].Proc == dest)
+                                var dest = proc.Upper;
+                                for (var i = state.Context.CallDepth; i > 0; i--)
                                 {
-                                    var returnValue = Unsafe.Add(ref registers, a);
-                                    if (TryReturnJump(ref callInfo, i, returnValue))
+                                    if (state.Context.CallStack[i - 1].Proc == dest)
                                     {
-                                        goto JumpAndNext;
+                                        var returnValue = Unsafe.Add(ref registers, a);
+                                        if (state.TryReturnJump(ref callInfo, i, returnValue))
+                                        {
+                                            return VmSignal.JumpAndNext;
+                                        }
+                                        retVal = returnValue;
+                                        return VmSignal.Return;
                                     }
-                                    return returnValue;
                                 }
                             }
+                            state.Raise(Names.LocalJumpError, "break from proc-closure"u8);
+                            return VmSignal.Next; // not reached
                         }
-                        Raise(Names.LocalJumpError, "break from proc-closure"u8);
-                        goto Next; // not reached
                     }
                     case OpCode.BlkPush:
                     {
                         Markers.BlkPush();
                         BlkPush(this, ref callInfo, Context.Stack.AsSpan(callInfo.StackPointer), ref sequence);
 
+                        [MethodImpl(MethodImplOptions.NoInlining)]
                         static void BlkPush(MRubyState state, ref MRubyCallInfo callInfo, Span<MRubyValue> registers, ref byte sequence)
                         {
                             var bs = OperandBS.Read(ref sequence, ref callInfo.ProgramCounter);
@@ -1399,313 +1785,6 @@ partial class MRubyState
                         }
 
                         goto Next;
-                    }
-                    case OpCode.Add:
-                    case OpCode.Sub:
-                    case OpCode.Mul:
-                    case OpCode.Div:
-                        Markers.Add();
-                        Markers.Sub();
-                        Markers.Mul();
-                        Markers.Div();
-                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        registerA = ref Unsafe.Add(ref registers, a);
-                        var rhs = Unsafe.Add(ref registerA, 1);
-
-                        var lhsIsFloat = registerA.IsFloat;
-                        var rhsIsFloat = rhs.IsFloat;
-
-                        // Float fast path: bit check only (bits & 0b11 == 0b10), avoids VType call
-                        if (lhsIsFloat && rhsIsFloat)
-                        {
-                            var leftVal = registerA.FloatValue;
-                            var rightVal = rhs.FloatValue;
-                            registerA = new MRubyValue(opcode switch
-                            {
-                                OpCode.Add => leftVal + rightVal,
-                                OpCode.Sub => leftVal - rightVal,
-                                OpCode.Mul => leftVal * rightVal,
-                                OpCode.Div => leftVal / rightVal,
-                                _ => default
-                            });
-                            goto Next;
-                        }
-
-                        var lhsIsFixnum = registerA.IsFixnum;
-                        var rhsIsFixnum = rhs.IsFixnum;
-
-                        // Fixnum fast path: avoid VType switch expression, use bit check + shift only
-                        if (lhsIsFixnum && rhsIsFixnum)
-                        {
-                            var leftInt = registerA.FixnumValue;
-                            var rightInt = rhs.FixnumValue;
-                            try
-                            {
-                                registerA = new MRubyValue(opcode switch
-                                {
-                                    OpCode.Add => checked(leftInt + rightInt),
-                                    OpCode.Sub => checked(leftInt - rightInt),
-                                    OpCode.Mul => checked(leftInt * rightInt),
-                                    OpCode.Div => leftInt / rightInt,
-                                    _ => 0
-                                });
-                            }
-                            catch (OverflowException)
-                            {
-                                IntegerMembers.RaiseIntegerOverflowError(this, opcode switch
-                                {
-                                    OpCode.Add => "add"u8,
-                                    OpCode.Sub => "sub"u8,
-                                    OpCode.Mul => "mul"u8,
-                                    OpCode.Div => "div"u8,
-                                    _ => default
-                                });
-                            }
-                            catch (DivideByZeroException)
-                            {
-                                IntegerMembers.RaiseDivideByZeroError(this);
-                            }
-                            goto Next;
-                        }
-
-                        // Float + Fixnum mixed fast path: bit checks only, no VType call
-                        if (lhsIsFloat && rhsIsFixnum)
-                        {
-                            var leftVal = registerA.FloatValue;
-                            var rightVal = (double)rhs.FixnumValue;
-                            registerA = new MRubyValue(opcode switch
-                            {
-                                OpCode.Add => leftVal + rightVal,
-                                OpCode.Sub => leftVal - rightVal,
-                                OpCode.Mul => leftVal * rightVal,
-                                OpCode.Div => leftVal / rightVal,
-                                _ => default
-                            });
-                            goto Next;
-                        }
-                        if (lhsIsFixnum && rhsIsFloat)
-                        {
-                            var leftVal = (double)registerA.FixnumValue;
-                            var rightVal = rhs.FloatValue;
-                            registerA = new MRubyValue(opcode switch
-                            {
-                                OpCode.Add => leftVal + rightVal,
-                                OpCode.Sub => leftVal - rightVal,
-                                OpCode.Mul => leftVal * rightVal,
-                                OpCode.Div => leftVal / rightVal,
-                                _ => default
-                            });
-                            goto Next;
-                        }
-
-                        var lhsIsInteger = lhsIsFixnum || registerA.Object?.VType == MRubyVType.Integer;
-                        var rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
-                        if (lhsIsInteger && rhsIsInteger)
-                        {
-                            var leftInt = registerA.IntegerValue;
-                            var rightInt = rhs.IntegerValue;
-                            try
-                            {
-                                registerA = new MRubyValue(opcode switch
-                                {
-                                    OpCode.Add => checked(leftInt + rightInt),
-                                    OpCode.Sub => checked(leftInt - rightInt),
-                                    OpCode.Mul => checked(leftInt * rightInt),
-                                    OpCode.Div => leftInt / rightInt,
-                                    _ => 0
-                                });
-                            }
-                            catch (OverflowException)
-                            {
-                                IntegerMembers.RaiseIntegerOverflowError(this, opcode switch
-                                {
-                                    OpCode.Add => "add"u8,
-                                    OpCode.Sub => "sub"u8,
-                                    OpCode.Mul => "mul"u8,
-                                    OpCode.Div => "div"u8,
-                                    _ => default
-                                });
-                            }
-                            catch (DivideByZeroException)
-                            {
-                                IntegerMembers.RaiseDivideByZeroError(this);
-                            }
-                            goto Next;
-                        }
-
-                        if ((lhsIsInteger || lhsIsFloat) &&
-                            (rhsIsInteger || rhsIsFloat))
-                        {
-                            var leftVal = lhsIsInteger ? registerA.IntegerValue : registerA.FloatValue;
-                            var rightVal = rhsIsInteger ? rhs.IntegerValue : rhs.FloatValue;
-
-                            registerA = new MRubyValue(opcode switch
-                            {
-                                OpCode.Add => leftVal + rightVal,
-                                OpCode.Sub => leftVal - rightVal,
-                                OpCode.Mul => leftVal * rightVal,
-                                OpCode.Div => leftVal / rightVal,
-                                _ => default
-                            });
-                            goto Next;
-                        }
-
-                        if (registerA.Object?.VType == MRubyVType.String &&
-                            rhs.Object?.VType == MRubyVType.String &&
-                            opcode == OpCode.Add)
-                        {
-                            registerA = registerA.As<RString>() + rhs.As<RString>();
-                            goto Next;
-                        }
-
-                    {
-                        // Jump to send : + or :- or :* or :/
-                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
-                        goto case OpCode.SendInternal;
-                    }
-                    case OpCode.AddI:
-                    case OpCode.SubI:
-                        Markers.AddI();
-                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        registerA = ref Unsafe.Add(ref registers, bb.A);
-                    {
-                        var rV = opcode == OpCode.AddI ? bb.B : -bb.B;
-
-                        // Float fast path: bit check only, avoids VType call
-                        if (registerA.IsFloat)
-                        {
-                            registerA = new MRubyValue(registerA.FloatValue + rV);
-                            goto Next;
-                        }
-
-                        // Fixnum fast path
-                        if (registerA.IsFixnum)
-                        {
-                            try
-                            {
-                                registerA = checked(registerA.FixnumValue + rV);
-                            }
-                            catch (OverflowException)
-                            {
-                                IntegerMembers.RaiseIntegerOverflowError(this, opcode == OpCode.AddI ? "add"u8 : "sub"u8);
-                            }
-                            goto Next;
-                        }
-
-                        switch (registerA.VType)
-                        {
-                            case MRubyVType.Integer:
-                                try
-                                {
-                                    registerA = checked(registerA.IntegerValue + rV);
-                                }
-                                catch (OverflowException)
-                                {
-                                    IntegerMembers.RaiseIntegerOverflowError(this, opcode == OpCode.AddI ? "add"u8 : "sub"u8);
-                                }
-                                goto Next;
-                            case MRubyVType.Float:
-                                registerA = new MRubyValue(registerA.FloatValue + rV);
-                                goto Next;
-                        }
-
-                        // Jump to send :+ or :-
-                        Unsafe.Add(ref registerA, 1) = new MRubyValue(bb.B);
-                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + bb.A, opcode, 1);
-                        goto case OpCode.SendInternal;
-                    }
-                    case OpCode.EQ:
-                    case OpCode.LT:
-                    case OpCode.LE:
-                    case OpCode.GT:
-                    case OpCode.GE:
-                        Markers.EQ();
-                        Markers.LT();
-                        Markers.LE();
-                        Markers.GT();
-                        Markers.GE();
-                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        registerA = ref Unsafe.Add(ref registers, a);
-                        rhs = Unsafe.Add(ref registerA, 1);
-
-                        if (opcode == OpCode.EQ)
-                        {
-                            if (registerA.Equals(rhs))
-                            {
-                                registerA = MRubyValue.True;
-                                goto Next;
-                            }
-                            if (registerA.IsSymbol)
-                            {
-                                registerA = MRubyValue.False;
-                                goto Next;
-                            }
-                        }
-
-                        // Float fast path: bit check only, avoids VType call
-                        lhsIsFloat = registerA.IsFloat;
-                        rhsIsFloat = rhs.IsFloat;
-                        if (lhsIsFloat && rhsIsFloat)
-                        {
-                            var leftVal = registerA.FloatValue;
-                            var rightVal = rhs.FloatValue;
-                            registerA = new MRubyValue(opcode switch
-                            {
-                                // ReSharper disable once CompareOfFloatsByEqualityOperator
-                                OpCode.EQ => leftVal == rightVal,
-                                OpCode.LT => leftVal < rightVal,
-                                OpCode.LE => leftVal <= rightVal,
-                                OpCode.GT => leftVal > rightVal,
-                                OpCode.GE => leftVal >= rightVal,
-                                _ => false
-                            });
-                            goto Next;
-                        }
-
-                        // Fixnum fast path
-                        lhsIsFixnum = registerA.IsFixnum;
-                        rhsIsFixnum = rhs.IsFixnum;
-                        if (lhsIsFixnum && rhsIsFixnum)
-                        {
-                            var leftInt = registerA.FixnumValue;
-                            var rightInt = rhs.FixnumValue;
-                            registerA = new MRubyValue(opcode switch
-                            {
-                                OpCode.EQ => leftInt == rightInt,
-                                OpCode.LT => leftInt < rightInt,
-                                OpCode.LE => leftInt <= rightInt,
-                                OpCode.GT => leftInt > rightInt,
-                                OpCode.GE => leftInt >= rightInt,
-                                _ => false
-                            });
-                            goto Next;
-                        }
-
-                        lhsIsInteger = lhsIsFixnum || registerA.Object?.VType == MRubyVType.Integer;
-                        rhsIsInteger = rhsIsFixnum || rhs.Object?.VType == MRubyVType.Integer;
-
-                        if ((lhsIsInteger || lhsIsFloat) &&
-                            (rhsIsInteger || rhsIsFloat))
-                        {
-                            var leftVal = lhsIsInteger ? registerA.IntegerValue : (long)registerA.FloatValue;
-                            var rightVal = rhsIsInteger ? rhs.IntegerValue : (long)rhs.FloatValue;
-                            {
-                                registerA = new MRubyValue(opcode switch
-                                {
-                                    OpCode.EQ => leftVal == rightVal,
-                                    OpCode.LT => leftVal < rightVal,
-                                    OpCode.LE => leftVal <= rightVal,
-                                    OpCode.GT => leftVal > rightVal,
-                                    OpCode.GE => leftVal >= rightVal,
-                                    _ => false
-                                });
-                            }
-                            goto Next;
-                        }
-                    {
-                        // Jump to send method
-                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
-                        goto case OpCode.SendInternal;
                     }
                     case OpCode.Array:
                     {
@@ -1787,6 +1866,7 @@ partial class MRubyState
                         {
                             APostShort(this, array, bbb, pre, post, ref registerA);
 
+                            [MethodImpl(MethodImplOptions.NoInlining)]
                             static void APostShort(MRubyState state, RArray array, OperandBBB bbb, int pre, int post, ref MRubyValue registerA)
                             {
                                 var slice = array.AsSpan().Slice(bbb.B, array.Length - pre - post);
@@ -1803,6 +1883,7 @@ partial class MRubyState
                         {
                             APostLong(this, array, pre, post, ref registerA);
 
+                            [MethodImpl(MethodImplOptions.NoInlining)]
                             static void APostLong(MRubyState state, RArray array, int pre, int post, ref MRubyValue registerA)
                             {
                                 registerA = state.NewArray(0);
@@ -1953,6 +2034,7 @@ partial class MRubyState
 
                         goto Next;
 
+                        [MethodImpl(MethodImplOptions.NoInlining)]
                         static void Class(MRubyState state, Irep irep, Span<MRubyValue> registers, ref byte sequence, ref MRubyCallInfo callInfo)
                         {
                             var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
@@ -2035,77 +2117,81 @@ partial class MRubyState
                     case OpCode.Module:
                     {
                         Markers.Module();
-                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        registerA = ref Unsafe.Add(ref registers, bb.A);
-                        var id = Unsafe.Add(ref symbols, bb.B);
-                        RClass outerClass;
-                        if (registerA.IsNil)
-                        {
-                            outerClass = callInfo.Proc?.Scope?.TargetClass ?? ObjectClass;
-                        }
-                        else
-                        {
-                            EnsureClassOrModule(registerA);
-                            outerClass = registerA.As<RClass>();
-                        }
-
-                        RClass definedModule;
-                        if (ConstDefinedAt(id, outerClass))
-                        {
-                            var old = GetConst(id, outerClass);
-                            if (old.VType != MRubyVType.Module)
-                            {
-                                RaiseNotAModule(old);
-
-                                [MethodImpl(MethodImplOptions.NoInlining)]
-                                void RaiseNotAModule(MRubyValue oldValue)
-                                {
-                                    Raise(Names.TypeError, $"{StringifyAny(oldValue)} is not a module");
-                                }
-                            }
-                            definedModule = old.As<RClass>();
-                        }
-                        else
-                        {
-                            definedModule = DefineModule(id, outerClass);
-                        }
-                        registerA = definedModule;
+                        Module(this, ref callInfo, ref registers, ref sequence, ref symbols);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Module(MRubyState state, ref MRubyCallInfo callInfo, ref MRubyValue registers, ref byte sequence, ref Symbol symbols)
+                        {
+                            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                            ref var registerA = ref Unsafe.Add(ref registers, bb.A);
+                            var id = Unsafe.Add(ref symbols, bb.B);
+                            RClass outerClass;
+                            if (registerA.IsNil)
+                            {
+                                outerClass = callInfo.Proc?.Scope?.TargetClass ?? state.ObjectClass;
+                            }
+                            else
+                            {
+                                state.EnsureClassOrModule(registerA);
+                                outerClass = registerA.As<RClass>();
+                            }
+
+                            RClass definedModule;
+                            if (state.ConstDefinedAt(id, outerClass))
+                            {
+                                var old = state.GetConst(id, outerClass);
+                                if (old.VType != MRubyVType.Module)
+                                {
+                                    state.Raise(Names.TypeError, $"{state.StringifyAny(old)} is not a module");
+                                }
+                                definedModule = old.As<RClass>();
+                            }
+                            else
+                            {
+                                definedModule = state.DefineModule(id, outerClass);
+                            }
+                            registerA = definedModule;
+                        }
                     }
                     case OpCode.Exec:
                     {
                         Markers.Exec();
-                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        var receiver = Unsafe.Add(ref registers, bb.A);
-                        var targetIrep = irep.Children[bb.B];
-
-                        // prepare closure
-                        var proc = NewProc(targetIrep, receiver.As<RClass>());
-                        proc.SetFlag(MRubyObjectFlags.ProcScope);
-
-                        // prepare callstack
-                        ref var nextCallInfo = ref Context.PushCallStack();
-                        nextCallInfo.StackPointer = callInfo.StackPointer + bb.A;
-                        nextCallInfo.CallerType = CallerType.InVmLoop;
-                        nextCallInfo.Scope = receiver.As<RClass>();
-                        nextCallInfo.Proc = proc;
-                        nextCallInfo.MethodId = default;
-                        nextCallInfo.ArgumentCount = 0;
-                        nextCallInfo.KeywordArgumentCount = 0;
-                        nextCallInfo.ProgramCounter = 0;
-
-                        // modify local variable and jump
-                        callInfo = ref nextCallInfo;
-
+                        Exec(this, ref callInfo, ref sequence, ref registers);
+                        callInfo = ref Context.CurrentCallInfo;
                         irep = callInfo.Proc!.Irep;
                         sequence = ref GetArrayDataReference(irep.Sequence);
                         symbols = ref GetArrayDataReference(irep.Symbols);
-
-                        Context.ExtendStack(callInfo.StackPointer + irep.RegisterVariableCount + 1);
-                        Context.ClearStack(callInfo.StackPointer + 1, irep.RegisterVariableCount - 1);
-
-                        registers = ref Unsafe.Add(ref GetArrayDataReference(Context.Stack), nextCallInfo.StackPointer);
+                        registers = ref Unsafe.Add(ref GetArrayDataReference(Context.Stack), callInfo.StackPointer);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Exec(MRubyState state, ref MRubyCallInfo callInfo, ref byte sequence, ref MRubyValue registers)
+                        {
+                            var bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                            var receiver = Unsafe.Add(ref registers, bb.A);
+                            var irep = callInfo.Proc!.Irep;
+                            var targetIrep = irep.Children[bb.B];
+
+                            // prepare closure
+                            var proc = state.NewProc(targetIrep, receiver.As<RClass>());
+                            proc.SetFlag(MRubyObjectFlags.ProcScope);
+
+                            // prepare callstack
+                            ref var nextCallInfo = ref state.Context.PushCallStack();
+                            nextCallInfo.StackPointer = callInfo.StackPointer + bb.A;
+                            nextCallInfo.CallerType = CallerType.InVmLoop;
+                            nextCallInfo.Scope = receiver.As<RClass>();
+                            nextCallInfo.Proc = proc;
+                            nextCallInfo.MethodId = default;
+                            nextCallInfo.ArgumentCount = 0;
+                            nextCallInfo.KeywordArgumentCount = 0;
+                            nextCallInfo.ProgramCounter = 0;
+
+                            var newIrep = proc.Irep;
+                            state.Context.ExtendStack(nextCallInfo.StackPointer + newIrep.RegisterVariableCount + 1);
+                            state.Context.ClearStack(nextCallInfo.StackPointer + 1, newIrep.RegisterVariableCount - 1);
+                        }
                     }
                     case OpCode.Def:
                     {
