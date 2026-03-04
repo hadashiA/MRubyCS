@@ -2,13 +2,18 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+#if NET7_0_OR_GREATER
+using static System.Runtime.InteropServices.MemoryMarshal;
+#else
+using static MRubyCS.Internal.MemoryMarshalEx;
+#endif
 
 namespace MRubyCS;
 
 public class VariableTable : IEnumerable<KeyValuePair<Symbol, MRubyValue>>
 {
-    Symbol[] keys = Array.Empty<Symbol>();
-    MRubyValue[] values = Array.Empty<MRubyValue>();
+    Symbol[] keys = [];
+    MRubyValue[] values = [];
     int count;
 
     public int Length
@@ -20,9 +25,12 @@ public class VariableTable : IEnumerable<KeyValuePair<Symbol, MRubyValue>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Defined(Symbol id)
     {
-        for (int i = 0; i < count; i++)
+        var keysLocal = keys;
+        ref var keysRef = ref GetArrayDataReference(keysLocal);
+        var l = count;
+        for (var i = 0; l > i; i++)
         {
-            if (keys[i] == id) return true;
+            if (Unsafe.Add(ref keysRef, i) == id) return true;
         }
         return false;
     }
@@ -30,11 +38,16 @@ public class VariableTable : IEnumerable<KeyValuePair<Symbol, MRubyValue>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGet(Symbol id, out MRubyValue value)
     {
-        for (int i = 0; i < count; i++)
+        var keysLocal = keys;
+        var valsLocal = values;
+        ref var keysRef = ref GetArrayDataReference(keysLocal);
+        ref var valsRef = ref GetArrayDataReference(valsLocal);
+        var l = count;
+        for (var i = 0; i < l; i++)
         {
-            if (keys[i] == id)
+            if (Unsafe.Add(ref keysRef, i) == id)
             {
-                value = values[i];
+                value = Unsafe.Add(ref valsRef, i);
                 return true;
             }
         }
@@ -45,46 +58,65 @@ public class VariableTable : IEnumerable<KeyValuePair<Symbol, MRubyValue>>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MRubyValue Get(Symbol id)
     {
-        for (int i = 0; i < count; i++)
+        var keysLocal = keys;
+        var valsLocal = values;
+        ref var keysRef = ref GetArrayDataReference(keysLocal);
+        ref var valsRef = ref GetArrayDataReference(valsLocal);
+        var l = count;
+        for (var i = 0; i < l; i++)
         {
-            if (keys[i] == id) return values[i];
+            if (Unsafe.Add(ref keysRef, i) == id)
+            {
+                return Unsafe.Add(ref valsRef, i);
+            }
         }
-        return MRubyValue.Nil;
+        return default;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Set(Symbol id, MRubyValue value)
     {
-        for (int i = 0; i < count; i++)
+        var keysLocal = keys;
+        var valsLocal = values;
+        ref var keysRef = ref GetArrayDataReference(keysLocal);
+        ref var valsRef = ref GetArrayDataReference(valsLocal);
+        var l = count;
+        for (var i = 0; i < l; i++)
         {
-            if (keys[i] == id)
+            if (Unsafe.Add(ref keysRef, i) == id)
             {
-                values[i] = value;
+                Unsafe.Add(ref valsRef, i) = value;
                 return;
             }
         }
         if (count >= keys.Length) Grow();
-        keys[count] = id;
-        values[count] = value;
+
+        Unsafe.Add(ref GetArrayDataReference(keys), count) = id;
+        Unsafe.Add(ref GetArrayDataReference(values), count) = value;
         count++;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Remove(Symbol id, out MRubyValue removedValue)
     {
-        for (int i = 0; i < count; i++)
+        var keysLocal = keys;
+        var valsLocal = values;
+        ref var keysRef = ref GetArrayDataReference(keysLocal);
+        ref var valsRef = ref GetArrayDataReference(valsLocal);
+        var l = count;
+        for (var i = 0; i < l; i++)
         {
-            if (keys[i] == id)
+            if (Unsafe.Add(ref keysRef, i) == id)
             {
-                removedValue = values[i];
+                removedValue = Unsafe.Add(ref valsRef, i);
                 count--;
-                for (int j = i; j < count; j++)
+                for (var j = i; j < count; j++)
                 {
-                    keys[j] = keys[j + 1];
-                    values[j] = values[j + 1];
+                    Unsafe.Add(ref keysRef, j) = Unsafe.Add(ref keysRef, j + 1);
+                    Unsafe.Add(ref valsRef, j) = Unsafe.Add(ref valsRef, j + 1);
                 }
-                keys[count] = default;
-                values[count] = default;
+                Unsafe.Add(ref keysRef, count) = default;
+                Unsafe.Add(ref valsRef, count) = default;
                 return true;
             }
         }
