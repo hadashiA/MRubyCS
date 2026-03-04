@@ -17,6 +17,16 @@ Easily embed Ruby into Unity or .NET—empowering users to script game logic whi
 - **Fiber & async/await** — suspend Ruby execution and await C# async methods without blocking threads.
 - **Prism-based compiler** — uses [mruby-compiler2](https://github.com/picoruby/mruby-compiler2), the next-generation mruby compiler built on [Prism](https://github.com/ruby/prism) (the official CRuby parser), for more accurate and modern Ruby syntax support.
 
+## Performance
+
+In the .NET JIT environment, execution speeds are equal to or faster than the original native mruby.
+
+<img width="693" height="346" alt="ss 2026-03-04 18 18 39" src="https://github.com/user-attachments/assets/c04c179c-d952-416e-939d-77d30030d36d" />
+
+The above results were obtained on macOS with Apple M4 over 10 iterations.
+
+Please refer to the following for the [benchmark code](https://github.com/hadashiA/MRubyCS/tree/main/sandbox/MRubyCS.Benchmark).
+
 ## Limitations
 
 - As of mruby 3.3, almost all bundled classes/methods are supported.
