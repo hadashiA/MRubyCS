@@ -223,5 +223,4 @@ public class RClass : RObject, ICallScope
     }
 
     internal void SetSuper(RClass newSuper) => super = newSuper;
-    //internal void SetInstanceVariables( newSuper) => super = newSuper;
 }
