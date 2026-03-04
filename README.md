@@ -21,7 +21,7 @@ Easily embed Ruby into Unity or .NET—empowering users to script game logic whi
 
 In the .NET JIT environment, execution speeds are equal to or faster than the original native mruby.
 
-<img width="693" height="346" alt="ss 2026-03-04 18 18 39" src="https://github.com/user-attachments/assets/c04c179c-d952-416e-939d-77d30030d36d" />
+<img width="594" height="389" alt="ss 2026-03-04 22 11 01" src="https://github.com/user-attachments/assets/00cd3644-e460-4b21-a41e-661d484fe30c" />
 
 The above results were obtained on macOS with Apple M4 over 10 iterations.
 
