@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace MRubyCS;
 
@@ -31,7 +32,15 @@ public sealed class ClassDefineOptions(MRubyState state, RClass c)
 
 partial class MRubyState
 {
-    const int MethodCacheSize = 1 << 8; // TODO:
+    const int MethodCacheSize = 1 << 8;
+
+    struct MethodCacheEntry
+    {
+        public RClass? Class;
+        public Symbol MethodId;
+        public MRubyMethod Method;
+        public RClass? DefiningClass;
+    }
 
     public RClass SingletonClassOf(MRubyValue value)
     {
@@ -230,6 +239,7 @@ partial class MRubyState
         }
 
         c.MethodTable[id] = method;
+        ClearMethodCache();
     }
 
     public void DefinePrivateMethod(RClass c, Symbol id, MRubyMethod method)
@@ -281,14 +291,31 @@ partial class MRubyState
         return TryFindMethod(c, methodId, out var method, out _) && method != MRubyMethod.Undef;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryFindMethod(RClass c, Symbol methodId, out MRubyMethod method, out RClass imp)
     {
-        // TODO caching ?
-        return c.TryFindMethod(methodId, out method, out imp);
+        var index = unchecked((uint)RuntimeHelpers.GetHashCode(c) ^ methodId.Value) & (MethodCacheSize - 1);
+        ref var entry = ref methodCache[index];
+        if (entry.Class == c && entry.MethodId == methodId)
+        {
+            method = entry.Method;
+            imp = entry.DefiningClass!;
+            return true;
+        }
+        if (c.TryFindMethod(methodId, out method, out imp))
+        {
+            entry.Class = c;
+            entry.MethodId = methodId;
+            entry.Method = method;
+            entry.DefiningClass = imp;
+            return true;
+        }
+        return false;
     }
 
     void ClearMethodCache()
     {
+        Array.Clear(methodCache, 0, methodCache.Length);
     }
 
     void PrepareSingletonClass(RObject obj)

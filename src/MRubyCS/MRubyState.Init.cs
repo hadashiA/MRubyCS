@@ -78,8 +78,7 @@ public partial class MRubyState
 
     RiteParser? riteParser;
 
-    // TODO:
-    // readonly (RClass, MRubyMethod)[] methodCacheEntries = new (RClass, MRubyMethod)[MethodCacheSize];
+    readonly MethodCacheEntry[] methodCache = new MethodCacheEntry[MethodCacheSize];
 
     MRubyState()
     {
