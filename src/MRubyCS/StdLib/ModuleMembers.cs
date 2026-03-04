@@ -146,11 +146,11 @@ static class ModuleMembers
 
             state.EnsureInstanceVariableName(name);
 
-            state.DefineMethod(mod, methodId, (s, _) =>
+            state.DefineMethod(mod, methodId, MRubyMethod.CreateTrivialGetter((s, _) =>
             {
                 var runtimeSelf = s.GetSelf();
                 return state.GetInstanceVariable(runtimeSelf.Object!, name);
-            });
+            }, name));
         }
         return MRubyValue.Nil;
     });

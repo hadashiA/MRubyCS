@@ -1155,6 +1155,29 @@ partial class MRubyState
                     {
                         Markers.SSend();
                         bbb = OperandBBB.Read(ref sequence, ref callInfo.ProgramCounter);
+
+                        // Trivial getter fast path — skip full dispatch for no-arg sends
+                        // that resolve to trivial getters (attr_reader or def x; @x; end)
+                        if (bbb.C == 0 && opcode is OpCode.Send or OpCode.SSend)
+                        {
+                            var selfVal = opcode == OpCode.SSend
+                                ? Unsafe.Add(ref registers, 0)
+                                : Unsafe.Add(ref registers, bbb.A);
+                            if (selfVal.Object is RObject selfObj && selfObj is not RClass)
+                            {
+                                var mid = Unsafe.Add(ref symbols, bbb.B);
+                                var cacheIdx = unchecked((uint)RuntimeHelpers.GetHashCode(selfObj.Class) ^ mid.Value) & (MethodCacheSize - 1);
+                                ref var ce = ref methodCache[cacheIdx];
+                                if (ce.Class == selfObj.Class && ce.MethodId == mid &&
+                                    ce.Method.TrivialGetterIVarSymbol.Value != 0)
+                                {
+                                    Unsafe.Add(ref registers, bbb.A) = selfObj.InstanceVariables.Get(
+                                        ce.Method.TrivialGetterIVarSymbol);
+                                    goto Next;
+                                }
+                            }
+                        }
+
                         var currentStackPointer = callInfo.StackPointer;
 
                         callInfo = ref Context.PushCallStack();
@@ -2201,7 +2224,7 @@ partial class MRubyState
                         var proc = Unsafe.Add(ref registers, bb.A + 1).As<RProc>();
                         var methodId = Unsafe.Add(ref symbols, bb.B);
 
-                        DefineMethod(target, methodId, new MRubyMethod(proc));
+                        DefineMethod(target, methodId, MRubyMethod.CreateFromProc(proc));
                         MethodAddedHook(target, methodId);
                         Unsafe.Add(ref registers, bb.A) = methodId;
                         goto Next;
