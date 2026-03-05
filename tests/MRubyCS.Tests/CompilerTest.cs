@@ -23,6 +23,12 @@ public class CompilerTest
     }
 
     [Test]
+    public void EmptySourceCode()
+    {
+        Assert.DoesNotThrow(() => compiler.LoadSourceCode(""u8));
+    }
+
+    [Test]
     public void BomValidation()
     {
         var sourceCode = "123 + 456";

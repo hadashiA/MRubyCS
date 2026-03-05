@@ -100,6 +100,14 @@ public class MRubyCompiler : IDisposable
 
     public unsafe CompilationResult Compile(ReadOnlySpan<byte> utf8Source)
     {
+        // Workaround for the crash that occurs when passing a blank to mrc
+        if (utf8Source.IsEmpty)
+        {
+            Span<byte> fallback = stackalloc byte[1];
+            fallback[0] = (byte)' ';
+            return Compile(fallback);
+        }
+
         if (BomHelper.TryDetectEncoding(utf8Source, out var encoding))
         {
             if (encoding.Equals(Encoding.UTF8))
