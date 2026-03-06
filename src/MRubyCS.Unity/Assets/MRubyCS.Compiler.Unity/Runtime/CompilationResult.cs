@@ -5,7 +5,8 @@ namespace MRubyCS.Compiler
 {
 public class CompilationResult : IDisposable
 {
-    public IReadOnlyList<DiagnosticsDescriptor> Diagnostics => diagnostics;
+    public IReadOnlyList<DiagnosticsDescriptor> Diagnostics { get; }
+
     public bool HasError => contextHandle.HasError;
 
     readonly MRubyState mrb;
@@ -13,7 +14,6 @@ public class CompilationResult : IDisposable
     readonly MrcCContextHandle contextHandle;
     readonly IntPtr bytecodeDataPtr;
     readonly int bytecodeLength;
-    readonly IReadOnlyList<DiagnosticsDescriptor> diagnostics;
     bool disposed;
 
     internal CompilationResult(
@@ -28,7 +28,7 @@ public class CompilationResult : IDisposable
         this.contextHandle = contextHandle;
         this.bytecodeDataPtr = bytecodeDataPtr;
         this.bytecodeLength = bytecodeLength;
-        diagnostics = contextHandle.GetDiagnostics();
+        Diagnostics = contextHandle.GetDiagnostics();
     }
 
     internal CompilationResult(
@@ -39,7 +39,7 @@ public class CompilationResult : IDisposable
         this.mrb = mrb;
         this.stateHandle = stateHandle;
         this.contextHandle = contextHandle;
-        diagnostics = contextHandle.GetDiagnostics();
+        Diagnostics = contextHandle.GetDiagnostics();
     }
 
     ~CompilationResult()
