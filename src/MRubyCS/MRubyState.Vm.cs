@@ -1625,58 +1625,61 @@ partial class MRubyState
                     {
                         Markers.KArg();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        // mrb_value k = mrb_symbol_value(irep->syms[b]);
-                        var key = Unsafe.Add(ref symbols, bb.B);
-                        var kargOffset = callInfo.KeywordArgumentOffset;
-                        if (kargOffset < 0)
-                        {
-                            RaiseMissingKeywordError(key);
-                        }
-                        var kdict = Unsafe.Add(ref registers, kargOffset);
-                        var value = default(MRubyValue);
-                        if (kdict.VType != MRubyVType.Hash ||
-                            !Unsafe.Add(ref registers, kargOffset).As<RHash>().TryGetValue(key, out value))
-                        {
-                            RaiseMissingKeywordError(key);
-                        }
-
-                        Unsafe.Add(ref registers, bb.A) = value;
-                        kdict.As<RHash>().TryDelete(key, out _);
+                        KArg(this, ref registers, ref symbols, ref callInfo, bb);
                         goto Next;
 
                         [MethodImpl(MethodImplOptions.NoInlining)]
-                        void RaiseMissingKeywordError(MRubyValue keyValue)
+                        static void KArg(MRubyState state, ref MRubyValue registers, ref Symbol symbols, ref MRubyCallInfo callInfo, OperandBB bb)
                         {
-                            Raise(Names.ArgumentError, $"missing keyword: {Stringify(keyValue)}");
+                            var key = Unsafe.Add(ref symbols, bb.B);
+                            var kargOffset = callInfo.KeywordArgumentOffset;
+                            if (kargOffset < 0)
+                            {
+                                state.Raise(Names.ArgumentError, $"missing keyword: {state.Stringify(key)}");
+                            }
+                            var kdict = Unsafe.Add(ref registers, kargOffset);
+                            var value = default(MRubyValue);
+                            if (kdict.VType != MRubyVType.Hash ||
+                                !Unsafe.Add(ref registers, kargOffset).As<RHash>().TryGetValue(key, out value))
+                            {
+                                state.Raise(Names.ArgumentError, $"missing keyword: {state.Stringify(key)}");
+                            }
+                            Unsafe.Add(ref registers, bb.A) = value;
+                            kdict.As<RHash>().TryDelete(key, out _);
                         }
                     }
                     case OpCode.KeyP:
                     {
                         Markers.KeyP();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        var key = Unsafe.Add(ref symbols, bb.B);
-                        var kdict = Unsafe.Add(ref registers, callInfo.KeywordArgumentOffset);
-                        Unsafe.Add(ref registers, bb.A) = kdict.As<RHash>().TryGetValue(key, out _);
+                        KeyP(ref registers, ref symbols, ref callInfo, bb);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void KeyP(ref MRubyValue registers, ref Symbol symbols, ref MRubyCallInfo callInfo, OperandBB bb)
+                        {
+                            var key = Unsafe.Add(ref symbols, bb.B);
+                            var kdict = Unsafe.Add(ref registers, callInfo.KeywordArgumentOffset);
+                            Unsafe.Add(ref registers, bb.A) = kdict.As<RHash>().TryGetValue(key, out _);
+                        }
                     }
                     case OpCode.KeyEnd:
                     {
                         Markers.KeyEnd();
                         callInfo.ProgramCounter++;
-                        var kargOffset = callInfo.KeywordArgumentOffset;
-                        if (kargOffset >= 0 &&
-                            Unsafe.Add(ref registers, kargOffset).Object is RHash { Length: > 0 } hash)
-                        {
-                            var key1 = hash.Keys[0];
-                            RaiseUnknownKeyword(key1);
+                        KeyEnd(this, ref registers, ref callInfo);
+                        goto Next;
 
-                            [MethodImpl(MethodImplOptions.NoInlining)]
-                            void RaiseUnknownKeyword(MRubyValue keyValue)
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void KeyEnd(MRubyState state, ref MRubyValue registers, ref MRubyCallInfo callInfo)
+                        {
+                            var kargOffset = callInfo.KeywordArgumentOffset;
+                            if (kargOffset >= 0 &&
+                                Unsafe.Add(ref registers, kargOffset).Object is RHash { Length: > 0 } hash)
                             {
-                                Raise(Names.ArgumentError, $"unknown keyword: {Stringify(keyValue)}");
+                                state.Raise(Names.ArgumentError, $"unknown keyword: {state.Stringify(hash.Keys[0])}");
                             }
                         }
-                        goto Next;
                     }
                     case OpCode.ReturnBlk:
                     {
@@ -1960,8 +1963,7 @@ partial class MRubyState
                     {
                         Markers.String();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        var str = irep.PoolValues[bb.B].As<RString>();
-                        Unsafe.Add(ref registers, bb.A) = str.Dup();
+                        Unsafe.Add(ref registers, bb.A) = irep.PoolValues[bb.B].As<RString>().Dup();
                         goto Next;
                     }
                     case OpCode.StrCat:
@@ -1975,31 +1977,41 @@ partial class MRubyState
                         Markers.Hash();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
                         registerA = ref Unsafe.Add(ref registers, bb.A);
-                        var hash = NewHash(bb.B);
-                        var lastIndex = bb.B * 2;
-                        for (var i = 0; i < lastIndex; i += 2)
-                        {
-                            hash.Add(Unsafe.Add(ref registerA, i), Unsafe.Add(ref registerA, i + 1));
-                        }
-
-                        registerA = hash;
+                        Hash(this, ref registerA, bb.B);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Hash(MRubyState state, ref MRubyValue registerA, int count)
+                        {
+                            var hash = state.NewHash(count);
+                            var lastIndex = count * 2;
+                            for (var i = 0; i < lastIndex; i += 2)
+                            {
+                                hash.Add(Unsafe.Add(ref registerA, i), Unsafe.Add(ref registerA, i + 1));
+                            }
+                            registerA = hash;
+                        }
                     }
                     case OpCode.HashAdd:
                     {
                         Markers.HashAdd();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
                         registerA = ref Unsafe.Add(ref registers, bb.A);
-                        var hashValue = registerA;
-                        var lastIndex = bb.B * 2 + 1;
-
-                        EnsureValueType(hashValue, MRubyVType.Hash);
-                        var hash = hashValue.As<RHash>();
-                        for (var i = 1; i < lastIndex; i += 2)
-                        {
-                            hash.Add(Unsafe.Add(ref registerA, i), Unsafe.Add(ref registerA, i + 1));
-                        }
+                        HashAdd(this, ref registerA, bb.B);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void HashAdd(MRubyState state, ref MRubyValue registerA, int count)
+                        {
+                            var hashValue = registerA;
+                            var lastIndex = count * 2 + 1;
+                            state.EnsureValueType(hashValue, MRubyVType.Hash);
+                            var hash = hashValue.As<RHash>();
+                            for (var i = 1; i < lastIndex; i += 2)
+                            {
+                                hash.Add(Unsafe.Add(ref registerA, i), Unsafe.Add(ref registerA, i + 1));
+                            }
+                        }
                     }
                     case OpCode.HashCat:
                         Markers.HashCat();
@@ -2034,16 +2046,22 @@ partial class MRubyState
                     }
                     case OpCode.RangeInc:
                     case OpCode.RangeExc:
+                    {
                         Markers.RangeInc();
                         a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
                         registerA = ref Unsafe.Add(ref registers, a);
-                    {
-                        var begin = registerA;
-                        var end = Unsafe.Add(ref registerA, 1);
-                        var range = new RRange(begin, end, opcode == OpCode.RangeExc, RangeClass);
-                        range.MarkAsFrozen();
-                        Unsafe.Add(ref registers, a) = range;
+                        RangeNew(this, ref registerA, a, ref registers, opcode);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void RangeNew(MRubyState state, ref MRubyValue registerA, int a, ref MRubyValue registers, OpCode opcode)
+                        {
+                            var begin = registerA;
+                            var end = Unsafe.Add(ref registerA, 1);
+                            var range = new RRange(begin, end, opcode == OpCode.RangeExc, state.RangeClass);
+                            range.MarkAsFrozen();
+                            Unsafe.Add(ref registers, a) = range;
+                        }
                     }
                     case OpCode.OClass:
                         Markers.OClass();
@@ -2220,34 +2238,51 @@ partial class MRubyState
                     {
                         Markers.Def();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        var target = Unsafe.Add(ref registers, bb.A).As<RClass>();
-                        var proc = Unsafe.Add(ref registers, bb.A + 1).As<RProc>();
-                        var methodId = Unsafe.Add(ref symbols, bb.B);
-
-                        DefineMethod(target, methodId, MRubyMethod.CreateFromProc(proc));
-                        MethodAddedHook(target, methodId);
-                        Unsafe.Add(ref registers, bb.A) = methodId;
+                        Def(this, ref registers, ref symbols, bb);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Def(MRubyState state, ref MRubyValue registers, ref Symbol symbols, OperandBB bb)
+                        {
+                            var target = Unsafe.Add(ref registers, bb.A).As<RClass>();
+                            var proc = Unsafe.Add(ref registers, bb.A + 1).As<RProc>();
+                            var methodId = Unsafe.Add(ref symbols, bb.B);
+                            state.DefineMethod(target, methodId, MRubyMethod.CreateFromProc(proc));
+                            state.MethodAddedHook(target, methodId);
+                            Unsafe.Add(ref registers, bb.A) = methodId;
+                        }
                     }
                     case OpCode.Alias:
                     {
                         Markers.Alias();
                         bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
-                        var c = callInfo.Scope.TargetClass;
-                        var newMethodId = Unsafe.Add(ref symbols, bb.A);
-                        var oldMethodId = Unsafe.Add(ref symbols, bb.B);
-                        AliasMethod(c, newMethodId, oldMethodId);
-                        MethodAddedHook(c, newMethodId);
+                        Alias(this, ref symbols, ref callInfo, bb);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Alias(MRubyState state, ref Symbol symbols, ref MRubyCallInfo callInfo, OperandBB bb)
+                        {
+                            var c = callInfo.Scope.TargetClass;
+                            var newMethodId = Unsafe.Add(ref symbols, bb.A);
+                            var oldMethodId = Unsafe.Add(ref symbols, bb.B);
+                            state.AliasMethod(c, newMethodId, oldMethodId);
+                            state.MethodAddedHook(c, newMethodId);
+                        }
                     }
                     case OpCode.Undef:
                     {
                         Markers.Undef();
                         a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        var c = callInfo.Scope.TargetClass;
-                        var methodId = Unsafe.Add(ref symbols, a);
-                        UndefMethod(c, methodId);
+                        Undef(this, ref symbols, ref callInfo, a);
                         goto Next;
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static void Undef(MRubyState state, ref Symbol symbols, ref MRubyCallInfo callInfo, int a)
+                        {
+                            var c = callInfo.Scope.TargetClass;
+                            var methodId = Unsafe.Add(ref symbols, a);
+                            state.UndefMethod(c, methodId);
+                        }
                     }
                     case OpCode.SClass:
                     {
@@ -2268,8 +2303,7 @@ partial class MRubyState
                     {
                         Markers.Err();
                         a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        var message = irep.PoolValues[a];
-                        Raise(Names.LocalJumpError, message.As<RString>());
+                        Raise(Names.LocalJumpError, irep.PoolValues[a].As<RString>());
                         goto Next;
                     }
                     case OpCode.Stop:
