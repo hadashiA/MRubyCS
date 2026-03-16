@@ -279,7 +279,7 @@ partial class MRubyState
                         break;
                     case OpCode.LoadI16:
                         var bs = OperandBS.Read(ref sequence, ref pc);
-                        Format(writer, $"R{bs.A}\t{bs.B}\t");
+                        Format(writer, $"R{bs.A}\t{unchecked((short)bs.B)}\t");
                         WriteLocalVariableA(bs.A);
                         break;
                     case OpCode.LoadI32:

@@ -409,7 +409,7 @@ partial class MRubyState
                     case OpCode.LoadI16:
                         Markers.LoadI16();
                         var bs = OperandBS.Read(ref sequence, ref callInfo.ProgramCounter);
-                        Unsafe.Add(ref registers, bs.A) = bs.B;
+                        Unsafe.Add(ref registers, bs.A) = unchecked((short)bs.B);
                         goto Next;
                     case OpCode.LoadI32:
                         Markers.LoadI32();
