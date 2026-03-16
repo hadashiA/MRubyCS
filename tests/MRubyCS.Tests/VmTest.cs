@@ -290,6 +290,13 @@ public class VmTest
     }
 
     [Test]
+    public void LoadI16MultiByes()
+    {
+        var result = Exec("-256"u8);
+        Assert.That(result, Is.EqualTo(new MRubyValue(-256)));
+    }
+
+    [Test]
     public void GetInstances()
     {
         Exec("""
