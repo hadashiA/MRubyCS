@@ -124,33 +124,44 @@ var mrb = MRubyState.Create(state =>
 > [!TIP]
 > Option A is recommended for production. Option B is convenient for development and prototyping.
 
-### Option A: Using CLI tool (pre-compile)
+### Option A: Pre-compile bytecode
 
-**1. Install**
+Pre-compiling Ruby source to `.mrb` bytecode keeps the native compiler out of your production deployment. You can use either the CLI tool or the C# API.
+
+#### A-1. CLI tool
 
 ```bash
-dotnet add package MRubyCS
 dotnet tool install -g MRubyCS.Compiler.Cli
-```
-
-**2. Write Ruby code** (`fibonacci.rb`)
-
-```ruby
-def fibonacci(n)
-  return n if n <= 1
-  fibonacci(n - 1) + fibonacci(n - 2)
-end
-
-fibonacci 10
-```
-
-**3. Compile to bytecode**
-
-```bash
 mruby-compiler fibonacci.rb -o fibonacci.mrb
 ```
 
-**4. Execute in C#**
+> [!TIP]
+> For local tool installation, use `dotnet tool install MRubyCS.Compiler.Cli` and run with `dotnet mruby-compiler`.
+
+#### A-2. C# API
+
+```cs
+using MRubyCS;
+using MRubyCS.Compiler;
+
+var mrb = MRubyState.Create();
+var compiler = MRubyCompiler.Create(mrb);
+
+var source = """
+    def fibonacci(n)
+      return n if n <= 1
+      fibonacci(n - 1) + fibonacci(n - 2)
+    end
+
+    fibonacci 10
+    """u8;
+
+// Compile and save as .mrb file
+using var compilation = compiler.Compile(source);
+File.WriteAllBytes("fibonacci.mrb", compilation.AsBytecode());
+```
+
+#### Execute pre-compiled bytecode
 
 ```cs
 using MRubyCS;
@@ -161,9 +172,6 @@ var result = mrb.LoadBytecode(bytecode);
 
 result.IntegerValue //=> 55
 ```
-
-> [!TIP]
-> For local tool installation, use `dotnet tool install MRubyCS.Compiler.Cli` and run with `dotnet mruby-compiler`.
 
 ### Option B: Using Compiler library (runtime compile)
 
