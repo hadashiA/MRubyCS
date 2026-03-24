@@ -43,9 +43,16 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
     - [MRubyState Lifecycle](#mrubystate-lifecycle)
     - [MRubyValue](#mrubyvalue)
         - [Symbol/String](#symbolstring)
+        - [Array/Hash](#arrayhash)
         - [Embedded custom C# data into MRubyValue](#embedded-custom-c-data-into-mrubyvalue)
     - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
+        - [Error handling & validation in C# methods](#error-handling--validation-in-c-methods)
+        - [Constants](#constants)
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
+        - [Send with block / keyword arguments](#send-with-block--keyword-arguments)
+        - [Type conversion & introspection](#type-conversion--introspection)
+        - [Instance variables / class variables](#instance-variables--class-variables)
+        - [Clone / Dup / Freeze](#clone--dup--freeze)
 - [Compiling Ruby source code](#compiling-ruby-source-code)
     - [MRubyCS.Compiler.Cli (dotnet tool)](#mrubycscompilercli-dotnet-tool)
     - [MRubyCS.Compiler (library)](#mrubycscompiler-library)
@@ -99,36 +106,62 @@ var mrb = MRubyState.Create(state =>
 - **No `Dispose` needed** — `MRubyState` is fully managed by .NET GC. No native resources to release.
 - **Not thread-safe** — each `MRubyState` instance must be used from a single thread. For multi-threaded scenarios, create a separate instance per thread.
 
+`MRubyState` exposes all built-in Ruby classes as properties, which are used for class definitions, type checks, and method definitions:
+
+| Property | Ruby class | Property | Ruby class |
+|:---------|:-----------|:---------|:-----------|
+| `BasicObjectClass` | `BasicObject` | `IntegerClass` | `Integer` |
+| `ObjectClass` | `Object` | `FloatClass` | `Float` |
+| `ClassClass` | `Class` | `TrueClass` | `TrueClass` |
+| `ModuleClass` | `Module` | `FalseClass` | `FalseClass` |
+| `KernelModule` | `Kernel` | `NilClass` | `NilClass` |
+| `StringClass` | `String` | `SymbolClass` | `Symbol` |
+| `ArrayClass` | `Array` | `ProcClass` | `Proc` |
+| `HashClass` | `Hash` | `FiberClass` | `Fiber` |
+| `RangeClass` | `Range` | `ExceptionClass` | `Exception` |
+| | | `StandardErrorClass` | `StandardError` |
+
 > [!TIP]
 > Option A is recommended for production. Option B is convenient for development and prototyping.
 
-### Option A: Using CLI tool (pre-compile)
+### Option A: Pre-compile bytecode
 
-**1. Install**
+Pre-compiling Ruby source to `.mrb` bytecode keeps the native compiler out of your production deployment. You can use either the CLI tool or the C# API.
+
+#### A-1. CLI tool
 
 ```bash
-dotnet add package MRubyCS
 dotnet tool install -g MRubyCS.Compiler.Cli
-```
-
-**2. Write Ruby code** (`fibonacci.rb`)
-
-```ruby
-def fibonacci(n)
-  return n if n <= 1
-  fibonacci(n - 1) + fibonacci(n - 2)
-end
-
-fibonacci 10
-```
-
-**3. Compile to bytecode**
-
-```bash
 mruby-compiler fibonacci.rb -o fibonacci.mrb
 ```
 
-**4. Execute in C#**
+> [!TIP]
+> For local tool installation, use `dotnet tool install MRubyCS.Compiler.Cli` and run with `dotnet mruby-compiler`.
+
+#### A-2. C# API
+
+```cs
+using MRubyCS;
+using MRubyCS.Compiler;
+
+var mrb = MRubyState.Create();
+var compiler = MRubyCompiler.Create(mrb);
+
+var source = """
+    def fibonacci(n)
+      return n if n <= 1
+      fibonacci(n - 1) + fibonacci(n - 2)
+    end
+
+    fibonacci 10
+    """u8;
+
+// Compile and save as .mrb file
+using var compilation = compiler.Compile(source);
+File.WriteAllBytes("fibonacci.mrb", compilation.AsBytecode());
+```
+
+#### Execute pre-compiled bytecode
 
 ```cs
 using MRubyCS;
@@ -139,9 +172,6 @@ var result = mrb.LoadBytecode(bytecode);
 
 result.IntegerValue //=> 55
 ```
-
-> [!TIP]
-> For local tool installation, use `dotnet tool install MRubyCS.Compiler.Cli` and run with `dotnet mruby-compiler`.
 
 ### Option B: Using Compiler library (runtime compile)
 
@@ -224,8 +254,22 @@ var intValue = new MRubyValue(100); // create int value
 var floatValue = new MRubyValue(1.234f); // create float value
 var objValue = new MRubyValue(str); // create allocated ruby object value
 
-// Or, we can cast implicitly and target-typed new
-MRubyValue intValue = new(100);
+// Implicit conversions — no `new MRubyValue(...)` needed
+MRubyValue a = 42;         // int
+MRubyValue b = 3.14;       // double
+MRubyValue c = true;       // bool
+MRubyValue d = sym;         // Symbol
+MRubyValue e = rstring;     // RObject (RString, RArray, etc.)
+
+// Static constants
+MRubyValue.Nil   // Ruby nil
+MRubyValue.True  // Ruby true
+MRubyValue.False // Ruby false
+
+// Boolean / truthiness
+value.BoolValue //=> C# bool
+value.Truthy    //=> true unless nil or false (Ruby semantics)
+value.Falsy     //=> true if nil or false
 ```
 
 #### Symbol/String
@@ -271,9 +315,93 @@ var sym2 = mrb.AsSymbol(mrb.NewString($"hoge"));
 > [!NOTE]
 > Both `Intern(“str”)` and `Intern(“str”u8)` are valid, but the u8 literal is faster. We recommend using the u8 literal whenever possible.
 
+`RString` also provides methods for in-place manipulation and direct UTF-8 byte access:
+
+```cs
+var str = mrb.NewString(“hello”u8);
+
+// UTF-8 byte access
+ReadOnlySpan<byte> bytes = str.AsSpan(); // raw UTF-8 bytes
+
+// In-place modification
+str.Concat(“ world”u8);  // append bytes
+str.Upcase();             // “HELLO WORLD”
+str.Downcase();           // “hello world”
+str.Capitalize();         // “Hello world”
+str.Chomp();              // remove trailing newline
+str.Chop();               // remove last character
+```
+
+#### Array/Hash
+
+`RArray` and `RHash` are the internal representations of Ruby's `Array` and `Hash`.
+
+```cs
+// Create array
+var array = mrb.NewArray(3); // with capacity
+var array2 = mrb.NewArray(new MRubyValue(1), new MRubyValue(2), new MRubyValue(3));
+
+// Access elements (supports negative indices)
+var first = array2[0];   //=> 1
+var last  = array2[-1];  //=> 3
+
+// Add elements
+array.Push(new MRubyValue(100));
+array.Push(new MRubyValue(200));
+
+// Get length
+array.Length //=> 2
+
+// Iterate over elements
+foreach (var item in array)
+{
+    Console.WriteLine(item.IntegerValue);
+}
+
+// Pop / Shift
+if (array.TryPop(out var popped)) { /* ... */ }
+var shifted = array.Shift(); // remove and return first element
+
+// Extract RArray from MRubyValue
+var value = mrb.LoadBytecode(bytecode); // returns MRubyValue
+var arr = value.As<RArray>();
+```
+
+```cs
+// Create hash
+var hash = mrb.NewHash();
+
+// Set values (key can be any MRubyValue — Symbol, String, Integer, etc.)
+hash[new MRubyValue(mrb.Intern("name"u8))] = new MRubyValue(mrb.NewString("Alice"u8));
+hash[new MRubyValue(mrb.Intern("age"u8))]  = new MRubyValue(30);
+
+// Get values
+var name = hash[new MRubyValue(mrb.Intern("name"u8))];
+
+// Check existence
+hash.ContainsKey(new MRubyValue(mrb.Intern("name"u8))); //=> true
+hash.TryGetValue(new MRubyValue(mrb.Intern("age"u8)), out var age); //=> true, age = 30
+
+// Get length
+hash.Length //=> 2
+
+// Iterate over key-value pairs
+foreach (var kv in hash)
+{
+    // kv.Key, kv.Value are MRubyValue
+}
+
+// Delete
+hash.TryDelete(new MRubyValue(mrb.Intern("age"u8)), out var deleted);
+
+// Extract RHash from MRubyValue
+var hashValue = mrb.LoadBytecode(bytecode);
+var h = hashValue.As<RHash>();
+```
+
 #### Embedded custom C# data into MRubyValue
 
-You can stuff any C# object into an MRubyValue.
+You can stuff any C# object into an `MRubyValue` via `RData`. The `RData.Data` property accepts any `object` and can be freely get/set from C#.
 
 This is useful when calling C# functionality from Ruby methods defined in C#.
 
@@ -399,6 +527,72 @@ a.additional_method2 #=> 123
 A.classmethod1 #=> "hoge fuga"
 ```
 
+#### Error handling & validation in C# methods
+
+Inside C#-defined methods, you can raise Ruby exceptions and validate arguments:
+
+```cs
+mrb.DefineMethod(myClass, mrb.Intern("safe_divide"u8), (s, self) =>
+{
+    s.EnsureArgumentCount(2, 2); // require exactly 2 arguments
+
+    var a = s.GetArgumentAsIntegerAt(0);
+    var b = s.GetArgumentAsIntegerAt(1);
+
+    if (b == 0)
+    {
+        s.Raise(s.StandardErrorClass, "division by zero"u8);
+    }
+    return new MRubyValue(a / b);
+});
+```
+
+```cs
+// Available validation helpers
+mrb.EnsureArgumentCount(min, max);               // check argument count
+mrb.EnsureValueType(value, MRubyVType.Integer);  // check value type
+mrb.EnsureBlockGiven(block);                     // check block is provided
+mrb.EnsureNotFrozen(value);                      // check object is not frozen
+
+// Raise Ruby exceptions
+mrb.Raise(mrb.StandardErrorClass, "message"u8);
+mrb.Raise(mrb.ExceptionClass, mrb.NewString($"detail: {info}"));
+```
+
+To catch Ruby exceptions raised during execution on the C# side:
+
+```cs
+try
+{
+    mrb.Send(obj, mrb.Intern("may_raise"u8));
+}
+catch (MRubyRaiseException ex)
+{
+    Console.WriteLine($"Ruby exception: {ex.Message}");
+}
+```
+
+#### Constants
+
+```cs
+// Define a constant under Object (global)
+mrb.DefineConst(mrb.Intern("MAX_SIZE"u8), new MRubyValue(1024));
+
+// Define a constant under a specific class/module
+mrb.DefineConst(myClass, mrb.Intern("VERSION"u8), new MRubyValue(mrb.NewString("1.0"u8)));
+
+// Check if a constant exists
+mrb.ConstDefinedAt(mrb.Intern("MAX_SIZE"u8));                         //=> true
+mrb.ConstDefinedAt(mrb.Intern("VERSION"u8), myClass);                 //=> true
+mrb.ConstDefinedAt(mrb.Intern("VERSION"u8), myClass, recursive: true); // search ancestors
+
+// Safe lookup
+if (mrb.TryGetConst(mrb.Intern("MAX_SIZE"u8), out var constValue))
+{
+    // use constValue...
+}
+```
+
 ### Call ruby method from C# side
 
 ```ruby
@@ -430,6 +624,9 @@ var classA = mrb.GetConst(mrb.Intern("A"), mrb.ObjectClass);
 mrb.Send(classA, mrb.Intern("foo="), new MRubyValue(123));
 mrb.Send(classA, mrb.Intern("foo")); //=> 123
 
+// call global-scope method — use TopSelf as the receiver
+mrb.Send(mrb.TopSelf, mrb.Intern("puts"u8), mrb.NewString("hello"u8));
+
 // get instance variable from top
 var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"));
 mrb.Send(instanceB, mrb.Intern("bar="), 456);
@@ -439,6 +636,88 @@ mrb.Send(instanceB, mrb.Intern("bar")); //=> 456
 var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"), mrb.NewString($"M::C"));
 ```
 
+#### Send with block / keyword arguments
+
+```cs
+// Send with a block (RProc)
+var proc = mrb.CreateProc(irep);
+mrb.Send(obj, mrb.Intern("each"u8), proc);
+
+// Send with keyword arguments
+mrb.Send(
+    obj,
+    mrb.Intern("configure"u8),
+    args: [],
+    kargs: [new(mrb.Intern("verbose"u8), MRubyValue.True)],
+    block: null);
+```
+
+> [!WARNING]
+> **Unity**: The `Send` overload with `params ReadOnlySpan<MRubyValue>` is not supported because Unity's C# compiler does not support `params ReadOnlySpan<T>`. You must explicitly allocate an array instead:
+> ```cs
+> // This does NOT compile in Unity:
+> // mrb.Send(klass, sym, arg0, arg1);
+>
+> // Use an explicit array:
+> mrb.Send(klass, sym, new MRubyValue[] { arg0, arg1 });
+> ```
+> The single-argument overload `Send(self, methodId, arg0)` works without this workaround.
+
+#### Type conversion & introspection
+
+```cs
+// Convert values (calls Ruby's to_i / to_f / to_sym internally)
+long   i = mrb.AsInteger(value);
+double f = mrb.AsFloat(value);
+Symbol s = mrb.AsSymbol(value);
+
+// Convert to string (Ruby's to_s / inspect)
+RString str     = mrb.Stringify(value);  // to_s
+RString inspect = mrb.Inspect(value);    // inspect
+
+// Class introspection
+RClass  klass = mrb.ClassOf(value);
+RString name  = mrb.ClassNameOf(value);
+
+// Type checking (Ruby's instance_of? / kind_of?)
+mrb.InstanceOf(value, mrb.StringClass);  //=> true if exact class
+mrb.KindOf(value, mrb.ObjectClass);      //=> true if class or ancestor
+
+// Equality and comparison (calls Ruby's == / <=>)
+mrb.ValueEquals(a, b);   //=> true/false
+mrb.ValueCompare(a, b);  //=> -1, 0, 1
+
+// Check if method exists (Ruby's respond_to?)
+mrb.RespondTo(value, mrb.Intern("to_s"u8)); //=> true
+```
+
+#### Instance variables / class variables
+
+```cs
+// Instance variables
+mrb.SetInstanceVariable(obj, mrb.Intern("@name"u8), mrb.NewString("Alice"u8));
+var name = mrb.GetInstanceVariable(obj, mrb.Intern("@name"u8));
+mrb.RemoveInstanceVariable(obj, mrb.Intern("@name"u8));
+
+// Class variables
+mrb.SetClassVariable(myClass, mrb.Intern("@@count"u8), new MRubyValue(0));
+var count = mrb.GetClassVariable(myClass, mrb.Intern("@@count"u8));
+```
+
+#### Clone / Dup / Freeze
+
+```cs
+// Clone (deep copy with singleton class)
+var cloned = mrb.CloneObject(value);
+
+// Dup (shallow copy)
+var duped = mrb.DupObject(value);
+
+// Freeze an object (RObject level)
+var str = mrb.NewString("immutable"u8);
+str.MarkAsFrozen();
+str.IsFrozen //=> true
+```
 
 ## Compiling Ruby source code
 
