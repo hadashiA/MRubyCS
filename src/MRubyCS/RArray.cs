@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace MRubyCS;
 
-public sealed class RArray : RObject
+public sealed class RArray : RObject, IEnumerable<MRubyValue>
 {
     public static int MaxLength => 0X7FFFFFC7;
 
@@ -264,4 +266,36 @@ public sealed class RArray : RObject
             Length = capacity;
         }
     }
+
+    public struct Enumerator(RArray source) : IEnumerator<MRubyValue>
+    {
+        public MRubyValue Current { get; private set; }
+        object IEnumerator.Current => Current;
+
+        int index = -1;
+
+        public bool MoveNext()
+        {
+            if (index + 1 < source.Length)
+            {
+                index++;
+                Current = source[index];
+                return true;
+            }
+            return false;
+        }
+
+        public void Reset()
+        {
+            index = -1;
+            Current = default;
+        }
+
+        public void Dispose() { }
+    }
+
+    public Enumerator GetEnumerator() => new(this);
+
+    IEnumerator<MRubyValue> IEnumerable<MRubyValue>.GetEnumerator() => GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
