@@ -730,18 +730,16 @@ graph TB
     subgraph host["host machine"]
         A[source code<br/>.rb files]
         C[byte-code<br/>.mrb files]
-
         A -->|compile| C
     end
-
     C -->|deploy/install| E
-
     subgraph application["application"]
-        D[mruby VM]
+        D{{mruby VM}}
         E[byte-code<br>.mrb files]
-
         E -->|execute bytecode| D
     end
+
+    style D fill:#ff4444,stroke:#cc0000,color:#ffffff,stroke-width:2px
 ```
 
 By the way, MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
