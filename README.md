@@ -7,7 +7,30 @@ Easily embed Ruby into Unity or .NET—empowering users to script game logic whi
 > [!NOTE]
 > [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) provides a high-level framework for integrating MRubyCS with Unity (and .NET, including command routing and script lifecycle management.
 
-## Why MRubyCS?
+## Why mruby?
+
+Ruby's elegant, expressive syntax makes it ideal for building DSLs (Domain-Specific Languages). Game designers and scenario writers can describe complex game logic — event triggers, dialogue trees, AI behavior — in clean, readable scripts without wrestling with C-like syntax.
+
+[mruby](https://github.com/mruby/mruby) is a lightweight, embeddable implementation of Ruby designed specifically for this purpose. It compiles to compact bytecode, has a small memory footprint, and provides a clean C API for host language integration — making it a perfect scripting layer for game engines and applications.
+
+```ruby
+# Example: game event DSL
+quest "The Lost Sword" do
+  trigger :enter, area: :ancient_ruins
+  condition { player.level >= 10 }
+
+  on_start do
+    npc(:elder).say "A legendary blade rests within these ruins..."
+    give_item :rusty_map
+  end
+
+  on_complete do
+    reward gold: 500, exp: 1200
+  end
+end
+```
+
+## Features
 
 - **Zero native dependencies** — runs anywhere Unity/.NET runs. No per-platform native builds to maintain.
 - **High performance** — leverages .NET JIT, GC, and modern C# optimizations with minimal overhead.
@@ -42,11 +65,10 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 - [Basic Usage](#basic-usage)
     - [Compiling and Executing Ruby Code](#compiling-and-executing-ruby-code)
         - [Option A: Pre-compile bytecode](#option-a-pre-compile-bytecode)
-            - [Pre-compile with CLI tool](#pre-compile-with-cli-tool)
-            - [Pre-compile with C# API](#pre-compile-with-c-api)
-            - [Execute pre-compiled bytecode](#execute-pre-compiled-bytecode)
         - [Option B: Using Compiler library (runtime compile)](#option-b-using-compiler-library-runtime-compile)
         - [Irep](#irep)
+        - [MRubyCS.Compiler.Cli (dotnet tool)](#mrubycscompilercli-dotnet-tool)
+        - [MRubyCS.Compiler (library)](#mrubycscompiler-library)
     - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
         - [Error handling & validation in C# methods](#error-handling--validation-in-c-methods)
         - [Constants](#constants)
@@ -59,9 +81,6 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
         - [Symbol/String](#symbolstring)
         - [Array/Hash](#arrayhash)
         - [Embedded custom C# data into MRubyValue](#embedded-custom-c-data-into-mrubyvalue)
-- [Compiling Ruby source code](#compiling-ruby-source-code)
-    - [MRubyCS.Compiler.Cli (dotnet tool)](#mrubycscompilercli-dotnet-tool)
-    - [MRubyCS.Compiler (library)](#mrubycscompiler-library)
 - [Fiber (Coroutine)](#fiber-coroutine)
 - [MRubyCS.Serializer](#mrubycsserializer)
 
@@ -86,11 +105,34 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
     - Utf8StringInterpolation
     - MRubyCS
     - (Optional) MRubyCS.Serializer
-3. (Optional) To install utilities for generating mrb bytecode, refer to the [Compiling Ruby source code](#compiling-ruby-source-code) section.
+3. (Optional) To install utilities for generating mrb bytecode, refer to the [Compiling and Executing Ruby Code](#compiling-and-executing-ruby-code) section.
 
 ## Basic Usage
 
 ### Compiling and Executing Ruby Code
+
+mruby has the following architecture, and allows the compiler and runtime to be separated.
+
+By distributing only precompiled bytecode, you can optimize the installation on the application.
+
+```mermaid
+graph TB
+    subgraph host["host machine"]
+        A[source code<br/>.rb files]
+        C[byte-code<br/>.mrb files]
+        A -->|compile| C
+    end
+    C -->|deploy/install| E
+    subgraph application["application"]
+        D{{mruby VM}}
+        E[byte-code<br>.mrb files]
+        E -->|execute bytecode| D
+    end
+
+    style D fill:#ff4444,stroke:#cc0000,color:#ffffff,stroke-width:2px
+```
+
+MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
 
 > [!TIP]
 > Option A is recommended for production. Option B is convenient for development and prototyping.
@@ -171,7 +213,7 @@ result.IntegerValue //=> 55
 ```
 
 > [!NOTE]
-> `MRubyCS.Compiler` includes native binaries. See [Compiling Ruby source code](#compiling-ruby-source-code) for supported platforms.
+> `MRubyCS.Compiler` includes native binaries. See [MRubyCS.Compiler (library)](#mrubycscompiler-library) for supported platforms.
 
 #### Irep
 
@@ -187,6 +229,135 @@ mrb.Execute(irep);
 > [!NOTE]
 > - **No `Dispose` needed** — `MRubyState` is fully managed by .NET GC. No native resources to release.
 > - **Not thread-safe** — each `MRubyState` instance must be used from a single thread. For multi-threaded scenarios, create a separate instance per thread.
+
+#### MRubyCS.Compiler.Cli (dotnet tool)
+
+The easiest way to compile Ruby source files is using the `mruby-compiler` dotnet tool.
+
+```bash
+# Install globally
+$ dotnet tool install -g MRubyCS.Compiler.Cli
+$ mruby-compiler input.rb -o output.mrb
+
+# Or, install locally
+$ dotnet tool install MRubyCS.Compiler.Cli
+$ dotnet mruby-compiler input.rb -o output.mrb
+```
+
+```bash
+# Dump bytecode in human-readable format
+$ mruby-compiler input.rb --dump
+
+# Generate C# code with embedded bytecode
+$ mruby-compiler input.rb -o Bytecode.cs --format csharp --csharp-namespace MyApp
+```
+
+##### Options
+
+| Option | Description |
+|:-------|:------------|
+| `-o`, `--output` | Output file path (default: same directory as input with `.mrb`/`.cs` extension). Use `-` for stdout. |
+| `--dump` | Dump bytecode in human-readable format (outputs to stdout) |
+| `--format` | Output format: `binary` (default) or `csharp` |
+| `--csharp-namespace` | C# namespace for generated code (used with `--format csharp`) |
+| `--csharp-class-name` | C# class name for generated code (used with `--format csharp`) |
+
+#### mrbc (original mruby compiler)
+
+Alternatively, you can use the original [mruby](https://github.com/mruby/mruby) project's compiler.
+
+```bash
+$ git clone git@github.com:mruby/mruby.git
+$ cd mruby
+$ rake
+$ ./build/host/bin/mrbc -o output.mrb input.rb
+```
+
+#### MRubyCS.Compiler (library)
+
+To simplify compilation from C#, we provide the MRubyCS.Compiler package, which is a thin wrapper of the C# API for the native compiler.
+
+> [!NOTE]
+> Currently, builds for linux (x64/arm64), macOS (x64/arm64), and windows (x64) are provided.
+
+```cs
+dotnet add package MRubyCS.Compiler
+```
+
+##### Unity
+
+Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
+
+```
+https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Unity/Assets/MRubyCS.Compiler.Unity#0.50.3
+```
+
+For manual compilation, refer to the following.
+
+##### Usage
+
+```cs
+using MRubyCS.Compiler;
+
+var source = """
+def f(a)
+  1 * a
+end
+
+f 100
+"""u8;
+
+var mrb = MRubyState.Create();
+var compiler = MRubyCompiler.Create(mrb);
+
+// Compile source code (returns CompilationResult)
+using var compilation = compiler.Compile(source);
+
+// Convert to irep (internal executable representation)
+var irep = compilation.ToIrep();
+
+// irep can be used later..
+var result = mrb.Execute(irep); // => 100
+
+// Or, get bytecode (mruby calls this format "Rite")
+// bytecode can be saved to a file or any other storage
+File.WriteAllBytes("compiled.mrb", compilation.AsBytecode());
+
+// Can be used later from file
+mrb.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
+
+// or, you can evaluate source code directly
+result = compiler.LoadSourceCode("f(100)"u8);
+result = compiler.LoadSourceCode("f(100)");
+```
+
+##### Unity AssetImporter
+
+In Unity, if you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
+
+For example, importing the text file `hoge.rb` into a project will result in the following.
+
+![docs/screenshot_subasset](./docs/screenshot_subasset.png)
+
+This subasset is a TextAsset. To specify it in the inspector.
+
+Or, to extract in C#, do the following:
+
+``` cs
+var mrb = MRubyState.Create();
+
+var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
+       .First(x => x.name.EndsWith(".mrb"));
+mrb.LoadBytecode(bytecodeAsset.GetData<byte>().AsSpan());
+```
+
+To read a subasset in Addressables, you would do the following.
+
+```cs
+Addressables.LoadAssetAsync<TextAsset>("Assets/hoge.rb[hoge.mrb]")
+```
+
+Alternatively, you can generate the .mrb bytecode yourself within your project.
 
 ### Define ruby class/module/method by C#
 
@@ -694,159 +865,6 @@ mrb.DefineMethod(yourClass, mrb.Intern("foo_method"u8), (s, self) =>
 
 ```
 
-## Compiling Ruby source code
-
-mruby has the following architecture, and allows the compiler and runtime to be separated.
-
-By distributing only precompiled bytecode, you can optimize the installation on the application.
-
-```mermaid
-graph TB
-    subgraph host["host machine"]
-        A[source code<br/>.rb files]
-        C[byte-code<br/>.mrb files]
-        A -->|compile| C
-    end
-    C -->|deploy/install| E
-    subgraph application["application"]
-        D{{mruby VM}}
-        E[byte-code<br>.mrb files]
-        E -->|execute bytecode| D
-    end
-
-    style D fill:#ff4444,stroke:#cc0000,color:#ffffff,stroke-width:2px
-```
-
-By the way, MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
-
-### MRubyCS.Compiler.Cli (dotnet tool)
-
-The easiest way to compile Ruby source files is using the `mruby-compiler` dotnet tool.
-
-```bash
-# Install globally
-$ dotnet tool install -g MRubyCS.Compiler.Cli
-$ mruby-compiler input.rb -o output.mrb
-
-# Or, install locally
-$ dotnet tool install MRubyCS.Compiler.Cli
-$ dotnet mruby-compiler input.rb -o output.mrb
-```
-
-```bash
-# Dump bytecode in human-readable format
-$ mruby-compiler input.rb --dump
-
-# Generate C# code with embedded bytecode
-$ mruby-compiler input.rb -o Bytecode.cs --format csharp --csharp-namespace MyApp
-```
-
-#### Options
-
-| Option | Description |
-|:-------|:------------|
-| `-o`, `--output` | Output file path (default: same directory as input with `.mrb`/`.cs` extension). Use `-` for stdout. |
-| `--dump` | Dump bytecode in human-readable format (outputs to stdout) |
-| `--format` | Output format: `binary` (default) or `csharp` |
-| `--csharp-namespace` | C# namespace for generated code (used with `--format csharp`) |
-| `--csharp-class-name` | C# class name for generated code (used with `--format csharp`) |
-
-### mrbc (original mruby compiler)
-
-Alternatively, you can use the original [mruby](https://github.com/mruby/mruby) project's compiler.
-
-```bash
-$ git clone git@github.com:mruby/mruby.git
-$ cd mruby
-$ rake
-$ ./build/host/bin/mrbc -o output.mrb input.rb
-```
-
-### MRubyCS.Compiler (library)
-
-To simplify compilation from C#, we  provide the MRubyCS.Compiler package, which is a thin wrapper of the C# API for the native compiler.
-
-> [!NOTE]
-> Currently, builds for linux (x64/arm64), macOS (x64/arm64), and windows (x64) are provided.
-
-```cs
-dotnet add package MRubyCS.Compiler
-```
-
-#### Unity
-
-Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
-
-```
-https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Unity/Assets/MRubyCS.Compiler.Unity#0.50.3
-```
-
-For manual compilation, refer to the following.
-
-#### Usage
-
-```cs
-using MRubyCS.Compiler;
-
-var source = """
-def f(a)
-  1 * a
-end
-
-f 100
-"""u8;
-
-var mrb = MRubyState.Create();
-var compiler = MRubyCompiler.Create(mrb);
-
-// Compile source code (returns CompilationResult)
-using var compilation = compiler.Compile(source);
-
-// Convert to irep (internal executable representation)
-var irep = compilation.ToIrep();
-
-// irep can be used later..
-var result = mrb.Execute(irep); // => 100
-
-// Or, get bytecode (mruby calls this format "Rite")
-// bytecode can be saved to a file or any other storage
-File.WriteAllBytes("compiled.mrb", compilation.AsBytecode());
-
-// Can be used later from file
-mrb.LoadBytecode(File.ReadAllBytes("compiled.mrb")); //=> 100
-
-// or, you can evaluate source code directly
-result = compiler.LoadSourceCode("f(100)"u8);
-result = compiler.LoadSourceCode("f(100)");
-```
-
-#### Unity AssetImporter
-
-In Unity, if you install this extension, importing a .rb text file will generate .mrb bytecode as a subasset.
-
-For example, importing the text file `hoge.rb` into a project will result in the following.
-
-![docs/screenshot_subasset](./docs/screenshot_subasset.png)
-
-This subasset is a TextAsset. To specify it in the inspector.
-
-Or, to extract in C#, do the following:
-
-``` cs
-var mrb = MRubyState.Create();
-
-var bytecodeAsset = (TextAsset)AssetDatabase.LoadAllAssetsAtPath("Assets/hoge.rb")
-       .First(x => x.name.EndsWith(".mrb"));
-mrb.LoadBytecode(bytecodeAsset.GetData<byte>().AsSpan());
-```
-
-To read a subasset in Addressables, you would do the following.
-
-```cs
-Addressables.LoadAssetAsync<TextAsset>("Assets/hoge.rb[hoge.mrb]")
-```
-
-Alternatively, you can generate the .mrb bytecode yourself within your project.
 
 ## Fiber (Coroutine)
 
