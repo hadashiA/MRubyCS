@@ -5,7 +5,7 @@ MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine des
 Easily embed Ruby into Unity or .NET—empowering users to script game logic while keeping your core engine in C#.
 
 > [!NOTE]
-> [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) provides a high-level framework for integrating MRubyCS with Unity (and .NET, including command routing and script lifecycle management.
+> [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) provides a high-level framework for integrating MRubyCS with Unity (and .NET), including command routing and script lifecycle management.
 
 ## Why mruby?
 
@@ -67,8 +67,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
         - [Option A: Pre-compile bytecode](#option-a-pre-compile-bytecode)
         - [Option B: Using Compiler library (runtime compile)](#option-b-using-compiler-library-runtime-compile)
         - [Irep](#irep)
-        - [MRubyCS.Compiler.Cli (dotnet tool)](#mrubycscompilercli-dotnet-tool)
-        - [MRubyCS.Compiler (library)](#mrubycscompiler-library)
+        - [Compiler Reference](#compiler-reference)
     - [Define ruby class/module/method by C#](#define-ruby-classmodulemethod-by-c)
         - [Error handling & validation in C# methods](#error-handling--validation-in-c-methods)
         - [Constants](#constants)
@@ -111,9 +110,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 
 ### Compiling and Executing Ruby Code
 
-mruby has the following architecture, and allows the compiler and runtime to be separated.
-
-By distributing only precompiled bytecode, you can optimize the installation on the application.
+mruby allows the compiler and runtime to be separated. By distributing only precompiled bytecode, you can keep the native compiler out of your production deployment.
 
 ```mermaid
 graph TB
@@ -139,19 +136,14 @@ MRubyCS only includes the mruby virtual machine. Therefore it is necessary to co
 
 #### Option A: Pre-compile bytecode
 
-Pre-compiling Ruby source to `.mrb` bytecode keeps the native compiler out of your production deployment. You can use either the CLI tool or the C# API.
-
-##### Pre-compile with CLI tool
+Pre-compile Ruby source to `.mrb` bytecode with the CLI tool:
 
 ```bash
 dotnet tool install -g MRubyCS.Compiler.Cli
 mruby-compiler fibonacci.rb -o fibonacci.mrb
 ```
 
-> [!TIP]
-> For local tool installation, use `dotnet tool install MRubyCS.Compiler.Cli` and run with `dotnet mruby-compiler`.
-
-##### Pre-compile with C# API
+Or with the C# API:
 
 ```cs
 using MRubyCS;
@@ -174,13 +166,13 @@ using var compilation = compiler.Compile(source);
 File.WriteAllBytes("fibonacci.mrb", compilation.AsBytecode());
 ```
 
-##### Execute pre-compiled bytecode
+Then execute the pre-compiled bytecode:
 
 ```cs
 using MRubyCS;
 
 var mrb = MRubyState.Create();
-var bytecode = File.ReadAllBytes("fibonacci.mrb");
+var bytecode = File.ReadAllBytes("/path/to/fibonacci.mrb");
 var result = mrb.LoadBytecode(bytecode);
 
 result.IntegerValue //=> 55
@@ -230,19 +222,13 @@ mrb.Execute(irep);
 > - **No `Dispose` needed** — `MRubyState` is fully managed by .NET GC. No native resources to release.
 > - **Not thread-safe** — each `MRubyState` instance must be used from a single thread. For multi-threaded scenarios, create a separate instance per thread.
 
-#### MRubyCS.Compiler.Cli (dotnet tool)
+---
 
-The easiest way to compile Ruby source files is using the `mruby-compiler` dotnet tool.
+#### Compiler Reference
 
-```bash
-# Install globally
-$ dotnet tool install -g MRubyCS.Compiler.Cli
-$ mruby-compiler input.rb -o output.mrb
+##### MRubyCS.Compiler.Cli (dotnet tool)
 
-# Or, install locally
-$ dotnet tool install MRubyCS.Compiler.Cli
-$ dotnet mruby-compiler input.rb -o output.mrb
-```
+The `mruby-compiler` CLI supports additional output formats beyond simple `.mrb`:
 
 ```bash
 # Dump bytecode in human-readable format
@@ -252,7 +238,8 @@ $ mruby-compiler input.rb --dump
 $ mruby-compiler input.rb -o Bytecode.cs --format csharp --csharp-namespace MyApp
 ```
 
-##### Options
+> [!TIP]
+> For local tool installation, use `dotnet tool install MRubyCS.Compiler.Cli` and run with `dotnet mruby-compiler`.
 
 | Option | Description |
 |:-------|:------------|
@@ -262,7 +249,7 @@ $ mruby-compiler input.rb -o Bytecode.cs --format csharp --csharp-namespace MyAp
 | `--csharp-namespace` | C# namespace for generated code (used with `--format csharp`) |
 | `--csharp-class-name` | C# class name for generated code (used with `--format csharp`) |
 
-#### mrbc (original mruby compiler)
+##### mrbc (original mruby compiler)
 
 Alternatively, you can use the original [mruby](https://github.com/mruby/mruby) project's compiler.
 
@@ -273,28 +260,22 @@ $ rake
 $ ./build/host/bin/mrbc -o output.mrb input.rb
 ```
 
-#### MRubyCS.Compiler (library)
+##### MRubyCS.Compiler (library)
 
-To simplify compilation from C#, we provide the MRubyCS.Compiler package, which is a thin wrapper of the C# API for the native compiler.
+`MRubyCS.Compiler` is a thin wrapper of the C# API for the native compiler.
 
 > [!NOTE]
 > Currently, builds for linux (x64/arm64), macOS (x64/arm64), and windows (x64) are provided.
 
-```cs
+```bash
 dotnet add package MRubyCS.Compiler
 ```
 
-##### Unity
-
-Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
+**Unity**: Open the Package Manager window by selecting Window > Package Manager, then click on [+] > Add package from git URL and enter the following URL:
 
 ```
 https://github.com/hadashiA/MRubyCS.git?path=src/MRubyCS.Unity/Assets/MRubyCS.Compiler.Unity#0.50.3
 ```
-
-For manual compilation, refer to the following.
-
-##### Usage
 
 ```cs
 using MRubyCS.Compiler;
@@ -339,9 +320,7 @@ For example, importing the text file `hoge.rb` into a project will result in the
 
 ![docs/screenshot_subasset](./docs/screenshot_subasset.png)
 
-This subasset is a TextAsset. To specify it in the inspector.
-
-Or, to extract in C#, do the following:
+This subasset is a `TextAsset` that can be assigned via the inspector or loaded from code:
 
 ``` cs
 var mrb = MRubyState.Create();
@@ -357,40 +336,46 @@ To read a subasset in Addressables, you would do the following.
 Addressables.LoadAssetAsync<TextAsset>("Assets/hoge.rb[hoge.mrb]")
 ```
 
-Alternatively, you can generate the .mrb bytecode yourself within your project.
-
 ### Define ruby class/module/method by C#
 
-``` cs
-// Define class
+```cs
 var classA = mrb.DefineClass(mrb.Intern("A"u8), c =>
 {
-    // Method definition that takes a required argument.
     c.DefineMethod(mrb.Intern("plus100"u8), (_, self) =>
     {
-        var arg0 = mrb.GetArgumentAsIntegerAt(0); // get first argument (index:0)
+        var arg0 = mrb.GetArgumentAsIntegerAt(0);
         return arg0 + 100;
     });
+});
+```
 
-    // Method definition that takes a block argument.
-    c.DefineMethod(mrb.Intern("method2"u8), (_, self) =>
+```ruby
+a = A.new
+a.plus100(123) #=> 223
+```
+
+#### Block / keyword / rest arguments
+
+Methods can also receive blocks, keyword arguments, and rest arguments:
+
+```cs
+var classA = mrb.DefineClass(mrb.Intern("A"u8), c =>
+{
+    // Block argument
+    c.DefineMethod(mrb.Intern("with_block"u8), (_, self) =>
     {
         var arg0 = mrb.GetArgumentAt(0);
         var blockArg = mrb.GetBlockArgument();
         if (!blockArg.IsNil)
         {
-            // Execute `Proc#call`
             mrb.Send(blockArg, mrb.Intern("call"u8), arg0);
         }
     });
 
-    // Other complex arguments...
-    c.DefineMethod(mrb.Intern("method3"u8), (_, self) =>
+    // Keyword and rest arguments
+    c.DefineMethod(mrb.Intern("with_kwargs"u8), (_, self) =>
     {
         var keywordArg = mrb.GetKeywordArgument(mrb.Intern("foo"u8));
-        Console.WriteLine($"foo: {keywordArg}");
-
-        // argument type checking
         mrb.EnsureValueType(keywordArg, MRubyVType.Integer);
 
         var restArguments = mrb.GetRestArgumentsAfter(0);
@@ -399,35 +384,34 @@ var classA = mrb.DefineClass(mrb.Intern("A"u8), c =>
             Console.WriteLine($"rest arg({i}: {restArguments[i]})");
         }
     });
+});
+```
 
-    // class method
-    c.DefineClassMethod(mrb.Intern("classmethod1"u8), (_, self) =>
+#### Class methods / modules
+
+```cs
+// Class method
+var classA = mrb.DefineClass(mrb.Intern("A"u8), c =>
+{
+    c.DefineClassMethod(mrb.Intern("greet"u8), (_, self) =>
     {
-        return mrb.NewString("hoge fuga"u8);
+        return mrb.NewString("hello"u8);
     });
 });
 
-// Monkey patching
-classA.DefineMethod(mrb.Intern("additional_method1"u8), (_, self) => { /* ... */ });
+// Monkey patching — add methods after class definition
+classA.DefineMethod(mrb.Intern("extra"u8), (_, self) => { /* ... */ });
 
-// Define module
+// Define module and include
 var moduleA = mrb.DefineModule(mrb.Intern("ModuleA"u8));
-mrb.DefineMethod(moduleA, mrb.Intern("additional_method2"u8), (_, self) => 123);
-
+mrb.DefineMethod(moduleA, mrb.Intern("module_method"u8), (_, self) => 123);
 mrb.IncludeModule(classA, moduleA);
 ```
 
-As a result of the definition, the following Ruby code can now be executed.
-
 ```ruby
-a = A.new
-a.plus100(123) #=> 223
-
-a.method2(1) { |a| a } #=> 1
-
-a.additional_method2 #=> 123
-
-A.classmethod1 #=> "hoge fuga"
+A.greet          #=> "hello"
+A.new.extra
+A.new.module_method #=> 123
 ```
 
 #### Error handling & validation in C# methods
@@ -435,6 +419,8 @@ A.classmethod1 #=> "hoge fuga"
 Inside C#-defined methods, you can raise Ruby exceptions and validate arguments:
 
 ```cs
+var myClass = mrb.DefineClass(mrb.Intern("MyClass"u8));
+
 mrb.DefineMethod(myClass, mrb.Intern("safe_divide"u8), (s, self) =>
 {
     s.EnsureArgumentCount(2, 2); // require exactly 2 arguments
@@ -498,6 +484,29 @@ if (mrb.TryGetConst(mrb.Intern("MAX_SIZE"u8), out var constValue))
 
 ### Call ruby method from C# side
 
+Use `mrb.Send()` to call Ruby methods from C#:
+
+```cs
+// Call a class method
+var classA = mrb.GetConst(mrb.Intern("A"u8), mrb.ObjectClass);
+mrb.Send(classA, mrb.Intern("foo="u8), 123);
+mrb.Send(classA, mrb.Intern("foo"u8)); //=> 123
+
+// Call a global-scope method — use TopSelf as the receiver
+mrb.Send(mrb.TopSelf, mrb.Intern("puts"u8), mrb.NewString("hello"u8));
+
+// Access instance variables
+var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"u8));
+mrb.Send(instanceB, mrb.Intern("bar="u8), 456);
+mrb.Send(instanceB, mrb.Intern("bar"u8)); //=> 456
+
+// Resolve nested constants
+var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"u8), mrb.NewString("M::C"u8));
+```
+
+<details>
+<summary>Ruby code assumed by the examples above</summary>
+
 ```ruby
 class A
   def self.foo = @@foo
@@ -518,26 +527,7 @@ module M
   end
 end
 ```
-
-```cs
-// get class instance
-var classA = mrb.GetConst(mrb.Intern("A"), mrb.ObjectClass);
-
-// call class method
-mrb.Send(classA, mrb.Intern("foo="), 123);
-mrb.Send(classA, mrb.Intern("foo")); //=> 123
-
-// call global-scope method — use TopSelf as the receiver
-mrb.Send(mrb.TopSelf, mrb.Intern("puts"u8), mrb.NewString("hello"u8));
-
-// get instance variable from top
-var instanceB = mrb.GetInstanceVariable(mrb.TopSelf, mrb.Intern("@b"));
-mrb.Send(instanceB, mrb.Intern("bar="), 456);
-mrb.Send(instanceB, mrb.Intern("bar")); //=> 456
-
-// find class instance on the hierarchy
-var classC = mrb.Send(mrb.ObjectClass, mrb.Intern("const_get"), mrb.NewString($"M::C"));
-```
+</details>
 
 #### Send with block / keyword arguments
 
@@ -567,6 +557,8 @@ mrb.Send(
 > The single-argument overload `Send(self, methodId, arg0)` works without this workaround.
 
 #### Type conversion & introspection
+
+The following examples use `value`, `a`, `b` as `MRubyValue` instances obtained from prior operations (e.g. `Send`, `LoadBytecode`).
 
 ```cs
 // Convert values (calls Ruby's to_i / to_f / to_sym internally)
@@ -659,16 +651,17 @@ switch (value)
         break;
 }
 
-var intValue = new MRubyValue(100); // create int value
-var floatValue = new MRubyValue(1.234f); // create float value
-var objValue = new MRubyValue(str); // create allocated ruby object value
+// Creating MRubyValue
+var intValue = new MRubyValue(100);
+var floatValue = new MRubyValue(1.234f);
+var objValue = new MRubyValue(str);
 
-// Implicit conversions — no `new MRubyValue(...)` needed
-MRubyValue a = 42;         // int
-MRubyValue b = 3.14;       // double
-MRubyValue c = true;       // bool
-MRubyValue d = sym;         // Symbol
-MRubyValue e = rstring;     // RObject (RString, RArray, etc.)
+// Implicit conversions are available — useful when passing arguments
+mrb.Send(obj, mrb.Intern("method"u8), 42);       // int → MRubyValue
+mrb.Send(obj, mrb.Intern("method"u8), 3.14);      // double → MRubyValue
+mrb.Send(obj, mrb.Intern("method"u8), true);       // bool → MRubyValue
+mrb.Send(obj, mrb.Intern("method"u8), sym);        // Symbol → MRubyValue
+mrb.Send(obj, mrb.Intern("method"u8), rstring);    // RObject → MRubyValue
 
 // Static constants
 MRubyValue.Nil   // Ruby nil
@@ -1107,7 +1100,7 @@ mrubyArray[2] //=> 333
 MRubyValue mrubyStringValue = MRubyValueSerializer.Serialize("hoge fuga", mrb);
 
 // Use the serialized value...
-mrb.Send(mrubyStringValue, mrb.Intern("upcase")); //=> MRubyValue("UPCASE")
+mrb.Send(mrubyStringValue, mrb.Intern("upcase"u8)); //=> MRubyValue("UPCASE")
 ```
 
 ### Builtin Supported types
@@ -1197,9 +1190,9 @@ deserialized.Z      //=> 8901
 var value = MRubyValueSerializer.Serialize(new SerializeExample { Id = "aiueo", X = 1234, FooBar = 4567 });
 
 var props = value.As<RHash>();
-props[mrb.Intern("id")] //=> "aiueo"
-props[mrb.Intern("x")] //=> 1234
-props[mrb.Intern("foo_bar")] //=> 4567
+props[mrb.Intern("id"u8)] //=> "aiueo"
+props[mrb.Intern("x"u8)] //=> 1234
+props[mrb.Intern("foo_bar"u8)] //=> 4567
 ```
 
 The list of properties specified by mruby is assigned to the C# member names that match the key names.
