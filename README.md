@@ -207,8 +207,15 @@ var result = compiler.LoadSourceCode("""
 result.IntegerValue //=> 55
 ```
 
-> [!NOTE]
-> `MRubyCS.Compiler` includes native binaries. See [MRubyCS.Compiler (library)](#mrubycscompiler-library) for supported platforms.
+`MRubyCS.Compiler` includes native binaries. Supported platforms:
+
+| OS      | Architecture |
+|:--------|:-------------|
+| Linux   | x64, arm64   |
+| macOS   | x64, arm64   |
+| Windows | x64          |
+
+See also [MRubyCS.Compiler (library)](#mrubycscompiler-library) for installation details.
 
 #### Irep
 
@@ -267,8 +274,11 @@ $ ./build/host/bin/mrbc -o output.mrb input.rb
 
 `MRubyCS.Compiler` is a thin wrapper of the C# API for the native compiler.
 
-> [!NOTE]
-> Currently, builds for linux (x64/arm64), macOS (x64/arm64), and windows (x64) are provided.
+| OS      | Architecture |
+|:--------|:-------------|
+| Linux   | x64, arm64   |
+| macOS   | x64, arm64   |
+| Windows | x64          |
 
 ```bash
 dotnet add package MRubyCS.Compiler
