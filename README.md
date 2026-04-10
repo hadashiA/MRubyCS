@@ -129,7 +129,7 @@ graph TB
     style D fill:#ff4444,stroke:#cc0000,color:#ffffff,stroke-width:2px
 ```
 
-MRubyCS only includes the mruby virtual machine. You can choose whether to deploy precompiled bytecode or raw source code:
+You can choose whether to deploy precompiled bytecode or raw source code:
 
 Bytecode only: extremely compact and recommended for production environments.
 Source code: compiled on the target machine. Note that compilation relies on the native compiler, so supported platforms are limited to those where mruby-compiler runs.
