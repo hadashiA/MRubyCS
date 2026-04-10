@@ -110,7 +110,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 
 ### Compiling and Executing Ruby Code
 
-mruby allows the compiler and runtime to be separated. By distributing only precompiled bytecode, you can keep the native compiler out of your production deployment.
+mruby allows the compiler and runtime to be separated. By distributing only precompiled bytecode, you can keep the mruby compiler out of your production deployment.
 
 ```mermaid
 graph TB
@@ -129,7 +129,10 @@ graph TB
     style D fill:#ff4444,stroke:#cc0000,color:#ffffff,stroke-width:2px
 ```
 
-MRubyCS only includes the mruby virtual machine. Therefore it is necessary to convert it to .mrb bytecode before executing the .rb source.
+MRubyCS only includes the mruby virtual machine. You can choose whether to deploy precompiled bytecode or raw source code:
+
+Bytecode only: extremely compact and recommended for production environments.
+Source code: compiled on the target machine. Note that compilation relies on the native compiler, so supported platforms are limited to those where mruby-compiler runs.
 
 > [!TIP]
 > Option A is recommended for production. Option B is convenient for development and prototyping.
