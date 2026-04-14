@@ -896,8 +896,8 @@ var code = """
     """u8;
 
 // Load the Ruby code as a Fiber
-var irep = compiler.Compile(code);
-var fiber = mrb.Execute(irep).As<RFiber>();
+using var compilation = compiler.Compile(code);
+var fiber = mrb.Execute(compilation.ToIrep()).As<RFiber>();
 
 // Resume the fiber with initial value
 var result1 = fiber.Resume(10);  // => 20
@@ -945,8 +945,8 @@ var code = """
     end
     """u8;
 
-var irep = compiler.Compile(code);
-var fiber = mrb.Execute(irep).As<RFiber>();
+using var compilation = compiler.Compile(code);
+var fiber = mrb.Execute(compilation.ToIrep()).As<RFiber>();
 
 // Start async wait before resuming
 var terminateTask = fiber.WaitForTerminateAsync();
@@ -972,8 +972,8 @@ var code = """
     end
     """u8;
 
-var irep = compiler.Compile(code);
-var fiber = mrb.Execute(irep).As<RFiber>();
+using var compilation = compiler.Compile(code);
+var fiber = mrb.Execute(compilation.ToIrep()).As<RFiber>();
 
 // Process each yielded value asynchronously
 await foreach (var value in fiber.AsAsyncEnumerable())
@@ -985,8 +985,8 @@ await foreach (var value in fiber.AsAsyncEnumerable())
 MRubyCS supports multiple consumers waiting for fiber results simultaneously:
 
 ```cs
-var irep = compiler.Compile(code);
-var fiber = mrb.Execute(irep).As<RFiber>();
+using var compilation = compiler.Compile(code);
+var fiber = mrb.Execute(compilation.ToIrep()).As<RFiber>();
 
 // Create multiple consumers
 var consumer1 = Task.Run(async () =>
@@ -1032,8 +1032,8 @@ var code = """
     end
     """u8;
 
-var irep = compiler.Compile(code);
-var fiber = mrb.Execute(irep).As<RFiber>();
+using var compilation = compiler.Compile(code);
+var fiber = mrb.Execute(compilation.ToIrep()).As<RFiber>();
 
 // First resume succeeds
 var result1 = fiber.Resume(10);  // => 10
