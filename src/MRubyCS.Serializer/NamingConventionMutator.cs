@@ -17,15 +17,15 @@ static class NamingConventionMutator
     public static readonly INamingConventionMutator KebabCase = new NotationCaseMutator('-');
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static bool IsUpper(byte c) => c - (byte)'A' < 26;
+    internal static bool IsUpper(byte c) => (uint)(c - (byte)'A') < 26u;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static bool IsLower(byte c) => c - (byte)'a' < 26;
+    internal static bool IsLower(byte c) => (uint)(c - (byte)'a') < 26u;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static byte ToUpper(byte ch)
     {
-        if (IsUpper(ch))
+        if (IsLower(ch))
         {
             return (byte)(ch - 0x20);
         }
