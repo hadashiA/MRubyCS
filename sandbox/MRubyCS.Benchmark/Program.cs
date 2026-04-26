@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using MRubyCS.Benchmark;
@@ -16,3 +16,6 @@ public class MandelbrotBenchmark() : MRubyBenchmarkBase("bm_so_mandelbrot.rb");
 
 [Config(typeof(BenchmarkConfig))]
 public class AoRenderBenchmark() : MRubyBenchmarkBase("bm_ao_render.rb");
+
+[Config(typeof(BenchmarkConfig))]
+public class SymbolInternBenchmark() : MRubyBenchmarkBase("bm_symbol_intern.rb");

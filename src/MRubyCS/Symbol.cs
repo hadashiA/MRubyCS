@@ -36,6 +36,19 @@ class SymbolTable
 
     static readonly byte[] PackTable = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"u8.ToArray();
 
+    // Reverse lookup: byte -> (PackTable index + 1). Zero means not packable.
+    static readonly byte[] UnpackTable = BuildUnpackTable();
+
+    static byte[] BuildUnpackTable()
+    {
+        var table = new byte[256];
+        for (var i = 0; i < PackTable.Length; i++)
+        {
+            table[PackTable[i]] = (byte)(i + 1);
+        }
+        return table;
+    }
+
     [ThreadStatic]
     static byte[]? nameBuffer;
 
@@ -88,83 +101,87 @@ class SymbolTable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryFind(ReadOnlySpan<byte> utf8, out Symbol symbol)
     {
-        // if (TryInlinePack(utf8, out symbol))
-        // {
-        //     return true;
-        // }
+        // Try inline-pack first. Packable presyms have IDs equal to their packed
+        // value (assigned by the source generator), so they resolve here without
+        // touching the hash dispatch.
+        if (TryInlinePack(utf8, out symbol))
+        {
+            return true;
+        }
         var key = Key.Create(utf8);
-        return symbols.TryGetValue(key, out symbol) ||
-               Names.TryFind(key.HashCode, utf8, out symbol);
+        // Check dynamic dict first; for runtime-heavy workloads dynamic symbols
+        // dominate, while non-packable presyms (mostly long class/error names) are
+        // rare in hot lookup paths.
+        return symbols.TryGetValue(key, out symbol)
+               || Names.TryFind(key.HashCode, utf8, out symbol);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ReadOnlySpan<byte> NameOf(Symbol symbol)
     {
-        if(symbol.Value==0)
+        if (symbol.Value == 0)
         {
             return default;
         }
-        // if (TryInlineUnpack(symbol, out var utf8))
-        // {
-        //     return utf8;
-        // }
         if (Names.TryGetName(symbol, out var c))
         {
             return c;
+        }
+        if (IsInlined(symbol))
+        {
+            return InlineUnpackCached(symbol);
         }
         return names[symbol];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static bool IsInlined(Symbol symbol) => symbol.Value > 1 << 24;
+    static bool IsInlined(Symbol symbol) => symbol.Value >= 1u << 24;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     static bool TryInlinePack(ReadOnlySpan<byte> utf8, out Symbol packedSymbol)
     {
-        if (utf8.Length > PackLengthMax || utf8.IsEmpty)
+        if ((uint)utf8.Length - 1 >= PackLengthMax)
         {
+            // length == 0 or length > PackLengthMax
             packedSymbol = default;
             return false;
         }
 
         uint packedValue = 0;
-        var table = PackTable.AsSpan();
+        var table = UnpackTable;
         for (var i = 0; i < utf8.Length; i++)
         {
-            var ch = utf8[i];
-            var x = table.IndexOf(ch);
-            if (x < 0)
+            var bits = (uint)table[utf8[i]];
+            if (bits == 0)
             {
                 packedSymbol = default;
                 return false;
             }
-            var bits = (uint)x + 1;
             packedValue |= bits << (24 - i * 6);
         }
 
         packedSymbol = new Symbol(packedValue);
-        // assert((sym) >= (1<<24))
         return true;
     }
 
-    static bool TryInlineUnpack(Symbol symbol, out ReadOnlySpan<byte> utf8)
+    ReadOnlySpan<byte> InlineUnpackCached(Symbol symbol)
     {
-        if (!IsInlined(symbol))
+        if (names.TryGetValue(symbol, out var cached))
         {
-            utf8 = default!;
-            return false;
+            return cached;
         }
 
-        Span<byte> buf = ThreadStaticBuffer();
-
+        Span<byte> buf = stackalloc byte[PackLengthMax];
         int i;
         for (i = 0; i < PackLengthMax; i++)
         {
-            uint bits = symbol.Value >> (24 - i * 6) & 0x3f;
+            var bits = symbol.Value >> (24 - i * 6) & 0x3f;
             if (bits == 0) break;
-            buf[i] = PackTable[bits - 1];
+            buf[i] = PackTable[(int)bits - 1];
         }
-        utf8 = buf[..i];
-        return true;
+
+        var name = buf[..i].ToArray();
+        names[symbol] = name;
+        return name;
     }
 }

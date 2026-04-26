@@ -3,23 +3,29 @@
 namespace MRubyCS.SourceGenerator;
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 sealed class ConstSymbolDefinition
 {
     const uint OffsetBasis = 2166136261u;
     const uint FnvPrime = 16777619u;
 
-    public int Index { get; }
+    const string PackTable = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const int PackLengthMax = 5;
+
+    public uint Index { get; }
     public string SymbolName { get; }
     public string VariableName { get; }
     public byte[] Utf8 { get; }
     public int HashCode { get; }
+    public bool IsPackable { get; }
 
-    public ConstSymbolDefinition(int index, string symbolName, string variableName)
+    public ConstSymbolDefinition(uint index, string symbolName, string variableName, bool isPackable)
     {
         Index = index;
         SymbolName = symbolName;
         VariableName = variableName;
+        IsPackable = isPackable;
         Utf8 = Encoding.UTF8.GetBytes(symbolName);
 
         var hash = OffsetBasis;
@@ -29,6 +35,20 @@ sealed class ConstSymbolDefinition
             hash *= FnvPrime;
         }
         HashCode = unchecked((int)hash);
+    }
+
+    public static uint? TryPack(string name)
+    {
+        if (name.Length == 0 || name.Length > PackLengthMax) return null;
+        uint packed = 0;
+        for (var i = 0; i < name.Length; i++)
+        {
+            var x = PackTable.IndexOf(name[i]);
+            if (x < 0) return null;
+            var bits = (uint)x + 1;
+            packed |= bits << (24 - i * 6);
+        }
+        return packed;
     }
 }
 
@@ -149,14 +169,30 @@ public class MRubyCSSourceGenerator : IIncrementalGenerator
     {
         context.RegisterPostInitializationOutput(static initContext =>
         {
-            var index = 1;
             var stringBuilder = new StringBuilder();
 
+            // Inline-packable presyms use their packed value as the ID; non-packable
+            // presyms are assigned sequential IDs starting from 1. The two ranges never
+            // collide because packed values are always >= 1<<24.
+            uint nonPackableSeq = 0;
             var definitions = KnownSymbols
-                .Select(x => new ConstSymbolDefinition(index++, x.Value, x.Key))
+                .Select(kvp =>
+                {
+                    var packed = ConstSymbolDefinition.TryPack(kvp.Value);
+                    var isPackable = packed.HasValue;
+                    var index = isPackable ? packed!.Value : ++nonPackableSeq;
+                    return new ConstSymbolDefinition(index, kvp.Value, kvp.Key, isPackable);
+                })
                 .ToArray();
 
-            var symbolDefinitionsByHashCode = definitions.ToLookup(
+            var nonPackableDefinitions = definitions.Where(x => !x.IsPackable)
+                .OrderBy(x => x.Index)
+                .ToArray();
+            var packableDefinitions = definitions.Where(x => x.IsPackable).ToArray();
+
+            // Hash-based dispatch covers non-packable presyms only; packable presyms are
+            // resolved by Symbol.TryInlinePack in the caller.
+            var nonPackableByHashCode = nonPackableDefinitions.ToLookup(
                 x => x.HashCode,
                 x => x);
 
@@ -169,12 +205,13 @@ namespace MRubyCS;
 
 static class Names
 {
-    public static int Count => {{definitions.Length}};
+    /// <summary>Number of non-packable presyms. Dynamic symbols are issued starting from Count + 1.</summary>
+    public static int Count => {{nonPackableDefinitions.Length}};
 
-    public static readonly byte[][] Utf8Names =
+    static readonly byte[][] Utf8Names =
     [
 """);
-            foreach (var x in definitions)
+            foreach (var x in nonPackableDefinitions)
             {
                 var byteArrayString = string.Join(", ", x.Utf8.Select(x => x.ToString()));
                 stringBuilder.AppendLine($$"""
@@ -185,27 +222,40 @@ static class Names
     ];
 
 """);
+            // Static byte arrays for packable presyms so NameOf can return them
+            // without allocating.
+            foreach (var x in packableDefinitions)
+            {
+                var byteArrayString = string.Join(", ", x.Utf8.Select(x => x.ToString()));
+                stringBuilder.AppendLine($$"""
+    static readonly byte[] _packed_{{x.VariableName}} = [{{byteArrayString}}]; // "{{x.SymbolName}}" packed=0x{{x.Index:X}}
+""");
+            }
+            stringBuilder.AppendLine();
+
             foreach (var x in definitions)
             {
+                var packedComment = x.IsPackable ? $" (inline-packed = 0x{x.Index:X})" : "";
                 stringBuilder.AppendLine($$"""
     /// <summary>
-    /// return known symbol ("{{x.SymbolName}}")
+    /// Known symbol ("{{x.SymbolName}}"){{packedComment}}
     /// </summary>
     public static Symbol {{x.VariableName}}
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => new({{x.Index}});
+        get => new({{x.Index}}u);
     }
 
 """);
             }
+
             stringBuilder.AppendLine($$"""
     public static bool TryFind(int hashCode, ReadOnlySpan<byte> name, out Symbol symbol)
     {
         switch (hashCode)
         {
 """);
-            foreach (var x in symbolDefinitionsByHashCode)
+            foreach (var x in nonPackableByHashCode)
             {
                 stringBuilder.AppendLine($$"""
             case {{x.Key}}:
@@ -214,8 +264,12 @@ static class Names
                 {
                     var singleValue = x.First();
                     stringBuilder.AppendLine($$"""
-                symbol = new Symbol({{singleValue.Index}});
-                return true;
+                if (name.SequenceEqual("{{singleValue.SymbolName}}"u8))
+                {
+                    symbol = new Symbol({{singleValue.Index}}u);
+                    return true;
+                }
+                break;
 """);
                 }
                 else
@@ -226,7 +280,7 @@ static class Names
                         stringBuilder.AppendLine($$"""
                 {{branch}} (name.SequenceEqual("{{xs.SymbolName}}"u8))
                 {
-                    symbol = new Symbol({{xs.Index}});
+                    symbol = new Symbol({{xs.Index}}u);
                     return true;
                 }
 """);
@@ -245,17 +299,40 @@ static class Names
 
     public static bool TryGetName(Symbol symbol, out ReadOnlySpan<byte> name)
     {
-        if (symbol.Value > 0 && symbol.Value <= Count)
+        var v = symbol.Value;
+        if (v > 0 && v <= (uint)Count)
         {
-            name = Utf8Names[(int)symbol.Value - 1];
+            name = Utf8Names[(int)v - 1];
             return true;
+        }
+        // Skip the packable-presym switch for dynamic symbols (the dominant case
+        // at runtime). All packable presyms have IDs >= 1<<24 by construction.
+        if (v < (1u << 24))
+        {
+            name = default!;
+            return false;
+        }
+        switch (v)
+        {
+""");
+            foreach (var x in packableDefinitions)
+            {
+                stringBuilder.AppendLine($$"""
+            case {{x.Index}}u: // "{{x.SymbolName}}"
+                name = _packed_{{x.VariableName}};
+                return true;
+""");
+            }
+            stringBuilder.AppendLine($$"""
         }
         name = default!;
         return false;
     }
 }
 """);
-            initContext.AddSource("KnownSymbols.g.cs", stringBuilder.ToString());
+            // Use UTF-8 without BOM so the generated file does not start with EF BB BF.
+            var sourceText = SourceText.From(stringBuilder.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            initContext.AddSource("KnownSymbols.g.cs", sourceText);
         });
     }
 }
