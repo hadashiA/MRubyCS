@@ -81,10 +81,6 @@ module Kernel
     !(self =~ y)
   end
 
-  def to_enum(*a)
-    raise NotImplementedError.new("fiber required for enumerator")
-  end
-
   # call-seq:
   #   obj.yield_self {|_obj|...} -> an_object
   #   obj.then {|_obj|...}       -> an_object
@@ -518,6 +514,502 @@ module Enumerable
   end
 end
 
+# Enumerable extensions (from mruby-enum-ext)
+module Enumerable
+  def drop(n)
+    n = n.__to_int
+    raise ArgumentError, "attempt to drop negative size" if n < 0
+
+    ary = []
+    self.each {|*val| n == 0 ? ary << val.__svalue : n -= 1 }
+    ary
+  end
+
+  def drop_while(&block)
+    return to_enum :drop_while unless block
+
+    ary, state = [], false
+    self.each do |*val|
+      state = true if !state and !block.call(*val)
+      ary << val.__svalue if state
+    end
+    ary
+  end
+
+  def take(n)
+    n = n.__to_int
+    i = n.to_i
+    raise ArgumentError, "attempt to take negative size" if i < 0
+    ary = []
+    return ary if i == 0
+    self.each do |*val|
+      ary << val.__svalue
+      i -= 1
+      break if i == 0
+    end
+    ary
+  end
+
+  def take_while(&block)
+    return to_enum :take_while unless block
+
+    ary = []
+    self.each do |*val|
+      return ary unless block.call(*val)
+      ary << val.__svalue
+    end
+    ary
+  end
+
+  def each_cons(n, &block)
+    n = n.__to_int
+    raise ArgumentError, "invalid size" if n <= 0
+
+    return to_enum(:each_cons,n) unless block
+    ary = []
+    n = n.to_i
+    self.each do |*val|
+      ary.shift if ary.size == n
+      ary << val.__svalue
+      block.call(ary.dup) if ary.size == n
+    end
+    nil
+  end
+
+  def each_slice(n, &block)
+    n = n.__to_int
+    raise ArgumentError, "invalid slice size" if n <= 0
+
+    return to_enum(:each_slice,n) unless block
+    ary = []
+    n = n.to_i
+    self.each do |*val|
+      ary << val.__svalue
+      if ary.size == n
+        block.call(ary)
+        ary = []
+      end
+    end
+    block.call(ary) unless ary.empty?
+    nil
+  end
+
+  def group_by(&block)
+    return to_enum :group_by unless block
+
+    h = {}
+    self.each do |*val|
+      key = block.call(*val)
+      sv = val.__svalue
+      h.key?(key) ? (h[key] << sv) : (h[key] = [sv])
+    end
+    h
+  end
+
+  def sort_by(&block)
+    return to_enum :sort_by unless block
+    self.to_a.sort_by(&block)
+  end
+
+  def first(*args)
+    case args.length
+    when 0
+      self.each do |*val|
+        return val.__svalue
+      end
+      return nil
+    when 1
+      i = args[0].__to_int
+      raise ArgumentError, "attempt to take negative size" if i < 0
+      ary = []
+      return ary if i == 0
+      self.each do |*val|
+        ary << val.__svalue
+        i -= 1
+        break if i == 0
+      end
+      ary
+    else
+      raise ArgumentError, "wrong number of arguments (given #{args.length}, expected 0..1)"
+    end
+  end
+
+  def count(v=NONE, &block)
+    count = 0
+    if block
+      self.each do |*val|
+        count += 1 if block.call(*val)
+      end
+    else
+      if NONE.equal?(v)
+        self.each { count += 1 }
+      else
+        self.each do |*val|
+          count += 1 if val.__svalue == v
+        end
+      end
+    end
+    count
+  end
+
+  def flat_map(&block)
+    return to_enum :flat_map unless block
+
+    ary = []
+    self.each do |*e|
+      e2 = block.call(*e)
+      if e2.respond_to? :each
+        e2.each {|e3| ary.push(e3) }
+      else
+        ary.push(e2)
+      end
+    end
+    ary
+  end
+  alias collect_concat flat_map
+
+  def max_by(&block)
+    return to_enum :max_by unless block
+
+    first = true
+    max = nil
+    max_cmp = nil
+
+    self.each do |*val|
+      if first
+        max = val.__svalue
+        max_cmp = block.call(*val)
+        first = false
+      else
+        if (cmp = block.call(*val)) > max_cmp
+          max = val.__svalue
+          max_cmp = cmp
+        end
+      end
+    end
+    max
+  end
+
+  def min_by(&block)
+    return to_enum :min_by unless block
+
+    first = true
+    min = nil
+    min_cmp = nil
+
+    self.each do |*val|
+      if first
+        min = val.__svalue
+        min_cmp = block.call(*val)
+        first = false
+      else
+        if (cmp = block.call(*val)) < min_cmp
+          min = val.__svalue
+          min_cmp = cmp
+        end
+      end
+    end
+    min
+  end
+
+  def minmax(&block)
+    max = nil
+    min = nil
+    first = true
+
+    self.each do |*val|
+      if first
+        val = val.__svalue
+        max = val
+        min = val
+        first = false
+      else
+        val = val.__svalue
+        if block
+          max = val if block.call(val, max) > 0
+          min = val if block.call(val, min) < 0
+        else
+          max = val if (val <=> max) > 0
+          min = val if (val <=> min) < 0
+        end
+      end
+    end
+    [min, max]
+  end
+
+  def minmax_by(&block)
+    return to_enum :minmax_by unless block
+
+    max = nil
+    max_cmp = nil
+    min = nil
+    min_cmp = nil
+    first = true
+
+    self.each do |*val|
+      if first
+        max = min = val.__svalue
+        max_cmp = min_cmp = block.call(*val)
+        first = false
+      else
+        if (cmp = block.call(*val)) > max_cmp
+          max = val.__svalue
+          max_cmp = cmp
+        end
+        if (cmp = block.call(*val)) < min_cmp
+          min = val.__svalue
+          min_cmp = cmp
+        end
+      end
+    end
+    [min, max]
+  end
+
+  def none?(pat=NONE, &block)
+    if !NONE.equal?(pat)
+      self.each do |*val|
+        return false if pat === val.__svalue
+      end
+    elsif block
+      self.each do |*val|
+        return false if block.call(*val)
+      end
+    else
+      self.each do |*val|
+        return false if val.__svalue
+      end
+    end
+    true
+  end
+
+  def one?(pat=NONE, &block)
+    count = 0
+    if !NONE.equal?(pat)
+      self.each do |*val|
+        count += 1 if pat === val.__svalue
+        return false if count > 1
+      end
+    elsif block
+      self.each do |*val|
+        count += 1 if block.call(*val)
+        return false if count > 1
+      end
+    else
+      self.each do |*val|
+        count += 1 if val.__svalue
+        return false if count > 1
+      end
+    end
+
+    count == 1 ? true : false
+  end
+
+  def all?(pat=NONE, &block)
+    if !NONE.equal?(pat)
+      self.each{|*val| return false unless pat === val.__svalue}
+    elsif block
+      self.each{|*val| return false unless block.call(*val)}
+    else
+      self.each{|*val| return false unless val.__svalue}
+    end
+    true
+  end
+
+  def any?(pat=NONE, &block)
+    if !NONE.equal?(pat)
+      self.each{|*val| return true if pat === val.__svalue}
+    elsif block
+      self.each{|*val| return true if block.call(*val)}
+    else
+      self.each{|*val| return true if val.__svalue}
+    end
+    false
+  end
+
+  def each_with_object(obj, &block)
+    return to_enum(:each_with_object, obj) unless block
+
+    self.each {|*val| block.call(val.__svalue, obj) }
+    obj
+  end
+
+  def reverse_each(&block)
+    return to_enum :reverse_each unless block
+
+    ary = self.to_a
+    i = ary.size - 1
+    while i>=0
+      block.call(ary[i])
+      i -= 1
+    end
+    self
+  end
+
+  def cycle(nv = nil, &block)
+    return to_enum(:cycle, nv) unless block
+
+    n = nil
+
+    if nv.nil?
+      n = -1
+    else
+      n = nv.__to_int
+      return nil if n <= 0
+    end
+
+    ary = []
+    each do |*i|
+      ary.push(i)
+      yield(*i)
+    end
+    return nil if ary.empty?
+
+    while n < 0 || 0 < (n -= 1)
+      ary.each do |i|
+        yield(*i)
+      end
+    end
+
+    nil
+  end
+
+  def find_index(val=NONE, &block)
+    return to_enum(:find_index, val) if !block && NONE.equal?(val)
+
+    idx = 0
+    if block
+      self.each do |*e|
+        return idx if block.call(*e)
+        idx += 1
+      end
+    else
+      self.each do |*e|
+        return idx if e.__svalue == val
+        idx += 1
+      end
+    end
+    nil
+  end
+
+  def zip(*arg, &block)
+    result = block ? nil : []
+    arg = arg.map do |a|
+      unless a.respond_to?(:to_a)
+        raise TypeError, "wrong argument type #{a.class} (must respond to :to_a)"
+      end
+      a.to_a
+    end
+
+    i = 0
+    self.each do |*val|
+      a = []
+      a.push(val.__svalue)
+      idx = 0
+      while idx < arg.size
+        a.push(arg[idx][i])
+        idx += 1
+      end
+      i += 1
+      if result.nil?
+        block.call(a)
+      else
+        result.push(a)
+      end
+    end
+    result
+  end
+
+  def to_h(&blk)
+    h = {}
+    if blk
+      self.each do |v|
+        v = blk.call(v)
+        raise TypeError, "wrong element type #{v.class} (expected Array)" unless v.is_a? Array
+        raise ArgumentError, "element has wrong array length (expected 2, was #{v.size})" if v.size != 2
+        h[v[0]] = v[1]
+      end
+    else
+      self.each do |*v|
+        v = v.__svalue
+        raise TypeError, "wrong element type #{v.class} (expected Array)" unless v.is_a? Array
+        raise ArgumentError, "element has wrong array length (expected 2, was #{v.size})" if v.size != 2
+        h[v[0]] = v[1]
+      end
+    end
+    h
+  end
+
+  def uniq(&block)
+    hash = {}
+    if block
+      self.each do|*v|
+        v = v.__svalue
+        hash[block.call(v)] ||= v
+      end
+    else
+      self.each do|*v|
+        v = v.__svalue
+        hash[v] ||= v
+      end
+    end
+    hash.values
+  end
+
+  def filter_map(&blk)
+    return to_enum(:filter_map) unless blk
+
+    ary = []
+    self.each do |x|
+      x = blk.call(x)
+      ary.push x if x
+    end
+    ary
+  end
+
+  alias filter select
+
+  def grep_v(pattern, &block)
+    ary = []
+    self.each{|*val|
+      sv = val.__svalue
+      unless pattern === sv
+        ary.push((block)? block.call(*val): sv)
+      end
+    }
+    ary
+  end
+
+  def tally
+    hash = {}
+    self.each do |x|
+      hash[x] = (hash[x]||0)+1
+    end
+    hash
+  end
+
+  def sum(init=0,&block)
+    result=init
+    if block
+      self.each do |e|
+        result += block.call(e)
+      end
+    else
+      self.each do |e|
+        result += e
+      end
+    end
+    result
+  end
+
+  def each_entry(*args, &blk)
+    return to_enum(:each_entry) unless blk
+    self.each do |*a|
+      yield a.__svalue
+    end
+    return self
+  end
+end
+
 ##
 # Array
 #
@@ -815,6 +1307,26 @@ class Array
   # Array is enumerable
   # ISO 15.2.12.3
   include Enumerable
+end
+
+# Array extensions (from mruby-enum-ext)
+class Array
+  def sort_by(&block)
+    return to_enum :sort_by unless block
+
+    ary = []
+    self.each_with_index{|e, i|
+      ary.push([block.call(e), i])
+    }
+    if ary.size > 1
+      ary.sort!
+    end
+    ary.collect!{|e,i| self[i]}
+  end
+
+  def sort_by!(&block)
+    self.replace(self.sort_by(&block))
+  end
 end
 
 ##
@@ -1559,4 +2071,340 @@ class String
   #def match(re, &block)
   #  re.match(self, &block)
   #end
+end
+
+# StopIteration#result accessor (from mruby-fiber upstream)
+class StopIteration
+  attr_accessor :result
+end
+
+##
+# Enumerator
+#
+# A class which allows both internal and external iteration.
+# (from mruby-enumerator)
+class Enumerator
+  include Enumerable
+
+  def initialize(obj=Enumerable::NONE, meth=:each, *args, **kwd, &block)
+    if block
+      obj = Generator.new(&block)
+    elsif Enumerable::NONE.equal?(obj)
+      raise ArgumentError, "wrong number of arguments (given 0, expected 1+)"
+    end
+
+    @obj = obj
+    @meth = meth
+    @args = args
+    @kwd = kwd
+    @fib = nil
+    @dst = nil
+    @lookahead = nil
+    @feedvalue = nil
+    @stop_exc = false
+  end
+
+  def initialize_copy(obj)
+    raise TypeError, "can't copy type #{obj.class}" unless obj.kind_of? Enumerator
+    raise TypeError, "can't copy execution context" if obj.instance_eval{@fib}
+    meth = args = kwd = fib = nil
+    obj.instance_eval {
+      obj = @obj
+      meth = @meth
+      args = @args
+      kwd = @kwd
+    }
+    @obj = obj
+    @meth = meth
+    @args = args
+    @kwd = kwd
+    @fib = nil
+    @lookahead = nil
+    @feedvalue = nil
+    self
+  end
+
+  def with_index(offset=0, &block)
+    return to_enum :with_index, offset unless block
+
+    if offset.nil?
+      offset = 0
+    else
+      offset = offset.__to_int
+    end
+
+    n = offset - 1
+    __enumerator_block_call do |*i|
+      n += 1
+      block.call i.__svalue, n
+    end
+  end
+
+  def each_with_index(&block)
+    with_index(0, &block)
+  end
+
+  def with_object(object, &block)
+    return to_enum(:with_object, object) unless block
+
+    __enumerator_block_call do |i|
+      block.call [i,object]
+    end
+    object
+  end
+
+  def inspect
+    if @args && @args.size > 0
+      args = @args.join(", ")
+      "#<#{self.class}: #{@obj.inspect}:#{@meth}(#{args})>"
+    else
+      "#<#{self.class}: #{@obj.inspect}:#{@meth}>"
+    end
+  end
+
+  def size
+    if @size
+      @size
+    elsif @obj.respond_to?(:size)
+      @obj.size
+    end
+  end
+
+  def each(*argv, &block)
+    obj = self
+    if 0 < argv.length
+      obj = self.dup
+      args = obj.instance_eval{@args}
+      if !args.empty?
+        args = args.dup
+        args.concat argv
+      else
+        args = argv.dup
+      end
+      obj.instance_eval{@args = args}
+    end
+    return obj unless block
+    __enumerator_block_call(&block)
+  end
+
+  def __enumerator_block_call(&block)
+    @obj.__send__ @meth, *@args, **@kwd, &block
+  end
+  private :__enumerator_block_call
+
+  def next
+    next_values.__svalue
+  end
+
+  def next_values
+    if @lookahead
+      vs = @lookahead
+      @lookahead = nil
+      return vs
+    end
+    raise @stop_exc if @stop_exc
+
+    curr = Fiber.current
+
+    if !@fib || !@fib.alive?
+      @dst = curr
+      @fib = Fiber.new do
+        result = each do |*args|
+          feedvalue = nil
+          Fiber.yield args
+          if @feedvalue
+            feedvalue = @feedvalue
+            @feedvalue = nil
+          end
+          feedvalue
+        end
+        @stop_exc = StopIteration.new "iteration reached an end"
+        @stop_exc.result = result
+        Fiber.yield nil
+      end
+      @lookahead = nil
+    end
+
+    vs = @fib.resume curr
+    if @stop_exc
+      @fib = nil
+      @dst = nil
+      @lookahead = nil
+      @feedvalue = nil
+      raise @stop_exc
+    end
+    vs
+  end
+
+  def peek
+    peek_values.__svalue
+  end
+
+  def peek_values
+    if @lookahead.nil?
+      @lookahead = next_values
+    end
+    @lookahead.dup
+  end
+
+  def rewind
+    @obj.rewind if @obj.respond_to? :rewind
+    @fib = nil
+    @dst = nil
+    @lookahead = nil
+    @feedvalue = nil
+    @stop_exc = false
+    self
+  end
+
+  def feed(value)
+    raise TypeError, "feed value already set" if @feedvalue
+    @feedvalue = value
+    nil
+  end
+
+  # just for internal
+  class Generator
+    include Enumerable
+    def initialize(&block)
+      raise TypeError, "wrong argument type #{self.class} (expected Proc)" unless block.kind_of? Proc
+
+      @proc = block
+    end
+
+    def each(*args, &block)
+      args.unshift Yielder.new(&block)
+      @proc.call(*args)
+    end
+  end
+
+  # just for internal
+  class Yielder
+    def initialize(&block)
+      raise LocalJumpError, "no block given" unless block
+
+      @proc = block
+    end
+
+    def yield(*args)
+      @proc.call(*args)
+    end
+
+    def << *args
+      self.yield(*args)
+      self
+    end
+  end
+
+  def Enumerator.produce(init=Enumerable::NONE, &block)
+    raise ArgumentError, "no block given" if block.nil?
+    Enumerator.new do |y|
+      if Enumerable::NONE.equal?(init)
+        val = nil
+      else
+        val = init
+        y.yield(val)
+      end
+      begin
+        while true
+          y.yield(val = block.call(val))
+        end
+      rescue StopIteration
+        # do nothing
+      end
+    end
+  end
+end
+
+module Kernel
+  def to_enum(meth=:each, *args, **kwd)
+    Enumerator.new self, meth, *args, **kwd
+  end
+  alias enum_for to_enum
+end
+
+module Enumerable
+  # use Enumerator to use infinite sequence
+  def zip(*args, &block)
+    args = args.map do |a|
+      if a.respond_to?(:each)
+        a.to_enum(:each)
+      else
+        raise TypeError, "wrong argument type #{a.class} (must respond to :each)"
+      end
+    end
+
+    result = block ? nil : []
+
+    each do |*val|
+      tmp = [val.__svalue]
+      args.each do |arg|
+        v = if arg.nil?
+          nil
+        else
+          begin
+            arg.next
+          rescue StopIteration
+            nil
+          end
+        end
+        tmp.push(v)
+      end
+      if result.nil?
+        block.call(tmp)
+      else
+        result.push(tmp)
+      end
+    end
+
+    result
+  end
+
+  def chunk(&block)
+    return to_enum :chunk unless block
+
+    enum = self
+    Enumerator.new do |y|
+      last_value, arr = nil, []
+      enum.each do |element|
+        value = block.call(element)
+        case value
+        when :_alone
+          y.yield [last_value, arr] if arr.size > 0
+          y.yield [value, [element]]
+          last_value, arr = nil, []
+        when :_separator, nil
+          y.yield [last_value, arr] if arr.size > 0
+          last_value, arr = nil, []
+        when last_value
+          arr << element
+        else
+          raise 'symbols beginning with an underscore are reserved' if value.is_a?(Symbol) && value.to_s[0] == '_'
+          y.yield [last_value, arr] if arr.size > 0
+          last_value, arr = value, [element]
+        end
+      end
+      y.yield [last_value, arr] if arr.size > 0
+    end
+  end
+
+  def chunk_while(&block)
+    enum = self
+    Enumerator.new do |y|
+      n = 0
+      last_value, arr = nil, []
+      enum.each do |element|
+        if n > 0
+          unless block.call(last_value, element)
+            y.yield arr
+            arr = []
+          end
+        end
+        arr.push(element)
+        n += 1
+        last_value = element
+      end
+      y.yield arr if arr.size > 0
+    end
+  end
 end
