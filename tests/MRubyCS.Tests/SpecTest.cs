@@ -105,6 +105,8 @@ public class SpecTest
     [TestCase("hash.rb")]
     [TestCase("range.rb")]
     [TestCase("fiber.rb")]
+    [TestCase("enumerator.rb")]
+    [TestCase("enum_ext.rb")]
     [TestCase("proc.rb")]
     // error
     [TestCase("exception.rb")]

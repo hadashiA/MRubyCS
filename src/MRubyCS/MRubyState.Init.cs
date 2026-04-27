@@ -344,7 +344,7 @@ public partial class MRubyState
         DefineClass(Names.TypeError, StandardErrorClass);
         DefineClass(Names.ZeroDivisionError, StandardErrorClass);
         DefineClass(Names.ArgumentError, StandardErrorClass);
-        DefineClass(Names.IndexError, StandardErrorClass);
+        var indexErrorClass = DefineClass(Names.IndexError, StandardErrorClass);
         DefineClass(Names.RangeError, StandardErrorClass);
         DefineClass(Names.FrozenError, StandardErrorClass);
         DefineClass(Names.NotImplementedError, StandardErrorClass);
@@ -353,7 +353,7 @@ public partial class MRubyState
 
         DefineClass(Intern("ScriptError"u8), ExceptionClass);
         DefineClass(Intern("SyntaxError"u8), ExceptionClass);
-        DefineClass(Intern("StopIteration"u8), ExceptionClass);
+        DefineClass(Intern("StopIteration"u8), indexErrorClass);
     }
 
     void InitNumeric()
