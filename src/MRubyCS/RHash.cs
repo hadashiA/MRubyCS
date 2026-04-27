@@ -2,25 +2,40 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace MRubyCS;
 
 public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyValue>>
 {
-    public int Length => keys.Count;
-    public ReadOnlySpan<MRubyValue> Keys => CollectionsMarshal.AsSpan(keys);
-    public ReadOnlySpan<MRubyValue> Values => CollectionsMarshal.AsSpan(values);
-
-    public MRubyValue? DefaultValue { get; set; }
-    public RProc? DefaultProc { get; set; }
-
-    readonly List<MRubyValue> keys;
-    readonly List<MRubyValue> values;
-    readonly Dictionary<MRubyValue, int> indexTable;
+    /// <summary>Pluggable backing storage. Replaceable on demote so the
+    /// .NET object identity of <see cref="RHash"/> stays stable across
+    /// type-mismatched mutations (Ruby in-place semantics).</summary>
+    internal RHashBackend backend;
 
     readonly IEqualityComparer<MRubyValue> keyComparer;
     readonly IEqualityComparer<MRubyValue> valueComparer;
+    readonly int initialCapacity;
+
+    public int Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => backend.Length;
+    }
+
+    public ReadOnlySpan<MRubyValue> Keys
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => backend.Keys;
+    }
+
+    public ReadOnlySpan<MRubyValue> Values
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => backend.Values;
+    }
+
+    public MRubyValue? DefaultValue { get; set; }
+    public RProc? DefaultProc { get; set; }
 
     internal RHash(
         int capacity,
@@ -30,61 +45,75 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     {
         this.keyComparer = keyComparer;
         this.valueComparer = valueComparer;
-        keys = new List<MRubyValue>(capacity);
-        values = new List<MRubyValue>(capacity);
-        indexTable = new Dictionary<MRubyValue, int>(capacity, keyComparer);
+        initialCapacity = capacity;
+        // Default to symbol-keyed: in Ruby workloads (kwargs, attribute lookup,
+        // option bags) symbol keys dominate. The first non-symbol Add demotes
+        // to a generic backend.
+        backend = new RHashSymbolKeyedBackend(capacity);
     }
 
-    RHash(
-        List<MRubyValue> keys,
-        List<MRubyValue> values,
-        IEqualityComparer<MRubyValue> keyComparer,
-        IEqualityComparer<MRubyValue> valueComparer,
-        RClass hashClass) : base(MRubyVType.Hash, hashClass)
+    RHash(RHash source) : base(MRubyVType.Hash, source.Class)
     {
-        this.keys = keys;
-        this.values = values;
-        this.keyComparer = keyComparer;
-        this.valueComparer = valueComparer;
-        indexTable = new Dictionary<MRubyValue, int>(keys.Count, keyComparer);
-        for (var i = 0; i < keys.Count; i++)
+        keyComparer = source.keyComparer;
+        valueComparer = source.valueComparer;
+        initialCapacity = source.initialCapacity;
+        // Shallow copy of contents — match Ruby Hash#dup which copies entries
+        // but does not share underlying storage.
+        backend = source.backend switch
         {
-            indexTable[keys[i]] = i;
+            RHashSymbolKeyedBackend sym => CloneSymbol(sym),
+            RHashGenericBackend gen => CloneGeneric(gen),
+            _ => throw new InvalidOperationException(),
+        };
+    }
+
+    static RHashSymbolKeyedBackend CloneSymbol(RHashSymbolKeyedBackend src)
+    {
+        var dst = new RHashSymbolKeyedBackend(src.Length);
+        for (var i = 0; i < src.Length; i++)
+        {
+            src.GetPairAt(i, out var k, out var v);
+            dst.TrySet(k, v);
         }
+        return dst;
+    }
+
+    RHashGenericBackend CloneGeneric(RHashGenericBackend src)
+    {
+        var dst = new RHashGenericBackend(src.Length, keyComparer, valueComparer);
+        for (var i = 0; i < src.Length; i++)
+        {
+            src.GetPairAt(i, out var k, out var v);
+            dst.TrySet(k, v);
+        }
+        return dst;
     }
 
     public MRubyValue this[MRubyValue key]
     {
-        get
-        {
-            if (TryGetIndexOfKey(key, out var index))
-            {
-                return values[index];
-            }
-            return MRubyValue.Nil;
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => backend.Get(key);
         set
         {
-            if (indexTable.TryGetValue(key, out var index))
+            if (!backend.TrySet(key, value))
             {
-                keys[index] = key;
-                values[index] = value;
-            }
-            else
-            {
-                indexTable.Add(key, keys.Count);
-                keys.Add(key);
-                values.Add(value);
+                backend = DemoteBackend();
+                backend.TrySet(key, value);
             }
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    RHashGenericBackend DemoteBackend()
+    {
+        if (backend is RHashGenericBackend g) return g;
+        var sym = (RHashSymbolKeyedBackend)backend;
+        return sym.DemoteWithComparers(keyComparer, valueComparer);
+    }
+
     public MRubyValue GetValueOrDefault(MRubyValue key, MRubyState state)
     {
-        if (TryGetIndexOfKey(key, out var index))
-        {
-            return values[index];
-        }
+        if (backend.TryGetValue(key, out var v)) return v;
         if (DefaultProc is { } proc)
         {
             return state.Send(proc, Names.Call, this, key);
@@ -95,22 +124,20 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Add(MRubyValue key, MRubyValue value)
     {
-        if (ContainsKey(key))
+        if (!backend.TryAdd(key, value))
         {
-            throw new InvalidOperationException("Duplicate key");
+            backend = DemoteBackend();
+            backend.TryAdd(key, value);
         }
-        indexTable.Add(key, keys.Count);
-        keys.Add(key);
-        values.Add(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ContainsKey(MRubyValue key) => indexTable.TryGetValue(key, out var i);
+    public bool ContainsKey(MRubyValue key) => backend.ContainsKey(key);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ContainsValue(MRubyValue value)
     {
-        foreach (var t in Values)
+        foreach (var t in backend.Values)
         {
             if (valueComparer.Equals(value, t)) return true;
         }
@@ -118,80 +145,46 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryGetValue(MRubyValue key, out MRubyValue value)
-    {
-        if (TryGetIndexOfKey(key, out var index))
-        {
-            value = values[index];
-            return true;
-        }
-        value = default;
-        return false;
-    }
+    public bool TryGetValue(MRubyValue key, out MRubyValue value) =>
+        backend.TryGetValue(key, out value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryDelete(MRubyValue key, out MRubyValue value)
-    {
-        if (TryGetIndexOfKey(key, out var index))
-        {
-            value = values[index];
-            indexTable.Remove(key);
-            keys.RemoveAt(index);
-            values.RemoveAt(index);
-            for (var i = index; i < keys.Count; i++)
-            {
-                indexTable[keys[i]] = i;
-            }
-            return true;
-        }
-        value = default;
-        return false;
-    }
+    public bool TryDelete(MRubyValue key, out MRubyValue value) =>
+        backend.TryDelete(key, out value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Clear()
-    {
-        keys.Clear();
-        values.Clear();
-        indexTable.Clear();
-    }
+    public void Clear() => backend.Clear();
 
     public void ReplaceTo(RHash other)
     {
-        other.keys.Clear();
-        other.values.Clear();
-        other.indexTable.Clear();
-        for (var i = 0; i < keys.Count; i++)
+        // Mirror self's backend type into other.
+        if (backend is RHashSymbolKeyedBackend sym)
         {
-            var k = keys[i];
-            other.keys.Add(k);
-            other.values.Add(values[i]);
-            other.indexTable.Add(k, i);
+            other.backend = CloneSymbol(sym);
         }
-
+        else
+        {
+            var srcGen = (RHashGenericBackend)backend;
+            var dst = new RHashGenericBackend(srcGen.Length, other.keyComparer, other.valueComparer);
+            for (var i = 0; i < srcGen.Length; i++)
+            {
+                srcGen.GetPairAt(i, out var k, out var v);
+                dst.TrySet(k, v);
+            }
+            other.backend = dst;
+        }
         other.DefaultValue = DefaultValue;
         other.DefaultProc = DefaultProc;
     }
 
-    public bool TryShift(out MRubyValue headKey, out MRubyValue headValue)
-    {
-        if (keys.Count > 0)
-        {
-            headKey = keys[0];
-            headValue = values[0];
-            TryDelete(headKey, out _);
-            return true;
-        }
-        headValue = default;
-        headKey = default;
-        return false;
-    }
+    public bool TryShift(out MRubyValue headKey, out MRubyValue headValue) =>
+        backend.TryShift(out headKey, out headValue);
 
-    public RHash Dup() => new(keys, values, keyComparer, valueComparer, Class);
+    public RHash Dup() => new(this);
 
     internal override RObject Clone()
     {
-        var clone = new RHash(Length, keyComparer, valueComparer, Class);
+        var clone = new RHash(initialCapacity, keyComparer, valueComparer, Class);
         InstanceVariables.CopyTo(clone.InstanceVariables);
         return clone;
     }
@@ -201,39 +194,14 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
         if (this == other) return;
         if (other.Length == 0) return;
 
-        for (var i = 0; i < other.keys.Count; i++)
+        for (var i = 0; i < other.backend.Length; i++)
         {
-            this[other.keys[i]] = other.values[i];
+            other.backend.GetPairAt(i, out var k, out var v);
+            this[k] = v;
         }
     }
 
-    public void Rehash()
-    {
-        indexTable.Clear();
-        var writePos = 0;
-
-        for (var readPos = 0; readPos < keys.Count; readPos++)
-        {
-            var key = keys[readPos];
-            if (indexTable.TryGetValue(key, out var existingIndex))
-            {
-                values[existingIndex] = values[readPos];
-            }
-            else
-            {
-                if (writePos != readPos)
-                {
-                    keys[writePos] = keys[readPos];
-                    values[writePos] = values[readPos];
-                }
-                indexTable[key] = writePos;
-                writePos++;
-            }
-        }
-
-        keys.RemoveRange(writePos, keys.Count - writePos);
-        values.RemoveRange(writePos, values.Count - writePos);
-    }
+    public void Rehash() => backend.Rehash();
 
     public struct Enumerator(RHash source) : IEnumerator<KeyValuePair<MRubyValue, MRubyValue>>
     {
@@ -244,9 +212,11 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
 
         public bool MoveNext()
         {
-            if (++index < source.keys.Count)
+            index++;
+            if (index < source.backend.Length)
             {
-                Current = new KeyValuePair<MRubyValue, MRubyValue>(source.keys[index], source.values[index]);
+                source.backend.GetPairAt(index, out var k, out var v);
+                Current = new KeyValuePair<MRubyValue, MRubyValue>(k, v);
                 return true;
             }
             return false;
@@ -263,17 +233,6 @@ public sealed class RHash : RObject, IEnumerable<KeyValuePair<MRubyValue, MRubyV
             index = -2;
             Current = default;
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    bool TryGetIndexOfKey(MRubyValue key, out int index)
-    {
-        if (indexTable.TryGetValue(key, out index))
-        {
-            return true;
-        }
-        index = -1;
-        return false;
     }
 
     public Enumerator GetEnumerator() => new(this);

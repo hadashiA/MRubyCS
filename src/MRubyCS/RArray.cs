@@ -10,85 +10,90 @@ public sealed class RArray : RObject, IEnumerable<MRubyValue>
 {
     public static int MaxLength => 0X7FFFFFC7;
 
+    /// <summary>Pluggable backing storage. Replaceable on demote so the
+    /// .NET object identity of <see cref="RArray"/> stays stable across
+    /// type-mismatched mutations (Ruby in-place semantics).</summary>
+    internal RArrayBackend backend;
+
     public int Length
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private set;
+        get => backend.Length;
     }
 
     public MRubyValue this[int index]
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
             if (index < 0)
             {
-                index += Length;
+                index += backend.Length;
             }
-            if ((uint)index < (uint)Length)
+            if ((uint)index < (uint)backend.Length)
             {
-                return data[offset + index];
+                return backend.Get(index);
             }
             return MRubyValue.Nil;
         }
         set
         {
-            MakeModifiable(index + 1, index >= Length);
-            data[offset + index] = value;
+            backend.EnsureCapacity(index + 1, expandLength: index >= backend.Length);
+            if (!backend.TrySet(index, value))
+            {
+                backend = backend.Demote();
+                backend.TrySet(index, value);
+            }
         }
     }
 
-    MRubyValue[] data;
-    int offset;
-    bool dataOwned;
+    /// <summary>Returns a writable span over the array's contents. If the
+    /// array is currently backed by specialized primitive storage, calling
+    /// this method transparently rebuilds an MRubyValue[] backing — the
+    /// instance reverts to the generic representation thereafter.</summary>
+    public Span<MRubyValue> AsSpan()
+    {
+        var obj = EnsureObjectBackend();
+        return obj.AsSpan();
+    }
 
-    public Span<MRubyValue> AsSpan() => data.AsSpan(offset, Length);
+    /// <inheritdoc cref="AsSpan()"/>
+    public Span<MRubyValue> AsSpan(int start, int count)
+    {
+        var obj = EnsureObjectBackend();
+        return obj.AsSpan(start, count);
+    }
 
-    public Span<MRubyValue> AsSpan(int start, int count) =>
-        data.AsSpan(offset + start, count);
+    /// <inheritdoc cref="AsSpan()"/>
+    public Span<MRubyValue> AsSpan(int start)
+    {
+        var obj = EnsureObjectBackend();
+        return obj.AsSpan(start);
+    }
 
-    public Span<MRubyValue> AsSpan(int start) =>
-        data.AsSpan(offset + start, Length - start);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    RArrayObjectBackend EnsureObjectBackend()
+    {
+        if (backend is RArrayObjectBackend obj) return obj;
+        var demoted = backend.Demote();
+        backend = demoted;
+        return demoted;
+    }
 
     internal RArray(ReadOnlySpan<MRubyValue> values, RClass arrayClass)
         : base(MRubyVType.Array, arrayClass)
     {
-        Length = values.Length;
-        offset = 0;
-        data = values.ToArray();
-        dataOwned = true;
+        backend = RArrayBackendFactory.FromSpan(values);
     }
 
     internal RArray(int capacity, RClass arrayClass) : base(MRubyVType.Array, arrayClass)
     {
-        Length = 0;
-        offset = 0;
-        data = new MRubyValue[capacity];
-        dataOwned = true;
+        backend = new RArrayObjectBackend(capacity);
     }
 
-    RArray(RArray shared)
-        : this(shared, 0, shared.Length)
+    RArray(RArrayBackend sharedBackend, RClass arrayClass) : base(MRubyVType.Array, arrayClass)
     {
-    }
-
-    RArray(RArray shared, int offset, int size) : base(MRubyVType.Array, shared.Class)
-    {
-        if (offset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(offset));
-        }
-
-        if (size > shared.Length)
-        {
-            size = shared.Length;
-        }
-        Length = size;
-        this.offset = offset;
-        data = shared.data;
-        dataOwned = false;
+        backend = sharedBackend;
     }
 
     public override string ToString()
@@ -97,174 +102,141 @@ public sealed class RArray : RObject, IEnumerable<MRubyValue>
         return $"[{string.Join(", ", list)}]";
     }
 
-    public RArray Dup() => new(this);
+    public RArray Dup() => new(backend.SubSequence(0, backend.Length), Class);
 
     public RArray SubSequence(int start, int length)
     {
-        return new RArray(this, start, length);
+        if (length > backend.Length) length = backend.Length;
+        return new RArray(backend.SubSequence(start, length), Class);
     }
 
-    public void Clear()
-    {
-        if (dataOwned)
-        {
-            AsSpan().Clear();
-            Length = 0;
-        }
-        else
-        {
-            MakeModifiable(0, true);
-        }
-    }
+    public void Clear() => backend.Clear();
 
     public void Push(MRubyValue newItem)
     {
-        var currentLength = Length;
-        MakeModifiable(currentLength + 1, true);
-        data[currentLength] = newItem;
-    }
-
-    public bool TryPop(out MRubyValue value)
-    {
-        if (Length <= 0)
+        if (!backend.TryPush(newItem))
         {
-            value = default;
-            return false;
+            backend = backend.Demote();
+            backend.TryPush(newItem);
         }
-
-        value = data[offset + Length - 1];
-        MakeModifiable(Length - 1, true);
-        return true;
     }
 
-    public MRubyValue Shift()
-    {
-        if (Length <= 0) return MRubyValue.Nil;
-        var result = this[0];
-        offset++;
-        Length--;
-        return result;
-    }
+    public bool TryPop(out MRubyValue value) => backend.TryPop(out value);
+
+    public MRubyValue Shift() => backend.Shift();
 
     public RArray Shift(int n)
     {
-        if (Length <= 0 || n <= 0) return new RArray(0, Class);
-        if (n > Length) n = Length;
+        if (backend.Length <= 0 || n <= 0) return new RArray(0, Class);
+        if (n > backend.Length) n = backend.Length;
 
-        var result = new RArray(this)
-        {
-            Length = n
-        };
-        offset += n;
-        Length -= n;
-        return result;
+        var head = backend.SubSequence(0, n);
+        // Advance self by n elements: take a sub-view of [n..end].
+        backend = backend.SubSequence(n, backend.Length - n);
+        return new RArray(head, Class);
     }
 
     public void Unshift(ReadOnlySpan<MRubyValue> newItems)
     {
         if (newItems.Length <= 0) return;
 
-        var currentLength = Length;
-        MakeModifiable(Length + newItems.Length, true);
-        var span = AsSpan();
-        AsSpan(0,currentLength).CopyTo(AsSpan(newItems.Length));
+        // Unshift writes through AsSpan, which always demotes. Match the
+        // pre-strategy code path: grow first, then move tail, then write head.
+        var currentLength = backend.Length;
+        var obj = EnsureObjectBackend();
+        obj.EnsureCapacity(currentLength + newItems.Length, expandLength: true);
+        var span = obj.AsSpan();
+        obj.AsSpan(0, currentLength).CopyTo(obj.AsSpan(newItems.Length));
         newItems.CopyTo(span);
     }
 
     public void Concat(RArray other)
     {
-        if (Length <= 0)
+        if (backend.Length <= 0)
         {
-            Length = other.Length;
-            data = other.data;
-            dataOwned = false;
+            // Empty-self alias trick: take a non-owned view of other's storage.
+            backend = other.backend.AliasView();
             return;
         }
 
-        var currentLength = Length;
-        var newLength = currentLength + other.Length;
-        var source = other.AsSpan();
-        MakeModifiable(newLength, true);
-        source.CopyTo(AsSpan(currentLength));
+        var currentLength = backend.Length;
+        var newLength = currentLength + other.backend.Length;
+
+        // Same-backend-type fast path keeps both arrays specialized.
+        if (backend.GetType() == other.backend.GetType())
+        {
+            backend.TryAppendSameType(other.backend, 0, other.backend.Length);
+            return;
+        }
+
+        // Mixed types: demote both via AsSpan; capture the source first so
+        // EnsureCapacity below doesn't invalidate it (also works for self
+        // alias via Span's array-pinning).
+        var src = other.AsSpan();
+        var dst = EnsureObjectBackend();
+        dst.EnsureCapacity(newLength, expandLength: true);
+        src.CopyTo(dst.AsSpan(currentLength));
     }
 
     public MRubyValue DeleteAt(int index)
     {
-        if (index < 0) index += Length;
-        if (index < 0 || index >= Length) return MRubyValue.Nil;
+        if (index < 0) index += backend.Length;
+        if (index < 0 || index >= backend.Length) return MRubyValue.Nil;
 
-        var value = data[offset + index];
-        var src = AsSpan(index + 1);
-        var dst = AsSpan(index);
-        src.CopyTo(dst);
-        Length--;
+        var value = backend.Get(index);
+        backend.DeleteAt(index);
         return value;
     }
 
     public void CopyTo(RArray other)
     {
-        other.MakeModifiable(Length);
-        other.Length = Length;
-        AsSpan().CopyTo(other.AsSpan());
+        var len = backend.Length;
+        var src = AsSpan();
+        var dst = other.EnsureObjectBackend();
+        dst.EnsureCapacity(len, expandLength: true);
+        src.CopyTo(dst.AsSpan());
     }
 
     public void ReplaceTo(RArray other)
     {
-        other.Length = 0;
+        other.backend.Clear();
         CopyTo(other);
     }
 
     internal override RObject Clone()
     {
-        var clone = new RArray(data.Length, Class);
+        var clone = new RArray(backend.Capacity, Class);
         InstanceVariables.CopyTo(clone.InstanceVariables);
         return clone;
     }
 
-    internal void PushRange(ReadOnlySpan<MRubyValue>newItems)
+    internal void PushRange(ReadOnlySpan<MRubyValue> newItems)
     {
-        var start = Length;
-        MakeModifiable(start + newItems.Length, true);
-        newItems.CopyTo(AsSpan(start));
+        if (newItems.Length == 0) return;
+
+        // Bulk-load promotion path: only if target is empty Generic AND the
+        // span is homogeneous, replace the backend with a specialised one.
+        if (backend is RArrayObjectBackend obj && obj.Length == 0 && obj.DataOwned)
+        {
+            var promoted = RArrayBackendFactory.FromSpan(newItems);
+            if (promoted is not RArrayObjectBackend)
+            {
+                backend = promoted;
+                return;
+            }
+        }
+
+        if (!backend.TryPushRange(newItems))
+        {
+            backend = backend.Demote();
+            backend.TryPushRange(newItems);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void MakeModifiable(int capacity, bool expandLength = false)
     {
-        if (data.Length - offset < capacity)
-        {
-            var newLength = data.Length * 2;
-            if (newLength - offset < capacity)
-            {
-                newLength = capacity;
-            }
-
-            if (dataOwned)
-            {
-                Array.Resize(ref data, newLength);
-            }
-            else
-            {
-                var newData = new MRubyValue[newLength];
-                data.AsSpan(offset).CopyTo(newData);
-                data = newData;
-                offset = 0;
-                dataOwned = true;
-            }
-        }
-        else if (!dataOwned)
-        {
-            var newData = new MRubyValue[data.Length];
-            data.AsSpan(offset).CopyTo(newData);
-            data = newData;
-            offset = 0;
-            dataOwned = true;
-        }
-
-        if (expandLength)
-        {
-            Length = capacity;
-        }
+        backend.EnsureCapacity(capacity, expandLength);
     }
 
     public struct Enumerator(RArray source) : IEnumerator<MRubyValue>

@@ -291,10 +291,21 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    MRubyValue(long bits, RObject? obj)
+    internal MRubyValue(long bits, RObject? obj)
     {
         this.bits = bits;
         Object = obj;
+    }
+
+    /// <summary>
+    /// The underlying NaN-boxed bit pattern. Internal so that specialized
+    /// containers (e.g. RArray fixnum/float backings) can store and reload
+    /// values without going through type-tag re-encoding.
+    /// </summary>
+    internal long RawBits
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => bits;
     }
 
     // Implicit conversion operators
