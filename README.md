@@ -4,6 +4,8 @@ MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine des
 
 Easily embed Ruby into Unity or .NET—empowering users to script game logic while keeping your core engine in C#.
 
+[mruby on C#: From VM Implementation to Game Scripting (RubyKaigi 2026) - Speaker Deck](https://speakerdeck.com/hadashia/mruby-on-c-number-from-vm-implementation-to-game-scripting)
+
 > [!NOTE]
 > [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) provides a high-level framework for integrating MRubyCS with Unity (and .NET), including command routing and script lifecycle management.
 
