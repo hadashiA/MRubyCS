@@ -1,3 +1,4 @@
+# nullable enable
 using System.IO;
 using UnityEditor.AssetImporters;
 using UnityEngine;
