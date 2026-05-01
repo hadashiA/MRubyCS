@@ -13,8 +13,6 @@ Easily embed Ruby into Unity or .NET—empowering users to script game logic whi
 
 Ruby's elegant, expressive syntax makes it ideal for building DSLs (Domain-Specific Languages). Game designers and scenario writers can describe complex game logic — event triggers, dialogue trees, AI behavior — in clean, readable scripts without wrestling with C-like syntax.
 
-[mruby](https://github.com/mruby/mruby) is a lightweight, embeddable implementation of Ruby designed specifically for this purpose. It compiles to compact bytecode, has a small memory footprint, and provides a clean C API for host language integration — making it a perfect scripting layer for game engines and applications.
-
 ```ruby
 # Example: game event DSL
 quest "The Lost Sword" do
