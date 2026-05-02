@@ -14,7 +14,7 @@ namespace MRubyCS.Compiler
 
         public override bool IsInvalid => handle == IntPtr.Zero;
 
-        public unsafe bool HasError => DangerousGetPtr()->CaptureErrors > 0;
+        public unsafe bool HasError => (DangerousGetPtr()->Flags & 0x01) != 0;
 
         public MrcCContextHandle(IntPtr invalidHandleValue) : base(invalidHandleValue, true)
         {
