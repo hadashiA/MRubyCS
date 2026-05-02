@@ -480,3 +480,29 @@ end
 #   b << b
 #   assert_equal a.hash, b.hash
 # end
+
+assert("Array#deconstruct") do
+  # Basic functionality - returns self
+  a = [1, 2, 3]
+  result = a.deconstruct
+  assert_equal([1, 2, 3], result)
+  assert_true(result.equal?(a))
+
+  # Empty array
+  b = []
+  result_empty = b.deconstruct
+  assert_equal([], result_empty)
+  assert_true(result_empty.equal?(b))
+
+  # Mixed types
+  c = [1, "hello", :symbol, nil, true]
+  result_mixed = c.deconstruct
+  assert_equal([1, "hello", :symbol, nil, true], result_mixed)
+  assert_true(result_mixed.equal?(c))
+
+  # Nested arrays
+  d = [[1, 2], [3, 4], [5]]
+  result_nested = d.deconstruct
+  assert_equal([[1, 2], [3, 4], [5]], result_nested)
+  assert_true(result_nested.equal?(d))
+end
