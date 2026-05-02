@@ -3,13 +3,12 @@ MRuby::CrossBuild.new("linux-x64") do |conf|
   conf.toolchain :gcc
 
   conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '375f6d8914399ff88a86dcac8e3104760f8a8c58'
+           checksum_hash: '71749bc54a710ac4567130ebd1609c331ba60e7a'
   conf.gem './mrbgems/mrubycs-compiler'
 
-  conf.disable_presym
-
+  # Note: mruby 4.0 removed MRB_NO_PRESYM and `disable_presym`; presym is always on.
   conf.compilers.each do |cc|
-    cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY MRC_ALLOC_LIBC)
+    cc.defines = %w(MRB_WORD_BOXING MRC_TARGET_MRUBY MRC_ALLOC_LIBC)
     cc.flags << '-fPIC'
   end
 
@@ -33,17 +32,16 @@ MRuby::CrossBuild.new("linux-arm64") do |conf|
   conf.toolchain :gcc
 
   conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '375f6d8914399ff88a86dcac8e3104760f8a8c58'
+           checksum_hash: '71749bc54a710ac4567130ebd1609c331ba60e7a'
   conf.gem './mrbgems/mrubycs-compiler'
   
   conf.cc.command = 'aarch64-linux-gnu-gcc'
   conf.linker.command = 'aarch64-linux-gnu-gcc'
   conf.archiver.command = 'aarch64-linux-gnu-ar'
 
-  conf.disable_presym
-
+  # Note: mruby 4.0 removed MRB_NO_PRESYM and `disable_presym`; presym is always on.
   conf.compilers.each do |cc|
-    cc.defines = %w(MRB_WORD_BOXING MRB_NO_PRESYM MRC_TARGET_MRUBY MRC_ALLOC_LIBC)
+    cc.defines = %w(MRB_WORD_BOXING MRC_TARGET_MRUBY MRC_ALLOC_LIBC)
     cc.flags << '-fPIC'
   end
 
