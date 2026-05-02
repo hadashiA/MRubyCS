@@ -349,6 +349,7 @@ public partial class MRubyState
         DefineClass(Names.FrozenError, StandardErrorClass);
         DefineClass(Names.NotImplementedError, StandardErrorClass);
         DefineClass(Names.LocalJumpError, StandardErrorClass);
+        DefineClass(Names.NoMatchingPatternError, StandardErrorClass);
         DefineClass(Names.FloatDomainError, StandardErrorClass);
 
         DefineClass(Intern("ScriptError"u8), ExceptionClass);

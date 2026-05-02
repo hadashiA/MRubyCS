@@ -567,13 +567,13 @@ partial class MRubyState
                         var valueB = Unsafe.Add(ref registerA, 1);
                         switch (registerA.Object)
                         {
-                            case RArray array when valueB.IsInteger:
+                            case RArray array when valueB.IsInteger && array.Class == ArrayClass:
                                 registerA = array[(int)valueB.IntegerValue];
                                 goto Next;
-                            case RHash hash:
+                            case RHash hash when hash.Class == HashClass:
                                 registerA = hash.GetValueOrDefault(valueB, this);
                                 goto Next;
-                            case RString str:
+                            case RString str when str.Class == StringClass:
                                 switch (valueB.VType)
                                 {
                                     case MRubyVType.Integer:
@@ -593,12 +593,52 @@ partial class MRubyState
                         callInfo = ref GetNextCallInfo(callInfo.StackPointer + a, opcode, 1);
                         goto case OpCode.SendInternal;
                     }
+                    case OpCode.GetIdx0:
+                    {
+                        Markers.GetIdx0();
+                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        var recv = Unsafe.Add(ref registers, bb.B);
+                        switch (recv.Object)
+                        {
+                            case RArray array when array.Class == ArrayClass:
+                                Unsafe.Add(ref registers, bb.A) = array.Length > 0
+                                    ? array[0]
+                                    : default;
+                                goto Next;
+                            case RHash hash when hash.Class == HashClass:
+                                Unsafe.Add(ref registers, bb.A) = hash.GetValueOrDefault(0, this);
+                                goto Next;
+                        }
+
+                        // Fallback to send :[](0) — set up call frame at register A.
+                        Unsafe.Add(ref registers, bb.A) = recv;
+                        Unsafe.Add(ref registers, bb.A + 1) = 0;
+                        Unsafe.Add(ref registers, bb.A + 2) = default; // push nil after arguments
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + bb.A, OpCode.GetIdx, 1);
+                        goto case OpCode.SendInternal;
+                    }
                     case OpCode.SetIdx:
                     {
                         Markers.SetIdx();
                         a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
-                        Unsafe.Add(ref registers, a + 3) = default; // push nil after arguments
+                        registerA = ref Unsafe.Add(ref registers, a);
+                        var keyVal = Unsafe.Add(ref registerA, 1);
+                        var setVal = Unsafe.Add(ref registerA, 2);
+                        switch (registerA.Object)
+                        {
+                            case RArray array when keyVal.IsInteger && array.Class == ArrayClass
+                                                   && !array.HasFlag(MRubyObjectFlags.Frozen):
+                                array[(int)keyVal.IntegerValue] = setVal;
+                                registerA = setVal;
+                                goto Next;
+                            case RHash hash when hash.Class == HashClass
+                                                 && !hash.HasFlag(MRubyObjectFlags.Frozen):
+                                hash[keyVal] = setVal;
+                                registerA = setVal;
+                                goto Next;
+                        }
 
+                        Unsafe.Add(ref registers, a + 3) = default; // push nil after arguments
                         // Jump to send :[]=
                         var nextStackPointer = callInfo.StackPointer + a;
                         callInfo = ref Context.PushCallStack();
@@ -841,6 +881,49 @@ partial class MRubyState
                             return false; // fallthrough to Send
                         }
 
+                    case OpCode.AddILV:
+                    case OpCode.SubILV:
+                        Markers.AddILV();
+                        bbb = OperandBBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        registerA = ref Unsafe.Add(ref registers, bbb.A);
+                    {
+                        var rV = opcode == OpCode.AddILV ? bbb.C : -bbb.C;
+
+                        if (registerA.IsFloat)
+                        {
+                            registerA = new MRubyValue(registerA.FloatValue + rV);
+                            goto Next;
+                        }
+                        if (registerA.IsFixnum)
+                        {
+                            registerA = registerA.FixnumValue + rV;
+                            goto Next;
+                        }
+
+                        // Slow path for boxed Integer/Float
+                        var equivalentOp = opcode == OpCode.AddILV ? OpCode.AddI : OpCode.SubI;
+                        switch (registerA.VType)
+                        {
+                            case MRubyVType.Integer:
+                            {
+                                var intVal = registerA.IntegerValue;
+                                var result = intVal + rV;
+                                if (((intVal ^ result) & ((long)rV ^ result)) < 0)
+                                    IntegerMembers.RaiseIntegerOverflowError(this,
+                                        equivalentOp == OpCode.AddI ? "add"u8 : "sub"u8);
+                                registerA = result;
+                                goto Next;
+                            }
+                            case MRubyVType.Float:
+                                registerA = new MRubyValue(registerA.FloatValue + rV);
+                                goto Next;
+                        }
+
+                        // fallthrough to Send (using register A+1 as the arg slot)
+                        Unsafe.Add(ref registerA, 1) = new MRubyValue(bbb.C);
+                        callInfo = ref GetNextCallInfo(callInfo.StackPointer + bbb.A, equivalentOp, 1);
+                        goto case OpCode.SendInternal;
+                    }
                     case OpCode.AddI:
                     case OpCode.SubI:
                         Markers.AddI();
@@ -1000,6 +1083,50 @@ partial class MRubyState
                         }
                         return returnValue;
                     }
+                    case OpCode.RetSelf:
+                    {
+                        Markers.RetSelf();
+                        callInfo.ProgramCounter++;
+                        var returnValue = Unsafe.Add(ref registers, 0);
+                        if (TryReturnJump(ref callInfo, Context.CallDepth, returnValue))
+                        {
+                            goto JumpAndNext;
+                        }
+                        return returnValue;
+                    }
+                    case OpCode.RetNil:
+                    {
+                        Markers.RetNil();
+                        callInfo.ProgramCounter++;
+                        var returnValue = MRubyValue.Nil;
+                        if (TryReturnJump(ref callInfo, Context.CallDepth, returnValue))
+                        {
+                            goto JumpAndNext;
+                        }
+                        return returnValue;
+                    }
+                    case OpCode.RetTrue:
+                    {
+                        Markers.RetTrue();
+                        callInfo.ProgramCounter++;
+                        var returnValue = MRubyValue.True;
+                        if (TryReturnJump(ref callInfo, Context.CallDepth, returnValue))
+                        {
+                            goto JumpAndNext;
+                        }
+                        return returnValue;
+                    }
+                    case OpCode.RetFalse:
+                    {
+                        Markers.RetFalse();
+                        callInfo.ProgramCounter++;
+                        var returnValue = MRubyValue.False;
+                        if (TryReturnJump(ref callInfo, Context.CallDepth, returnValue))
+                        {
+                            goto JumpAndNext;
+                        }
+                        return returnValue;
+                    }
                     // --- End hot opcodes ---
 
                     case OpCode.JmpUw:
@@ -1148,19 +1275,43 @@ partial class MRubyState
                             return VmSignal.Next;
                         }
                     }
+                    case OpCode.MatchErr:
+                    {
+                        Markers.MatchErr();
+                        a = ReadOperandB(ref sequence, ref callInfo.ProgramCounter);
+                        if (Unsafe.Add(ref registers, a).Falsy)
+                        {
+                            Raise(Names.NoMatchingPatternError, "no matching pattern"u8);
+                        }
+                        goto Next;
+                    }
                     case OpCode.SSend:
                     case OpCode.SSendB:
                     case OpCode.Send:
                     case OpCode.SendB:
+                    case OpCode.SSend0:
+                    case OpCode.Send0:
                     {
                         Markers.SSend();
-                        bbb = OperandBBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        // Send0/SSend0 use BB operand (no argc byte); synthesize C=0.
+                        if (opcode is OpCode.Send0 or OpCode.SSend0)
+                        {
+                            bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                            bbb = default;
+                            bbb.A = bb.A;
+                            bbb.B = bb.B;
+                            bbb.C = 0;
+                        }
+                        else
+                        {
+                            bbb = OperandBBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        }
 
                         // Trivial getter fast path — skip full dispatch for no-arg sends
                         // that resolve to trivial getters (attr_reader or def x; @x; end)
-                        if (bbb.C == 0 && opcode is OpCode.Send or OpCode.SSend)
+                        if (bbb.C == 0 && opcode is OpCode.Send or OpCode.SSend or OpCode.Send0 or OpCode.SSend0)
                         {
-                            var selfVal = opcode == OpCode.SSend
+                            var selfVal = opcode is OpCode.SSend or OpCode.SSend0
                                 ? Unsafe.Add(ref registers, 0)
                                 : Unsafe.Add(ref registers, bbb.A);
                             if (selfVal.Object is RObject selfObj && selfObj is not RClass)
@@ -1220,7 +1371,7 @@ partial class MRubyState
                             }
                         }
 
-                        if (opcode is OpCode.Send or OpCode.SSend)
+                        if (opcode is OpCode.Send or OpCode.SSend or OpCode.Send0 or OpCode.SSend0)
                         {
                             nextRegisters[blockOffset] = default;
                         }
@@ -1239,7 +1390,7 @@ partial class MRubyState
                         }
 
                         // self send
-                        if (opcode is OpCode.SSend or OpCode.SSendB)
+                        if (opcode is OpCode.SSend or OpCode.SSendB or OpCode.SSend0)
                         {
                             nextRegisters[0] = Unsafe.Add(ref registers, 0);
                         }
@@ -1809,6 +1960,54 @@ partial class MRubyState
 
                         goto Next;
                     }
+                    case OpCode.BlkCall:
+                    {
+                        Markers.BlkCall();
+                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        var blockValue = Unsafe.Add(ref registers, bb.A);
+                        if (blockValue.Object is not RProc proc)
+                        {
+                            Raise(Names.TypeError, $"wrong type {Stringify(blockValue)} (expected Proc)");
+                            goto Next; // unreachable
+                        }
+
+                        var currentStackPointer = callInfo.StackPointer;
+                        callInfo = ref Context.PushCallStack();
+                        callInfo.CallerType = CallerType.InVmLoop;
+                        callInfo.StackPointer = currentStackPointer + bb.A;
+                        callInfo.MethodId = default;
+                        callInfo.ArgumentCount = (byte)bb.B;
+                        callInfo.KeywordArgumentCount = 0;
+                        callInfo.Scope = proc.Scope?.TargetClass!;
+                        callInfo.Proc = proc;
+
+                        irep = proc.Irep;
+                        callInfo.ProgramCounter = proc.ProgramCounter;
+
+                        var newRegisterCount = irep.RegisterVariableCount;
+                        Context.ExtendStack(callInfo.StackPointer + newRegisterCount + 1);
+                        // self at stack[0] is already the proc value (= old register A);
+                        // ensure block arg slot is nil.
+                        var blockArgIdx = callInfo.BlockArgumentOffset;
+                        Context.Stack[callInfo.StackPointer + blockArgIdx] = default;
+                        var clearStart = callInfo.StackPointer + bb.B + 1;
+                        var clearLen = newRegisterCount - (bb.B + 1);
+                        if (clearLen > 0)
+                        {
+                            Context.ClearStack(clearStart, clearLen);
+                        }
+
+                        if (proc.Scope is REnv env)
+                        {
+                            callInfo.MethodId = env.MethodId;
+                            Context.Stack[callInfo.StackPointer] = env.Stack[0];
+                        }
+
+                        sequence = ref GetArrayDataReference(irep.Sequence);
+                        symbols = ref GetArrayDataReference(irep.Symbols);
+                        registers = ref Unsafe.Add(ref GetArrayDataReference(Context.Stack), callInfo.StackPointer);
+                        goto Next;
+                    }
                     case OpCode.Array:
                     {
                         Markers.Array();
@@ -2227,6 +2426,32 @@ partial class MRubyState
                         DefineMethod(target, methodId, MRubyMethod.CreateFromProc(proc));
                         MethodAddedHook(target, methodId);
                         Unsafe.Add(ref registers, bb.A) = methodId;
+                        goto Next;
+                    }
+                    case OpCode.TDef:
+                    {
+                        Markers.TDef();
+                        bbb = OperandBBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        var target = callInfo.Scope.TargetClass;
+                        var methodId = Unsafe.Add(ref symbols, bbb.B);
+                        var proc = NewProc(irep.Children[bbb.C]);
+                        proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
+                        DefineMethod(target, methodId, MRubyMethod.CreateFromProc(proc));
+                        MethodAddedHook(target, methodId);
+                        Unsafe.Add(ref registers, bbb.A) = methodId;
+                        goto Next;
+                    }
+                    case OpCode.SDef:
+                    {
+                        Markers.SDef();
+                        bbb = OperandBBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        var target = SingletonClassOf(Unsafe.Add(ref registers, bbb.A));
+                        var methodId = Unsafe.Add(ref symbols, bbb.B);
+                        var proc = NewProc(irep.Children[bbb.C]);
+                        proc.SetFlag(MRubyObjectFlags.ProcStrict | MRubyObjectFlags.ProcScope);
+                        DefineMethod(target, methodId, MRubyMethod.CreateFromProc(proc));
+                        MethodAddedHook(target, methodId);
+                        Unsafe.Add(ref registers, bbb.A) = methodId;
                         goto Next;
                     }
                     case OpCode.Alias:
