@@ -58,6 +58,7 @@ partial class MRubyState
             GetUpVar();
             SetUpVar();
             GetIdx();
+            GetIdx0();
             SetIdx();
             Jmp();
             JmpIf();
@@ -67,11 +68,15 @@ partial class MRubyState
             Except();
             Rescue();
             RaiseIf();
+            MatchErr();
             SSend();
+            SSend0();
             SSendB();
             Send();
+            Send0();
             SendB();
             Call();
+            BlkCall();
             Super();
             ArgAry();
             Enter();
@@ -80,12 +85,18 @@ partial class MRubyState
             KArg();
             Return();
             ReturnBlk();
+            RetSelf();
+            RetNil();
+            RetTrue();
+            RetFalse();
             Break();
             BlkPush();
             Add();
             AddI();
             Sub();
             SubI();
+            AddILV();
+            SubILV();
             Mul();
             Div();
             EQ();
@@ -118,6 +129,8 @@ partial class MRubyState
             Module();
             Exec();
             Def();
+            TDef();
+            SDef();
             Alias();
             Undef();
             SClass();
@@ -770,6 +783,84 @@ partial class MRubyState
         [MethodImpl(MethodImplOptions.NoInlining)]
         [Conditional("CASE_MARKER")]
         public static void SendInternal()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void GetIdx0()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void MatchErr()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void SSend0()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void Send0()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void BlkCall()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void RetSelf()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void RetNil()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void RetTrue()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void RetFalse()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void AddILV()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void SubILV()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void TDef()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [Conditional("CASE_MARKER")]
+        public static void SDef()
         {
         }
     }

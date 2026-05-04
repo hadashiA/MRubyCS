@@ -349,6 +349,7 @@ public partial class MRubyState
         DefineClass(Names.FrozenError, StandardErrorClass);
         DefineClass(Names.NotImplementedError, StandardErrorClass);
         DefineClass(Names.LocalJumpError, StandardErrorClass);
+        DefineClass(Names.NoMatchingPatternError, StandardErrorClass);
         DefineClass(Names.FloatDomainError, StandardErrorClass);
 
         DefineClass(Intern("ScriptError"u8), ExceptionClass);
@@ -391,6 +392,9 @@ public partial class MRubyState
         DefineMethod(IntegerClass, Intern("to_f"u8), IntegerMembers.ToF);
         DefineMethod(IntegerClass, Names.ToI, MRubyMethod.Identity);
         DefineMethod(IntegerClass, Intern("to_int"u8), MRubyMethod.Identity);
+        DefineMethod(IntegerClass, Intern("bit_length"u8), IntegerMembers.BitLength);
+        DefineMethod(IntegerClass, Intern("gcd"u8), IntegerMembers.Gcd);
+        DefineMethod(IntegerClass, Intern("lcm"u8), IntegerMembers.Lcm);
         DefineMethod(IntegerClass, Names.OpAnd, IntegerMembers.OpAnd);
         DefineMethod(IntegerClass, Names.OpOr, IntegerMembers.OpOr);
         DefineMethod(IntegerClass, Names.OpXor, IntegerMembers.OpXor);
@@ -534,6 +538,8 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Names.Inspect, ArrayMembers.Inspect);
         DefineMethod(ArrayClass, Names.InitializeCopy, ArrayMembers.Replace);
 
+        DefineMethod(ArrayClass, Intern("deconstruct"u8), ArrayMembers.Deconstruct);
+
         DefineMethod(ArrayClass, Intern("__ary_eq"u8), ArrayMembers.InternalEq);
         DefineMethod(ArrayClass, Intern("__ary_cmp"u8), ArrayMembers.InternalCmp);
         DefineMethod(ArrayClass, Intern("__svalue"u8), ArrayMembers.InternalSValue);
@@ -572,6 +578,10 @@ public partial class MRubyState
         DefineMethod(HashClass, Intern("rehash"u8), HashMembers.Rehash);
         DefineMethod(HashClass, Intern("__delete"u8), HashMembers.InternalDelete);
         DefineMethod(HashClass, Intern("__merge"u8), HashMembers.InternalMerge);
+        DefineMethod(HashClass, Intern("__except"u8), HashMembers.InternalExcept);
+        DefineMethod(HashClass, Intern("__pat_values"u8), HashMembers.InternalPatValues);
+        DefineMethod(HashClass, Intern("slice"u8), HashMembers.Slice);
+        DefineMethod(HashClass, Intern("slice!"u8), HashMembers.SliceBang);
     }
 
     void InitRange()

@@ -607,4 +607,7 @@ static class ArrayMembers
             _ => self
         };
     });
+
+    [MRubyMethod]
+    public static MRubyMethod Deconstruct = new((state, self) => self);
 }

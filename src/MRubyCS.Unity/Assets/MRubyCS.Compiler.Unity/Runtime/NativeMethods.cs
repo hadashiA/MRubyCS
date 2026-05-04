@@ -22,12 +22,10 @@ unsafe struct MrcCContext
     public byte* Filename;
     public ushort LineNo;
     public void* TargetClass;
-    public byte CaptureErrors;
-    public byte DumpResult;
-    public byte NoExec;
-    public byte KeepLv;
-    public byte NoOptimize;
-    public byte NoExtOps;
+    // Six C bit-fields (capture_errors..no_ext_ops) packed into one byte.
+    // bit 0 = capture_errors, bit 1 = dump_result, bit 2 = no_exec,
+    // bit 3 = keep_lv, bit 4 = no_optimize, bit 5 = no_ext_ops
+    public byte Flags;
     public void* Upper;
     public MrcDiagnosticList* DiagnosticList;
 }
@@ -45,6 +43,7 @@ unsafe struct MrcDiagnosticList
 {
     public MrcDiagnosticCode DiagnosticCode;
     public byte* Message;
+    public byte* Filename;
     public int Line;
     public int Column;
     public MrcDiagnosticList* Next;
