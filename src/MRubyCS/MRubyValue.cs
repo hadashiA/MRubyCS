@@ -73,7 +73,10 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     internal const long FixnumMin = long.MinValue >> 1;
     internal const long FixnumMax = long.MaxValue >> 1;
 
-    readonly long bits;
+    // Tagged 64-bit immediate. Exposed as internal so the VM hot path
+    // (MRubyState.Vm.cs) can perform tagged-bits arithmetic without going
+    // through getters that the JIT may decline to inline.
+    internal readonly long bits;
 
     public RObject? Object
     {
@@ -291,7 +294,7 @@ public readonly struct MRubyValue : IEquatable<MRubyValue>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    MRubyValue(long bits, RObject? obj)
+    internal MRubyValue(long bits, RObject? obj)
     {
         this.bits = bits;
         Object = obj;

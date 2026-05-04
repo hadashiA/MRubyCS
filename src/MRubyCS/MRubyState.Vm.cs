@@ -742,36 +742,71 @@ partial class MRubyState
                         var lhsIsFixnum = registerA.IsFixnum;
                         var rhsIsFixnum = rhs.IsFixnum;
 
-                        // Fixnum fast path: avoid VType switch expression, use bit check + shift only
+                        // Fixnum fast path: tagged-bits arithmetic operates directly on the
+                        // tagged 64-bit immediate. The fixnum range maps bijectively onto the
+                        // long range via (value << 1) | 1, so two's-complement long-overflow
+                        // on the tagged form exactly matches fixnum-range overflow. On
+                        // overflow we fall through to ArithmeticSlowPath which raises the
+                        // proper Ruby RangeError.
                         if (lhsIsFixnum && rhsIsFixnum)
                         {
-                            var leftInt = registerA.FixnumValue;
-                            var rightInt = rhs.FixnumValue;
-                            long result;
+                            long lhsBits = registerA.bits;
+                            long rhsBits = rhs.bits;
+                            long resultBits;
+                            bool overflow;
                             switch (opcode)
                             {
                                 case OpCode.Add:
-                                    result = leftInt + rightInt; // Cannot overflow long: FixnumMax*2 < long.MaxValue
+                                {
+                                    // (a<<1|1) + (b<<1|1) - 1 = ((a+b)<<1) | 1, computed as a + (b - 1)
+                                    long b = unchecked(rhsBits - 1);
+                                    resultBits = unchecked(lhsBits + b);
+                                    overflow = ((lhsBits ^ resultBits) & (b ^ resultBits)) < 0;
                                     break;
+                                }
                                 case OpCode.Sub:
-                                    result = leftInt - rightInt; // Cannot overflow long: same reason
+                                {
+                                    // (a<<1|1) - (b<<1|1) + 1 = ((a-b)<<1) | 1, computed as a - (b - 1)
+                                    long b = unchecked(rhsBits - 1);
+                                    resultBits = unchecked(lhsBits - b);
+                                    overflow = ((lhsBits ^ b) & (lhsBits ^ resultBits)) < 0;
                                     break;
+                                }
                                 case OpCode.Mul:
-                                    result = leftInt * rightInt;
-                                    if (leftInt != 0 && result / leftInt != rightInt)
-                                        IntegerMembers.RaiseIntegerOverflowError(this, "mul"u8);
+                                {
+                                    // (a) * (b<<1) + 1 = ((a*b)<<1) | 1
+                                    long aUnboxed = lhsBits >> 1;
+                                    long bShifted = unchecked(rhsBits - 1);
+#if NET5_0_OR_GREATER
+                                    long high = Math.BigMul(aUnboxed, bShifted, out long product);
+                                    overflow = high != (product >> 63);
+#else
+                                    long product = unchecked(aUnboxed * bShifted);
+                                    overflow = aUnboxed != 0 && (aUnboxed == -1 ? bShifted == long.MinValue : product / aUnboxed != bShifted);
+#endif
+                                    resultBits = unchecked(product + 1);
                                     break;
+                                }
                                 case OpCode.Div:
+                                {
+                                    var rightInt = rhs.FixnumValue;
                                     if (rightInt == 0)
                                         IntegerMembers.RaiseDivideByZeroError(this);
-                                    result = leftInt / rightInt;
-                                    break;
+                                    // Div has no tagged shortcut: both operands need full unboxing.
+                                    registerA = new MRubyValue(registerA.FixnumValue / rightInt);
+                                    goto Next;
+                                }
                                 default:
-                                    result = 0;
+                                    overflow = true;
+                                    resultBits = 0;
                                     break;
                             }
-                            registerA = new MRubyValue(result);
-                            goto Next;
+                            if (!overflow)
+                            {
+                                registerA = new MRubyValue(resultBits, null);
+                                goto Next;
+                            }
+                            // overflow: fall through to slow path
                         }
 
                         // Float + Fixnum mixed fast path: bit checks only, no VType call
@@ -896,8 +931,16 @@ partial class MRubyState
                         }
                         if (registerA.IsFixnum)
                         {
-                            registerA = registerA.FixnumValue + rV;
-                            goto Next;
+                            // Tagged-bits add: bits + (rV << 1) keeps the LSB tag in place.
+                            long lhsBits = registerA.bits;
+                            long delta = (long)rV << 1;
+                            long resultBits = unchecked(lhsBits + delta);
+                            if (((lhsBits ^ resultBits) & (delta ^ resultBits)) >= 0)
+                            {
+                                registerA = new MRubyValue(resultBits, null);
+                                goto Next;
+                            }
+                            // overflow: fall through to slow path which raises IntegerOverflowError
                         }
 
                         // Slow path for boxed Integer/Float
@@ -939,11 +982,18 @@ partial class MRubyState
                             goto Next;
                         }
 
-                        // Fixnum fast path: FixnumMax + 255 < long.MaxValue, cannot overflow long
+                        // Fixnum fast path: tagged-bits add with sign-bit overflow check.
                         if (registerA.IsFixnum)
                         {
-                            registerA = registerA.FixnumValue + rV;
-                            goto Next;
+                            long lhsBits = registerA.bits;
+                            long delta = (long)rV << 1;
+                            long resultBits = unchecked(lhsBits + delta);
+                            if (((lhsBits ^ resultBits) & (delta ^ resultBits)) >= 0)
+                            {
+                                registerA = new MRubyValue(resultBits, null);
+                                goto Next;
+                            }
+                            // overflow: fall through to slow path which raises IntegerOverflowError
                         }
 
                         if (AddISubISlowPath(this, ref registerA, registerA, rV, opcode))
@@ -1022,20 +1072,22 @@ partial class MRubyState
                             goto Next;
                         }
 
-                        // Fixnum fast path
+                        // Fixnum fast path: tagged-bits comparison — left-shift by 1 preserves
+                        // signed ordering and the LSB tag (always 1 on both sides) cancels in
+                        // subtraction, so raw bits compare equivalently to unboxed values.
                         lhsIsFixnum = registerA.IsFixnum;
                         rhsIsFixnum = rhs.IsFixnum;
                         if (lhsIsFixnum && rhsIsFixnum)
                         {
-                            var leftInt = registerA.FixnumValue;
-                            var rightInt = rhs.FixnumValue;
+                            long lhsBits = registerA.bits;
+                            long rhsBits = rhs.bits;
                             registerA = new MRubyValue(opcode switch
                             {
-                                OpCode.EQ => leftInt == rightInt,
-                                OpCode.LT => leftInt < rightInt,
-                                OpCode.LE => leftInt <= rightInt,
-                                OpCode.GT => leftInt > rightInt,
-                                OpCode.GE => leftInt >= rightInt,
+                                OpCode.EQ => lhsBits == rhsBits,
+                                OpCode.LT => lhsBits < rhsBits,
+                                OpCode.LE => lhsBits <= rhsBits,
+                                OpCode.GT => lhsBits > rhsBits,
+                                OpCode.GE => lhsBits >= rhsBits,
                                 _ => false
                             });
                             goto Next;
