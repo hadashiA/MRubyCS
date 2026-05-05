@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace MRubyCS.SourceGenerator;
 
@@ -139,6 +139,7 @@ public class MRubyCSSourceGenerator : IIncrementalGenerator
         new("FrozenError", "FrozenError"),
         new("NotImplementedError", "NotImplementedError"),
         new("LocalJumpError", "LocalJumpError"),
+        new("NoMatchingPatternError", "NoMatchingPatternError"),
         new("SystemStackError", "SystemStackError"),
         new("FloatDomainError", "FloatDomainError"),
         new("KeyError", "KeyError"),

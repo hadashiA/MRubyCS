@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace MRubyCS.StdLib;
 
 static class HashMembers
@@ -315,5 +317,96 @@ static class HashMembers
             }
         }
         return self;
+    });
+
+    // Hash#slice(*keys) — returns a new hash containing only entries whose key matches an arg.
+    public static MRubyMethod Slice = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var keys = state.GetRestArgumentsAfter(0);
+        var result = state.NewHash(keys.Length);
+        foreach (var key in keys)
+        {
+            if (h.TryGetValue(key, out var value))
+            {
+                result[key] = value;
+            }
+        }
+        return result;
+    });
+
+    // Hash#slice!(*keys) — keeps only the listed keys in self, returns the removed entries.
+    public static MRubyMethod SliceBang = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        state.EnsureNotFrozen(h);
+        var keys = state.GetRestArgumentsAfter(0);
+
+        var keep = new HashSet<MRubyValue>(state.ValueEqualityComparer);
+        foreach (var k in keys) keep.Add(k);
+
+        var removed = state.NewHash(0);
+        // Snapshot keys to avoid mutating during iteration.
+        var snapshot = new MRubyValue[h.Length];
+        var i = 0;
+        foreach (var entry in h)
+        {
+            snapshot[i++] = entry.Key;
+        }
+        foreach (var key in snapshot)
+        {
+            if (!keep.Contains(key))
+            {
+                if (h.TryDelete(key, out var value))
+                {
+                    removed[key] = value;
+                }
+            }
+        }
+        return removed;
+    });
+
+    // Hash#__except(*keys) — pattern matching support for **rest binding.
+    public static MRubyMethod InternalExcept = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var keys = state.GetRestArgumentsAfter(0);
+        var result = state.NewHash(h.Length);
+        foreach (var entry in h)
+        {
+            var skip = false;
+            foreach (var k in keys)
+            {
+                if (entry.Key.Equals(k))
+                {
+                    skip = true;
+                    break;
+                }
+            }
+            if (!skip)
+            {
+                result[entry.Key] = entry.Value;
+            }
+        }
+        return result;
+    });
+
+    // Hash#__pat_values(keys) — used by case/in for hash patterns. Returns the
+    // values array when every key is present, or false otherwise.
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod InternalPatValues = new((state, self) =>
+    {
+        var h = self.As<RHash>();
+        var keysArray = state.GetArgumentAsArrayAt(0);
+        var result = state.NewArray(keysArray.Length);
+        foreach (var key in keysArray.AsSpan())
+        {
+            if (!h.TryGetValue(key, out var value))
+            {
+                return MRubyValue.False;
+            }
+            result.Push(value);
+        }
+        return result;
     });
 }

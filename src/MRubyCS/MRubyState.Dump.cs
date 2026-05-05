@@ -52,6 +52,7 @@ partial class MRubyState
             OpCode.GetUpVar => "GETUPVAR"u8,
             OpCode.SetUpVar => "SETUPVAR"u8,
             OpCode.GetIdx => "GETIDX"u8,
+            OpCode.GetIdx0 => "GETIDX0"u8,
             OpCode.SetIdx => "SETIDX"u8,
             OpCode.Jmp => "JMP"u8,
             OpCode.JmpIf => "JMPIF"u8,
@@ -61,11 +62,15 @@ partial class MRubyState
             OpCode.Except => "EXCEPT"u8,
             OpCode.Rescue => "RESCUE"u8,
             OpCode.RaiseIf => "RAISEIF"u8,
+            OpCode.MatchErr => "MATCHERR"u8,
             OpCode.SSend => "SSEND"u8,
+            OpCode.SSend0 => "SSEND0"u8,
             OpCode.SSendB => "SSENDB"u8,
             OpCode.Send => "SEND"u8,
+            OpCode.Send0 => "SEND0"u8,
             OpCode.SendB => "SENDB"u8,
             OpCode.Call => "CALL"u8,
+            OpCode.BlkCall => "BLKCALL"u8,
             OpCode.Super => "SUPER"u8,
             OpCode.ArgAry => "ARGARY"u8,
             OpCode.Enter => "ENTER"u8,
@@ -74,12 +79,18 @@ partial class MRubyState
             OpCode.KArg => "KARG"u8,
             OpCode.Return => "RETURN"u8,
             OpCode.ReturnBlk => "RETURN_BLK"u8,
+            OpCode.RetSelf => "RETSELF"u8,
+            OpCode.RetNil => "RETNIL"u8,
+            OpCode.RetTrue => "RETTRUE"u8,
+            OpCode.RetFalse => "RETFALSE"u8,
             OpCode.Break => "BREAK"u8,
             OpCode.BlkPush => "BLKPUSH"u8,
             OpCode.Add => "ADD"u8,
             OpCode.AddI => "ADDI"u8,
             OpCode.Sub => "SUB"u8,
             OpCode.SubI => "SUBI"u8,
+            OpCode.AddILV => "ADDILV"u8,
+            OpCode.SubILV => "SUBILV"u8,
             OpCode.Mul => "MUL"u8,
             OpCode.Div => "DIV"u8,
             OpCode.EQ => "EQ"u8,
@@ -112,6 +123,8 @@ partial class MRubyState
             OpCode.Module => "MODULE"u8,
             OpCode.Exec => "EXEC"u8,
             OpCode.Def => "DEF"u8,
+            OpCode.TDef => "TDEF"u8,
+            OpCode.SDef => "SDEF"u8,
             OpCode.Alias => "ALIAS"u8,
             OpCode.Undef => "UNDEF"u8,
             OpCode.SClass => "SCLASS"u8,
@@ -224,7 +237,9 @@ partial class MRubyState
                 //TODO: Irep debug info
 
                 var opcode = (OpCode)irep.Sequence[pc];
-                if (opcode is OpCode.Nop or OpCode.Call or OpCode.KeyEnd or OpCode.Stop or OpCode.EXT1 or OpCode.EXT2 or OpCode.EXT3)
+                if (opcode is OpCode.Nop or OpCode.Call or OpCode.KeyEnd or OpCode.Stop
+                    or OpCode.EXT1 or OpCode.EXT2 or OpCode.EXT3
+                    or OpCode.RetSelf or OpCode.RetNil or OpCode.RetTrue or OpCode.RetFalse)
                 {
                     writer.Write(GetOpCodeName(opcode));
                     writer.Write("\n"u8);
@@ -446,6 +461,12 @@ partial class MRubyState
                             Format(writer, $"R{b.A}\tR{b.A + 1}\n");
                             break;
                         }
+                    case OpCode.GetIdx0:
+                        {
+                            bb = OperandBB.Read(ref sequence, ref pc);
+                            Format(writer, $"R{bb.A}\tR{bb.B}\n");
+                            break;
+                        }
                     case OpCode.SetIdx:
                         {
                             b = OperandB.Read(ref sequence, ref pc);
@@ -516,6 +537,20 @@ partial class MRubyState
                             bbb = OperandBBB.Read(ref sequence, ref pc);
                             Format(writer, $"R{bbb.A}\t:{symbolTable.NameOf(irep.Symbols[bbb.B])}\t");
                             WriteLocalVariableA(bbb.A);
+                            break;
+                        }
+                    case OpCode.SSend0:
+                    case OpCode.Send0:
+                        {
+                            bb = OperandBB.Read(ref sequence, ref pc);
+                            Format(writer, $"R{bb.A}\t:{symbolTable.NameOf(irep.Symbols[bb.B])}\t");
+                            WriteLocalVariableA(bb.A);
+                            break;
+                        }
+                    case OpCode.BlkCall:
+                        {
+                            bb = OperandBB.Read(ref sequence, ref pc);
+                            Format(writer, $"R{bb.A}\t{bb.B}\n");
                             break;
                         }
                     case OpCode.Call:
@@ -625,6 +660,13 @@ partial class MRubyState
                             Format(writer, $"R{bb.A}\t:{symbolTable.NameOf(irep.Symbols[bb.B])}\t(R{bb.A + 1})\n");
                             break;
                         }
+                    case OpCode.TDef:
+                    case OpCode.SDef:
+                        {
+                            bbb = OperandBBB.Read(ref sequence, ref pc);
+                            Format(writer, $"R{bbb.A}\t:{symbolTable.NameOf(irep.Symbols[bbb.B])}\tI[{bbb.C}]\n");
+                            break;
+                        }
                     case OpCode.Undef:
                         {
                             b = OperandB.Read(ref sequence, ref pc);
@@ -657,6 +699,14 @@ partial class MRubyState
                             bb = OperandBB.Read(ref sequence, ref pc);
                             Format(writer, $"R{bb.A}\t{bb.B}\t");
                             WriteLocalVariableA(bb.A);
+                            break;
+                        }
+                    case OpCode.AddILV:
+                    case OpCode.SubILV:
+                        {
+                            bbb = OperandBBB.Read(ref sequence, ref pc);
+                            Format(writer, $"R{bbb.A}\tR{bbb.B}\t{bbb.C}\t");
+                            WriteLocalVariableA(bbb.A);
                             break;
                         }
                     case OpCode.Mul:
@@ -842,6 +892,13 @@ partial class MRubyState
                             break;
                         }
                     case OpCode.RaiseIf:
+                        {
+                            b = OperandB.Read(ref sequence, ref pc);
+                            Format(writer, $"R{b.A}\t\t");
+                            WriteLocalVariableA(b.A);
+                            break;
+                        }
+                    case OpCode.MatchErr:
                         {
                             b = OperandB.Read(ref sequence, ref pc);
                             Format(writer, $"R{b.A}\t\t");

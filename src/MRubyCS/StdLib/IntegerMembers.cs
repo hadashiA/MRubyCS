@@ -465,6 +465,56 @@ static class IntegerMembers
 
     public static MRubyMethod ToF = new((state, self) => (double)state.AsInteger(self));
 
+    [MRubyMethod]
+    public static MRubyMethod BitLength = new((state, self) =>
+    {
+        var v = state.AsInteger(self);
+        // Two's-complement bit_length: negatives use ~v.
+        var x = (ulong)(v < 0 ? ~v : v);
+        long bits = 0;
+        while (x != 0)
+        {
+            bits++;
+            x >>= 1;
+        }
+        return bits;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Gcd = new((state, self) =>
+    {
+        var a = Math.Abs(state.AsInteger(self));
+        var b = Math.Abs(state.GetArgumentAsIntegerAt(0));
+        while (b != 0)
+        {
+            (a, b) = (b, a % b);
+        }
+        return a;
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Lcm = new((state, self) =>
+    {
+        var a = Math.Abs(state.AsInteger(self));
+        var b = Math.Abs(state.GetArgumentAsIntegerAt(0));
+        if (a == 0 || b == 0) return 0L;
+        // gcd then a/gcd*b, with overflow check.
+        long ga = a, gb = b;
+        while (gb != 0)
+        {
+            (ga, gb) = (gb, ga % gb);
+        }
+        try
+        {
+            return checked((a / ga) * b);
+        }
+        catch (OverflowException)
+        {
+            RaiseIntegerOverflowError(state, "lcm"u8);
+            return default;
+        }
+    });
+
     internal static bool NumShift(MRubyState state, long val, long width, out long num)
     {
         const int numericShiftWidthMax = 8 * sizeof(long) - 1;

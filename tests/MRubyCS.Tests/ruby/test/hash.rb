@@ -975,3 +975,42 @@ assert('test value omission') do
   y = 2
   assert_equal({x:1, y:2}, {x:, y:})
 end
+
+assert("Hash#slice") do
+  h = { a: 100, b: 200, c: 300 }
+  assert_equal({:a=>100}, h.slice(:a))
+  assert_equal({:b=>200, :c=>300}, h.slice(:b, :c, :d))
+end
+
+assert("Hash#slice!") do
+  h = { a: 1, b: 2, c: 3, d: 4 }
+  removed = h.slice!(:a, :c)
+  assert_equal({ a: 1, c: 3 }, h)
+  assert_equal({ b: 2, d: 4 }, removed)
+
+  h = { a: 1, b: 2 }
+  removed = h.slice!()
+  assert_equal({}, h)
+  assert_equal({ a: 1, b: 2 }, removed)
+
+  h = { a: 1, b: 2 }
+  removed = h.slice!(:a, :b, :c)
+  assert_equal({ a: 1, b: 2 }, h)
+  assert_equal({}, removed)
+end
+
+assert("Hash#__except (pattern matching internal)") do
+  h = { a: 1, b: 2, c: 3 }
+  assert_equal({ b: 2, c: 3 }, h.__except(:a))
+  assert_equal({ a: 1 }, h.__except(:b, :c, :d))
+  assert_equal(h, h.__except)
+end
+
+assert("Hash#__pat_values (pattern matching internal)") do
+  h = { a: 1, b: 2 }
+  assert_equal([1, 2], h.__pat_values([:a, :b]))
+  assert_equal([2, 1], h.__pat_values([:b, :a]))
+  assert_equal([], h.__pat_values([]))
+  assert_false(h.__pat_values([:a, :missing]))
+  assert_false(h.__pat_values([:missing]))
+end

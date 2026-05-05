@@ -1,10 +1,8 @@
 # mruby/cs
 
-MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine designed for seamless integration with C# game engines. It combines high Ruby-level compatibility with the performance and extensibility of modern C#.
+MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine implementation designed for seamless integration with C# game engines. It combines high Ruby-level compatibility with the performance and extensibility of modern C#.
 
 Easily embed Ruby into Unity or .NET—empowering users to script game logic while keeping your core engine in C#.
-
-[Presentation at RubyKaigi 2026](https://speakerdeck.com/hadashia/mruby-on-c-number-from-vm-implementation-to-game-scripting)
 
 > [!NOTE]
 > [VitalRouter.MRuby](https://github.com/hadashiA/VitalRouter) provides a high-level framework for integrating MRubyCS with Unity (and .NET), including command routing and script lifecycle management.
@@ -30,15 +28,19 @@ quest "The Lost Sword" do
 end
 ```
 
+> [!NOTE]
+> [Presentation at RubyKaigi 2026](https://speakerdeck.com/hadashia/mruby-on-c-number-from-vm-implementation-to-game-scripting)
+
 ## Features
 
-- **Zero native dependencies** — runs anywhere Unity/.NET runs. No per-platform native builds to maintain.
+- Support mruby 4.0 bytecode.
+- **Pure C# implementation/Zero native dependencies mruby VM** — runs anywhere Unity/.NET runs. No per-platform native builds to maintain.
 - **High performance** — leverages .NET JIT, GC, and modern C# optimizations with minimal overhead.
 - **Ruby compatible** — all opcodes implemented; passes mruby's official test suite
   - [Syntax](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [Literals](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/literals.rb), [Lang](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/lang.rb), [Methods](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/methods.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Exception](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/exception.rb), ...
   - Supported Types: [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb), [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [Enumerator](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/enumerator.rb), [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb), [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb), [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb), [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb), [Proc](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/proc.rb), [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb), [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb), [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb), [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb), [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
   - Enumerable extensions ([mruby-enum-ext](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/enum_ext.rb)): `each_cons`, `each_slice`, `each_with_object`, `flat_map`, `group_by`, `sort_by`, `min_by`/`max_by`, `minmax`/`minmax_by`, `tally`, `filter_map`, `chunk`/`chunk_while`, `zip`, `to_h`, `uniq`, `cycle`, etc.
-- **Fiber & async/await** — suspend Ruby execution and await C# async methods without blocking threads.
+- **Fiber & async/await integration** — suspend Ruby execution and await C# async methods without blocking threads.
 - **Prism-based compiler** — uses [mruby-compiler2](https://github.com/picoruby/mruby-compiler2), the next-generation mruby compiler built on [Prism](https://github.com/ruby/prism) (the official CRuby parser), for more accurate and modern Ruby syntax support.
 
 ## Performance
@@ -53,10 +55,8 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 
 ## Limitations
 
-- As of mruby 3.3, almost all bundled classes/methods are supported.
+- As of mruby 4.0, almost all bundled classes/methods are supported.
     - Support for extensions split into [mrbgems](https://github.com/mruby/mruby/tree/master/mrbgems) remains limited.
-    - Some methods/specs added in 3.4 are not yet covered.
-- However, basic private/protected visibility is already supported.
 
 ## Table of Contents
 
@@ -85,6 +85,11 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 - [MRubyCS.Serializer](#mrubycsserializer)
 
 ## Installation
+
+> [!NOTE]
+> The current version supports mruby 4.0 bytecode.
+> Versions 0.70.0 and older supported mruby 3.0 bytecode.
+> If you have bytecode from an older MRubyCS.Compiler (or mrbc), please regenerate it with the latest version.
 
 ### NuGet
 
@@ -132,8 +137,11 @@ graph TB
 
 You can choose whether to deploy precompiled bytecode or raw source code:
 
-Bytecode only: extremely compact and recommended for production environments.
-Source code: compiled on the target machine. Note that compilation relies on the native compiler, so supported platforms are limited to those where mruby-compiler runs.
+- Bytecode only:
+    - extremely compact and recommended for production environments.
+- Source code:
+    - compiled on the target machine.
+    - Note that compilation relies on the native compiler, so supported platforms are limited to those where mruby-compiler runs.
 
 > [!TIP]
 > Option A is recommended for production. Option B is convenient for development and prototyping.
@@ -229,6 +237,15 @@ mrb.Execute(irep);
 
 #### Compiler Reference
 
+The MRubyCS runtime is pure C#, but the mrb compiler uses the native prism compiler.
+Note that the compiler's supported target platforms are subject to the following limitations.
+
+| OS      | Architecture |
+|:--------|:-------------|
+| Linux   | x64, arm64   |
+| macOS   | x64, arm64   |
+| Windows | x64          |
+
 ##### MRubyCS.Compiler.Cli (dotnet tool)
 
 The `mruby-compiler` CLI supports additional output formats beyond simple `.mrb`:
@@ -266,12 +283,6 @@ $ ./build/host/bin/mrbc -o output.mrb input.rb
 ##### MRubyCS.Compiler (library)
 
 `MRubyCS.Compiler` is a thin wrapper of the C# API for the native compiler.
-
-| OS      | Architecture |
-|:--------|:-------------|
-| Linux   | x64, arm64   |
-| macOS   | x64, arm64   |
-| Windows | x64          |
 
 ```bash
 dotnet add package MRubyCS.Compiler

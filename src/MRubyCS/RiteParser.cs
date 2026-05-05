@@ -45,7 +45,7 @@ unsafe struct RiteSectionIrepHeader
 
 public class RiteParser(MRubyState state)
 {
-    static readonly byte[] MajorVersion = "03"u8.ToArray();
+    static readonly byte[] MajorVersion = "04"u8.ToArray();
     static readonly byte[] MinorVersionLower = "00"u8.ToArray();
 
     public unsafe Irep Parse(ReadOnlySpan<byte> bin)
@@ -103,7 +103,7 @@ public class RiteParser(MRubyState state)
         {
             var actualMajor = Encoding.ASCII.GetString(binaryHeader.MajorVersion, 2);
             var actualMinor = Encoding.ASCII.GetString(binaryHeader.MinorVersion, 2);
-            throw new RiteParseException($"Incompatible RITE version. Expected=03.00 Actual={actualMajor}.{actualMinor}");
+            throw new RiteParseException($"Incompatible RITE version. Expected=04.00 Actual={actualMajor}.{actualMinor}");
         }
 
         binSize = BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(binaryHeader.BinarySize, 4));
