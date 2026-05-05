@@ -369,6 +369,86 @@ public class VmTest
         Assert.That(mrb.RemoveGlobalVariable(name, out _), Is.False);
     }
 
+    public void Send_FixedArityOverloads()
+    {
+        Exec("""
+             class Joiner
+               def join1(a) = a.to_s
+               def join2(a, b) = "#{a},#{b}"
+               def join3(a, b, c) = "#{a},#{b},#{c}"
+               def join4(a, b, c, d) = "#{a},#{b},#{c},#{d}"
+             end
+             """u8);
+
+        var joinerClass = mrb.GetConst(mrb.Intern("Joiner"u8), mrb.ObjectClass);
+        var joiner = mrb.Send(joinerClass, mrb.Intern("new"u8));
+
+        var r1 = mrb.Send(joiner, mrb.Intern("join1"u8), new MRubyValue(1));
+        Assert.That(mrb.Stringify(r1).ToString(), Is.EqualTo("1"));
+
+        var r2 = mrb.Send(joiner, mrb.Intern("join2"u8), new MRubyValue(1), new MRubyValue(2));
+        Assert.That(mrb.Stringify(r2).ToString(), Is.EqualTo("1,2"));
+
+        var r3 = mrb.Send(joiner, mrb.Intern("join3"u8), new MRubyValue(1), new MRubyValue(2), new MRubyValue(3));
+        Assert.That(mrb.Stringify(r3).ToString(), Is.EqualTo("1,2,3"));
+
+        var r4 = mrb.Send(joiner, mrb.Intern("join4"u8), new MRubyValue(1), new MRubyValue(2), new MRubyValue(3), new MRubyValue(4));
+        Assert.That(mrb.Stringify(r4).ToString(), Is.EqualTo("1,2,3,4"));
+    }
+
+    [Test]
+    public void Send_FixedArityWithBlock()
+    {
+        Exec("""
+             class WithBlock
+               def call0 = yield
+               def call1(a) = yield(a)
+               def call2(a, b) = yield(a, b)
+               def call3(a, b, c) = yield(a, b, c)
+               def call4(a, b, c, d) = yield(a, b, c, d)
+             end
+             """u8);
+
+        var klass = mrb.GetConst(mrb.Intern("WithBlock"u8), mrb.ObjectClass);
+        var receiver = mrb.Send(klass, mrb.Intern("new"u8));
+
+        var collectBlock = compiler.LoadSourceCode("Proc.new { |*xs| xs.map { |x| x.to_s }.join(',') }"u8).As<RProc>();
+
+        var r1 = mrb.Send(receiver, mrb.Intern("call1"u8), new MRubyValue(10), collectBlock);
+        Assert.That(mrb.Stringify(r1).ToString(), Is.EqualTo("10"));
+
+        var r2 = mrb.Send(receiver, mrb.Intern("call2"u8), new MRubyValue(10), new MRubyValue(20), collectBlock);
+        Assert.That(mrb.Stringify(r2).ToString(), Is.EqualTo("10,20"));
+
+        var r3 = mrb.Send(receiver, mrb.Intern("call3"u8), new MRubyValue(10), new MRubyValue(20), new MRubyValue(30), collectBlock);
+        Assert.That(mrb.Stringify(r3).ToString(), Is.EqualTo("10,20,30"));
+
+        var r4 = mrb.Send(receiver, mrb.Intern("call4"u8), new MRubyValue(10), new MRubyValue(20), new MRubyValue(30), new MRubyValue(40), collectBlock);
+        Assert.That(mrb.Stringify(r4).ToString(), Is.EqualTo("10,20,30,40"));
+    }
+
+    [Test]
+    public void Send_KeywordArgumentsOnly()
+    {
+        Exec("""
+             class WithKwargs
+               def show(verbose:, mode:) = "verbose=#{verbose} mode=#{mode}"
+             end
+             """u8);
+
+        var klass = mrb.GetConst(mrb.Intern("WithKwargs"u8), mrb.ObjectClass);
+        var receiver = mrb.Send(klass, mrb.Intern("new"u8));
+
+        var kargs = new[]
+        {
+            new KeyValuePair<Symbol, MRubyValue>(mrb.Intern("verbose"u8), MRubyValue.True),
+            new KeyValuePair<Symbol, MRubyValue>(mrb.Intern("mode"u8), mrb.NewString("fast"u8)),
+        };
+
+        var result = mrb.Send(receiver, mrb.Intern("show"u8), kargs);
+        Assert.That(mrb.Stringify(result).ToString(), Is.EqualTo("verbose=true mode=fast"));
+    }
+
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
         using var compilation = compiler.Compile(code);
