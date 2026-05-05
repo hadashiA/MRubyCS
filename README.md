@@ -86,7 +86,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 
 ## Installation
 
-> [!NOTE]
+> [!WARNING]
 > The current version supports mruby 4.0 bytecode.
 > Versions 0.70.0 and older supported mruby 3.0 bytecode.
 > If you have bytecode from an older MRubyCS.Compiler (or mrbc), please regenerate it with the latest version.
