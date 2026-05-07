@@ -750,41 +750,42 @@ partial class MRubyState
                         // proper Ruby RangeError.
                         if (lhsIsFixnum && rhsIsFixnum)
                         {
-                            long rhsBitsShiftted;
+                            long rhsTemp;
                             long resultBits = 0;
                             var overflow = false;
                             switch (opcode)
                             {
                                 case OpCode.Add:
                                     // (a<<1|1) + (b<<1|1) - 1 = ((a+b)<<1) | 1, computed as a + (b - 1)
-                                    rhsBitsShiftted = unchecked(rhs.bits - 1);
-                                    resultBits = unchecked(registerA.bits + rhsBitsShiftted);
-                                    overflow = ((registerA.bits ^ resultBits) & (rhsBitsShiftted ^ resultBits)) < 0;
+                                    rhsTemp = unchecked(rhs.bits - 1);
+                                    resultBits = unchecked(registerA.bits + rhsTemp);
+                                    overflow = ((registerA.bits ^ resultBits) & (rhsTemp ^ resultBits)) < 0;
                                     break;
                                 case OpCode.Sub:
                                     // (a<<1|1) - (b<<1|1) + 1 = ((a-b)<<1) | 1, computed as a - (b - 1)
-                                    rhsBitsShiftted = unchecked(rhs.bits - 1);
-                                    resultBits = unchecked(registerA.bits - rhsBitsShiftted);
-                                    overflow = ((registerA.bits ^ rhsBitsShiftted) & (registerA.bits ^ resultBits)) < 0;
+                                    rhsTemp = unchecked(rhs.bits - 1);
+                                    resultBits = unchecked(registerA.bits - rhsTemp);
+                                    overflow = ((registerA.bits ^ rhsTemp) & (registerA.bits ^ resultBits)) < 0;
                                     break;
                                 case OpCode.Mul:
                                 {
                                     // (a) * (b<<1) + 1 = ((a*b)<<1) | 1
-                                    rhsBitsShiftted = unchecked(rhs.bits - 1);
+                                    rhsTemp = unchecked(rhs.bits - 1);
                                     var aUnboxed = registerA.bits >> 1;
-                                    var product = unchecked(aUnboxed * rhsBitsShiftted);
-                                    overflow = aUnboxed != 0 && (aUnboxed == -1 ? rhsBitsShiftted == long.MinValue : product / aUnboxed != rhsBitsShiftted);
-                                    resultBits = unchecked(product + 1);
+                                    resultBits = unchecked(aUnboxed * rhsTemp);
+                                    overflow = aUnboxed != 0 &&
+                                               (aUnboxed == -1
+                                                   ? rhsTemp == long.MinValue
+                                                   : resultBits / aUnboxed != rhsTemp);
+                                    resultBits = unchecked(resultBits + 1);
                                     break;
                                 }
                                 case OpCode.Div:
-                                {
-                                    rhsBitsShiftted = rhs.FixnumValue;
-                                    if (rhsBitsShiftted == 0) IntegerMembers.RaiseDivideByZeroError(this);
+                                    rhsTemp = rhs.FixnumValue;
+                                    if (rhsTemp == 0) IntegerMembers.RaiseDivideByZeroError(this);
                                     // Div has no tagged shortcut: both operands need full unboxing.
-                                    registerA = new MRubyValue(registerA.FixnumValue / rhsBitsShiftted);
+                                    registerA = new MRubyValue(registerA.FixnumValue / rhsTemp);
                                     goto Next;
-                                }
                             }
                             if (!overflow)
                             {
