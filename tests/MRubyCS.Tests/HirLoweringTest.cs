@@ -1,3 +1,5 @@
+using MRubyCS.Compiler;
+
 namespace MRubyCS.Tests;
 
 // End-to-end round-trip tests for HIR -> bytecode lowering.
@@ -224,6 +226,46 @@ public class HirLoweringTest
                 "Original Irep should compute 7 + 5 = 12 in the false leg");
             Assert.That(optResult.IntegerValue, Is.EqualTo(origResult.IntegerValue),
                 "Optimized Irep should produce the same value");
+        });
+    }
+
+    [Test]
+    public void RoundTrip_Fibonacci_OptimizesChildIrep()
+    {
+        // The toplevel `def fib ... fib(10)` includes ops the lowering doesn't
+        // yet cover (TDef / Method / Def / Class). Optimize falls back for
+        // the toplevel but recursively optimizes the child Irep (the body of
+        // `def fib`) which exercises Send + Enter + branches + arithmetic.
+        var state = MRubyState.Create();
+        using var compiler = MRubyCompiler.Create(state);
+        using var compilation = compiler.Compile("""
+            def fib(n)
+              return n if n < 2
+              fib(n - 1) + fib(n - 2)
+            end
+            fib(10)
+            """u8);
+        var bytecode = compilation.AsBytecode();
+        var src = state.ParseBytecode(bytecode);
+
+        // Sanity: child#0 is the body of `def fib`. Optimize() should produce
+        // a different Sequence for it (Move/DCE/etc. cleanup at minimum).
+        var origChild = src.Children[0];
+
+        var optimized = state.Optimize(src);
+        var optChild = optimized.Children[0];
+
+        Assert.That(optChild.Sequence.SequenceEqual(origChild.Sequence), Is.False,
+            "Child Irep sequence should change after optimization");
+
+        // Both run to completion and yield 55.
+        var origResult = state.Execute(src);
+        var optResult = state.Execute(optimized);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(origResult.IntegerValue, Is.EqualTo(55));
+            Assert.That(optResult.IntegerValue, Is.EqualTo(55));
         });
     }
 

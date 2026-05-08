@@ -196,10 +196,110 @@ internal sealed class BytecodeEmitter
             case HirInsnKind.AddI: EmitImmediateArith(id, insn, OpCode.AddI); return;
             case HirInsnKind.SubI: EmitImmediateArith(id, insn, OpCode.SubI); return;
 
+            case HirInsnKind.Send: EmitSend(id, insn); return;
+
+            case HirInsnKind.Enter: EmitEnter(insn); return;
+
             default:
                 throw new System.NotSupportedException(
-                    $"H2: insn kind {insn.Kind} not yet lowered (slot {id})");
+                    $"H3: insn kind {insn.Kind} not yet lowered (slot {id})");
         }
+    }
+
+    void EmitSend(InsnId id, HirInsn insn)
+    {
+        var argc = insn.Aux1;
+        var kargc = insn.Aux2;
+        var hasBlock = insn.AuxBool;
+        var isSelfSend = insn.AuxBool2;
+
+        var symIdx = FindSymbolIndex(insn.AuxSymbol);
+        if (symIdx < 0)
+        {
+            throw new System.NotSupportedException(
+                $"Send symbol {insn.AuxSymbol.Value} not found in source Irep symbols");
+        }
+        if (symIdx > byte.MaxValue)
+        {
+            throw new System.NotSupportedException(
+                $"Send symbol index {symIdx} out of byte range");
+        }
+
+        // Operand window starts at scratchReg0. The window covers:
+        //   slot 0       : receiver / self / result
+        //   slot 1..argc : positional args
+        //   slot argc+1.. argc+kargc*2 : keyword pairs
+        //   slot argc+kargc*2+1: block
+        //
+        // For self-send the receiver is implicit (VM sets it from current self),
+        // so we skip writing slot 0. For non-block sends the VM nil-clears the
+        // block slot, so it's safe to leave uninitialized.
+        var inputIdx = 0;
+        if (!isSelfSend)
+        {
+            bb.EmitBB(OpCode.Move, (byte)scratchReg0, Reg(insn.Inputs[inputIdx++]));
+        }
+        for (var i = 0; i < argc; i++)
+        {
+            bb.EmitBB(OpCode.Move, (byte)(scratchReg0 + 1 + i), Reg(insn.Inputs[inputIdx++]));
+        }
+        for (var i = 0; i < kargc * 2; i++)
+        {
+            bb.EmitBB(OpCode.Move, (byte)(scratchReg0 + argc + 1 + i), Reg(insn.Inputs[inputIdx++]));
+        }
+        if (hasBlock)
+        {
+            bb.EmitBB(OpCode.Move, (byte)(scratchReg0 + argc + kargc * 2 + 1), Reg(insn.Inputs[inputIdx++]));
+        }
+
+        // Pick the variant + emit.
+        if (argc == 0 && kargc == 0 && !hasBlock)
+        {
+            bb.EmitBB(isSelfSend ? OpCode.SSend0 : OpCode.Send0, (byte)scratchReg0, (byte)symIdx);
+        }
+        else
+        {
+            var c = (byte)((argc & 0xf) | ((kargc & 0xf) << 4));
+            OpCode op = (isSelfSend, hasBlock) switch
+            {
+                (true, true) => OpCode.SSendB,
+                (true, false) => OpCode.SSend,
+                (false, true) => OpCode.SendB,
+                (false, false) => OpCode.Send,
+            };
+            bb.EmitBBB(op, (byte)scratchReg0, (byte)symIdx, c);
+        }
+
+        // Result is at scratchReg0; copy to dst if different.
+        if (alloc.TryGet(id, out var dstReg) && dstReg != scratchReg0)
+        {
+            bb.EmitBB(OpCode.Move, (byte)dstReg, (byte)scratchReg0);
+        }
+    }
+
+    void EmitEnter(HirInsn insn)
+    {
+        // OP_Enter is W-layout: op + 3 bytes of packed BBB-style arg signature
+        // (4 bytes total). The lifter doesn't decode the signature into Aux
+        // fields, so we re-read the bytes verbatim from the source Irep.
+        var src = func.SourceIrep.Sequence;
+        var pc = insn.SourcePc;
+        if (pc < 0 || pc + 4 > src.Length)
+        {
+            throw new System.InvalidOperationException(
+                $"Enter SourcePc={pc} out of range for source Irep");
+        }
+        bb.EmitW(OpCode.Enter, src[pc + 1], src[pc + 2], src[pc + 3]);
+    }
+
+    int FindSymbolIndex(Symbol sym)
+    {
+        var symbols = func.SourceIrep.Symbols;
+        for (var i = 0; i < symbols.Length; i++)
+        {
+            if (symbols[i] == sym) return i;
+        }
+        return -1;
     }
 
     void EmitBinaryArith(InsnId id, HirInsn insn, OpCode op)
@@ -413,6 +513,15 @@ internal sealed class BytecodeBuilder
         bytes.Add((byte)((v >> 16) & 0xff));
         bytes.Add((byte)((v >> 8) & 0xff));
         bytes.Add((byte)(v & 0xff));
+    }
+
+    /// <summary>Emit an op followed by a verbatim 3-byte payload (W layout, 4 bytes total).</summary>
+    public void EmitW(OpCode op, byte b0, byte b1, byte b2)
+    {
+        bytes.Add((byte)op);
+        bytes.Add(b0);
+        bytes.Add(b1);
+        bytes.Add(b2);
     }
 
     /// <summary>Patch a 16-bit big-endian value at <paramref name="pc"/>.</summary>
