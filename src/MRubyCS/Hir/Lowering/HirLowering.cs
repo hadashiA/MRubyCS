@@ -20,16 +20,28 @@ public sealed class LoweredFunction
 
 public static class HirLowering
 {
+    // Two consecutive scratch registers above the linear-scan output:
+    //   * scratch0: lhs of binary ops (mruby's `R[a]`); also break-cycle temp
+    //               for parallel-copy phi resolution.
+    //   * scratch1: rhs of binary ops (mruby's `R[a+1]`).
+    //
+    // These are clobbered freely by every emit; the upstream IR may not assume
+    // anything about their values across insns. Reserved as the highest two
+    // registers in the lowered Irep.
+    const int ScratchSize = 2;
+
     public static LoweredFunction Lower(HirFunction func)
     {
         var layout = BlockLayout.Compute(func);
         var lin = Linearization.Compute(func, layout);
         var alloc = LinearScanAllocator.Run(func, layout, lin);
-        var emitter = new BytecodeEmitter(func, layout, alloc);
+        var scratch0 = alloc.RegisterCount;
+        var scratch1 = scratch0 + 1;
+        var emitter = new BytecodeEmitter(func, layout, alloc, scratch0, scratch1);
         var seq = emitter.Emit();
-        // Always reserve at least 1 register (R0 = self) even if the allocator
-        // didn't assign anything (e.g. a function whose body is just `Stop`).
-        var regCount = (ushort)System.Math.Max(alloc.RegisterCount, 1);
+        // Reserve ScratchSize registers above the allocator's output; ensure
+        // at least 1 register (R0 = self) is always present.
+        var regCount = (ushort)System.Math.Max(alloc.RegisterCount + ScratchSize, 1);
         return new LoweredFunction { Sequence = seq, RegisterCount = regCount };
     }
 }
