@@ -214,8 +214,11 @@ internal static class OpCodeInfo
         t[(int)OpCode.Module] = OperandLayout.BB;
         t[(int)OpCode.Exec] = OperandLayout.BB;
         t[(int)OpCode.Def] = OperandLayout.BB;
-        t[(int)OpCode.TDef] = OperandLayout.B;
-        t[(int)OpCode.SDef] = OperandLayout.BB;
+        // TDef/SDef are BBB in the actual VM (see MRubyState.Vm.cs: OperandBBB.Read).
+        // Earlier table entries were B / BB, which made HirBuilder misalign the
+        // bytecode walk on top-level scripts that use `def name`.
+        t[(int)OpCode.TDef] = OperandLayout.BBB;
+        t[(int)OpCode.SDef] = OperandLayout.BBB;
         t[(int)OpCode.Alias] = OperandLayout.BB;
         t[(int)OpCode.Undef] = OperandLayout.B;
         t[(int)OpCode.SClass] = OperandLayout.B;
