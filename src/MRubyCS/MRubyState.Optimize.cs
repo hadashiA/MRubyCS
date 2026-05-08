@@ -6,6 +6,17 @@ namespace MRubyCS;
 
 partial class MRubyState
 {
+    OptimizationInvariants? optimizationInvariants;
+
+    /// <summary>
+    /// Lazily-allocated registry of compile-time assumptions made by
+    /// MRubyState.Optimize. Phase J will hook into VM mutation points
+    /// (DefineMethod / const_set / class reopen) to invalidate dependent
+    /// optimized Ireps; for now it's record-only.
+    /// </summary>
+    public OptimizationInvariants OptimizationInvariants =>
+        optimizationInvariants ??= new OptimizationInvariants();
+
     /// <summary>
     /// Run the HIR optimization pipeline over <paramref name="src"/> and
     /// return a new <see cref="Irep"/> whose <c>Sequence</c> is the lowered
@@ -35,6 +46,7 @@ partial class MRubyState
         {
             var func = HirFunction.Build(src);
             TypeInference.Run(func);
+            ConstantResolution.Run(func, this);
             MoveElim.Run(func);
             ConstantFold.Run(func);
             PhiSimplify.Run(func);
