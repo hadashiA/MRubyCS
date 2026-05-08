@@ -20,12 +20,15 @@ public sealed class HirInsn
     public List<InsnId> Inputs { get; } = new();
 
     // Auxiliary scalar / object operands. Interpretation depends on Kind.
-    public int Aux1 { get; init; }
-    public int Aux2 { get; init; }
-    public Symbol AuxSymbol { get; init; }
-    public bool AuxBool { get; init; }
-    public bool AuxBool2 { get; init; }
-    public object? AuxObj { get; init; }
+    // Internal-set so optimization passes can rewrite an insn in place
+    // (e.g. fold Add → LoadInt) without invalidating users that already
+    // hold the InsnId.
+    public int Aux1 { get; internal set; }
+    public int Aux2 { get; internal set; }
+    public Symbol AuxSymbol { get; internal set; }
+    public bool AuxBool { get; internal set; }
+    public bool AuxBool2 { get; internal set; }
+    public object? AuxObj { get; internal set; }
 
     internal HirInsn(HirInsnKind kind, int sourcePc, OpCode sourceOpCode)
     {

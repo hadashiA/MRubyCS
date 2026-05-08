@@ -39,6 +39,7 @@ partial class MRubyState
                 ShowParams = opts.ShowParams,
                 ShowSourcePc = opts.ShowSourcePc,
                 ShowDeadParams = opts.ShowDeadParams,
+                RunOptimizations = opts.RunOptimizations,
             };
         }
 
@@ -49,6 +50,14 @@ partial class MRubyState
     {
         var func = HirFunction.Build(irep);
         if (runTypeInference) TypeInference.Run(func);
+
+        if (opts.RunOptimizations && runTypeInference)
+        {
+            MoveElim.Run(func);
+            ConstantFold.Run(func);
+            PhiSimplify.Run(func);
+            Dce.Run(func);
+        }
 
         if (depth > 0) sb.Append('\n');
         sb.Append("=== HIR ").Append(label).Append(" ===\n");

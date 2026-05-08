@@ -12,6 +12,11 @@ public sealed class HirDumpOptions
     public bool ShowEffects { get; init; } = false;
     public bool ShowSourcePc { get; init; } = true;
     public bool ShowDeadParams { get; init; } = false;  // Suppress all-bb-have-N-params noise
+    // When true, DumpHir applies the structurally-safe optimization passes
+    // (MoveElim / ConstantFold / Dce) before rendering. Useful for visually
+    // diffing the IR before vs. after optimization. Off by default so the
+    // dump represents the raw lifted form.
+    public bool RunOptimizations { get; init; } = false;
     public MRubyState? State { get; init; }
 }
 

@@ -123,7 +123,7 @@ static class HirBuilder
             if (pcToBlock.TryGetValue(block.EndPc, out var next))
             {
                 var edge = func.NewEdge(block.Id, next);
-                AppendArgs(edge, frame);
+                AppendArgs(func, edge, frame);
             }
             return;
         }
@@ -135,7 +135,7 @@ static class HirBuilder
                 if (pcToBlock.TryGetValue(last.Aux1, out var jt))
                 {
                     var edge = func.NewEdge(block.Id, jt);
-                    AppendArgs(edge, frame);
+                    AppendArgs(func, edge, frame);
                 }
                 break;
             case HirInsnKind.BranchIf:
@@ -145,12 +145,12 @@ static class HirBuilder
                 if (pcToBlock.TryGetValue(last.Aux1, out var taken))
                 {
                     var e = func.NewEdge(block.Id, taken);
-                    AppendArgs(e, frame);
+                    AppendArgs(func, e, frame);
                 }
                 if (pcToBlock.TryGetValue(block.EndPc, out var fall))
                 {
                     var e = func.NewEdge(block.Id, fall);
-                    AppendArgs(e, frame);
+                    AppendArgs(func, e, frame);
                 }
                 break;
             case HirInsnKind.Return:
@@ -164,16 +164,19 @@ static class HirBuilder
                 if (pcToBlock.TryGetValue(block.EndPc, out var next))
                 {
                     var edge = func.NewEdge(block.Id, next);
-                    AppendArgs(edge, frame);
+                    AppendArgs(func, edge, frame);
                 }
                 break;
         }
     }
 
-    static void AppendArgs(HirBranchEdge edge, InsnId[] frame)
+    static void AppendArgs(HirFunction func, HirBranchEdge edge, InsnId[] frame)
     {
         edge.Args.Capacity = frame.Length;
-        foreach (var v in frame) edge.Args.Add(v);
+        for (var i = 0; i < frame.Length; i++)
+        {
+            func.AppendEdgeArg(edge, frame[i], i);
+        }
     }
 
     // -----------------------------------------------------------------

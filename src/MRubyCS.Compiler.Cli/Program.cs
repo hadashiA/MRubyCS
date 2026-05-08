@@ -20,6 +20,7 @@ class Commands
     /// <param name="hirNoTypes">Skip type inference when dumping HIR (faster, less informative)</param>
     /// <param name="hirShowEffects">Include per-insn effect classification in the HIR dump</param>
     /// <param name="hirShowDeadParams">Show all RegisterCount params per block (verbose)</param>
+    /// <param name="hirOptimize">Run cleanup passes (MoveElim/ConstantFold/Dce) before dumping</param>
     /// <param name="format">Output format: binary or csharp</param>
     /// <param name="csharpNamespace">C# namespace for generated code</param>
     /// <param name="csharpClassName">C# class name for generated code</param>
@@ -32,6 +33,7 @@ class Commands
         bool hirNoTypes = false,
         bool hirShowEffects = false,
         bool hirShowDeadParams = false,
+        bool hirOptimize = false,
         OutputFormat format = OutputFormat.binary,
         string? csharpNamespace = null,
         string? csharpClassName = null)
@@ -48,6 +50,7 @@ class Commands
                 ShowTypes = !hirNoTypes,
                 ShowEffects = hirShowEffects,
                 ShowDeadParams = hirShowDeadParams,
+                RunOptimizations = hirOptimize,
             };
             var dumpText = state.DumpHir(irep, opts, runTypeInference: !hirNoTypes);
 
