@@ -8,7 +8,7 @@ public class RiteParserTest
     [Test]
     public void Parse()
     {
-        var mrb = MRubyState.Create();
+        using var mrb = MRubyState.Create();
         using var compiler = MRubyCompiler.Create(mrb);
         using var compilation = compiler.Compile("a = 'abcdefg'"u8);
         var irep = compilation.ToIrep();

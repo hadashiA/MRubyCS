@@ -7,6 +7,13 @@ partial class MRubyState
 {
     public RFiber CurrentFiber => Context.Fiber ??= new RFiber(Context, this, FiberClass);
 
+    public IMRubyFiberScheduler? FiberScheduler { get; private set; }
+
+    public void SetFiberScheduler(IMRubyFiberScheduler scheduler)
+        => FiberScheduler = scheduler;
+
+    public void ClearFiberScheduler() => FiberScheduler = null;
+
     public RProc ParseBytecodeAsProc(ReadOnlySpan<byte> bytecode)
     {
         var irep = ParseBytecode(bytecode);

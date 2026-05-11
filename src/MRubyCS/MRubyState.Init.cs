@@ -7,7 +7,7 @@ using Utf8StringInterpolation;
 
 namespace MRubyCS;
 
-public partial class MRubyState
+public partial class MRubyState : IDisposable
 {
     public static MRubyState Create(Action<MRubyState> configure)
     {
@@ -85,6 +85,42 @@ public partial class MRubyState
         Context = ContextRoot;
         ValueEqualityComparer = new MRubyValueEqualityComparer(this);
         HashKeyEqualityComparer = new MRubyValueHashKeyEqualityComparer(this);
+    }
+
+    bool disposed;
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Core dispose path. Override in derived types to release additional
+    /// resources, calling <c>base.Dispose(disposing)</c>.
+    /// <paramref name="disposing"/> is <c>true</c> when invoked from
+    /// <see cref="Dispose()"/> (safe to touch other managed objects) and
+    /// <c>false</c> when invoked from the finalizer (touch only unmanaged
+    /// state).
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposed) return;
+
+        if (disposing)
+        {
+            // Managed resources. The scheduler holds Timers, which back
+            // onto unmanaged OS timer handles — disposing it here matters
+            // even though MRubyState itself has no unmanaged members.
+            FiberScheduler?.Dispose();
+        }
+
+        disposed = true;
+    }
+
+    ~MRubyState()
+    {
+        Dispose(disposing: false);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -271,6 +307,7 @@ public partial class MRubyState
         DefineMethod(KernelModule, Intern("object_id"u8), KernelMembers.ObjectId);
         DefineMethod(KernelModule, Intern("p"u8), KernelMembers.P);
         DefineMethod(KernelModule, Intern("print"u8), KernelMembers.Print);
+        DefineMethod(KernelModule, Intern("sleep"u8), KernelMembers.Sleep);
         DefineMethod(KernelModule, Intern("remove_instance_variable"u8), KernelMembers.RemoveInstanceVariable);
         DefineMethod(KernelModule, Names.QRespondTo, KernelMembers.RespondTo);
         DefineMethod(KernelModule, Names.QRespondToMissing, MRubyMethod.False);

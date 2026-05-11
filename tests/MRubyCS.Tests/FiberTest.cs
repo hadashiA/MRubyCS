@@ -41,6 +41,7 @@ public class FiberTest
     public void After()
     {
         compiler.Dispose();
+        mrb.Dispose();
     }
 
     [Test]
@@ -64,7 +65,12 @@ public class FiberTest
         Assert.That(fiber.IsAlive, Is.True);
 
         var result3 = fiber.Resume(100);
-        Assert.That(result3.IsNil, Is.True);
+        // After the second Fiber.yield resumes (its "return" inside the
+        // block is whatever the next resume passes — i.e. 100), the block
+        // ends. The block's return value is its last expression, which is
+        // the resumed value (100). Fiber#resume on a terminating fiber
+        // returns that block-return value (CRuby semantics).
+        Assert.That(result3.IntegerValue, Is.EqualTo(100));
         Assert.That(fiber.IsAlive, Is.False);
     }
 

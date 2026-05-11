@@ -20,6 +20,7 @@ public class CompilerTest
     public void AfterAll()
     {
         compiler.Dispose();
+        mrb.Dispose();
     }
 
     [Test]
