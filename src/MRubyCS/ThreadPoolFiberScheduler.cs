@@ -5,31 +5,10 @@ using System.Threading.Tasks;
 
 namespace MRubyCS;
 
-/// <summary>
-/// Default <see cref="IMRubyFiberScheduler"/> implementation backed by .NET
-/// thread-pool tasks and timers. Suitable for tests, CLI tools, and any
-/// host where the VM is only touched from inside fiber bodies.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Each blocking hook spawns work that, when ready, calls
-/// <see cref="RFiber.Resume"/> on a thread-pool thread. Hosts that require
-/// main-thread affinity (Unity, WPF) must implement their own scheduler
-/// that hops back to the VM thread before resuming.
-/// </para>
-/// <para>
-/// Pair with <see cref="RFiber.WaitForTerminateAsync"/> to await a fiber's
-/// completion from C#:
-/// <code>
-/// state.SetFiberScheduler(new ThreadPoolFiberScheduler());
-/// var fiber = compiler.LoadSourceCodeAsFiber(code);
-/// fiber.Resume();
-/// await fiber.WaitForTerminateAsync();
-/// </code>
-/// </para>
-/// </remarks>
 public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
 {
+    public static readonly ThreadPoolFiberScheduler Instance = new();
+
     readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
     readonly ConcurrentDictionary<RFiber, Timer> sleepTimers = new();
     readonly ConcurrentDictionary<RFiber, TimeoutEntry> timeouts = new();
@@ -99,9 +78,6 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
             var fiber = (RFiber)state!;
             if (timeouts.TryRemove(fiber, out var te)) te.Timer?.Dispose();
 
-            // Wake the fiber via whichever mechanism it's parked in. Use
-            // CAS-style TryRemove so we don't race a concurrent natural
-            // wake of the same park into a double Resume.
             if (blockedFibers.TryGetValue(fiber, out var entry))
             {
                 // Block's continuation will dispose its timer + Resume.
@@ -112,11 +88,6 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
                 st.Dispose();
                 fiber.Resume();
             }
-            // Else: fiber wasn't parked in this scheduler's hooks. We
-            // can't interrupt arbitrary VM execution from here; drop the
-            // deadline silently. (TODO: once a VM-side pending-exception
-            // primitive exists, set it on `fiber` so the next yield-point
-            // picks it up.)
         };
         timeoutCancelCallback = state =>
         {
@@ -157,18 +128,9 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
             cancellationToken.UnsafeRegister(blockCancelCallback, entry);
         }
 
-        // Continuation must run regardless of how the task completed
-        // (success / cancellation / timeout). Passing cancellationToken to
-        // ContinueWith would cancel the continuation itself if the token
-        // fires, leaving the fiber permanently blocked. We always run the
-        // continuation and dispose the timer there. The resume value
-        // (passed to fiber.Resume) is the TCS result on success, or Nil on
-        // cancellation/timeout.
         entry.Task.ContinueWith(blockContinuationCallback, fiber, CancellationToken.None,
             TaskContinuationOptions.None, TaskScheduler.Default);
 
-        // CRuby-style: hook yields internally. Callers must have arranged
-        // the matching Unblock (or have set a timeout) before getting here.
         fiber.Yield();
     }
 

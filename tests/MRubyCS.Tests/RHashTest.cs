@@ -5,7 +5,7 @@ public class RHashTest
     [Test]
     public void MRubyValueKey()
     {
-        var state = MRubyState.Create();
+        using var state = MRubyState.Create();
         var h = state.NewHash(2);
 
         var a1 = state.NewString("a"u8);

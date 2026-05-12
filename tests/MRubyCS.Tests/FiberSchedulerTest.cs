@@ -189,8 +189,7 @@ public class FiberSchedulerTest
         // caller arranges the Unblock task *before* calling Block.
         // Captured via a Ruby-side helper (record) so we observe what the
         // running program actually sees.
-        var scheduler = new ThreadPoolFiberScheduler();
-        mrb.SetFiberScheduler(scheduler);
+        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
 
         var helloSym = mrb.Intern("hello"u8);
         var capturedRuby = new TaskCompletionSource<MRubyValue>(
@@ -236,8 +235,7 @@ public class FiberSchedulerTest
         // This guards against the regression where ContinueWith was
         // cancelled along with the fiber-cancellation token, leaving the
         // fiber permanently parked.
-        var scheduler = new ThreadPoolFiberScheduler();
-        mrb.SetFiberScheduler(scheduler);
+        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
 
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_value"u8),
             new MRubyMethod((state, self) =>
