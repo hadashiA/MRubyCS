@@ -25,6 +25,8 @@ jobs:
       dry-run: ${{ fromJson(github.event.inputs.dry-run) }}
    
   build-dotnet:
+    permissions:
+      id-token: write  # enable GitHub OIDC token issuance for this job
     needs: [update-version-number]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -32,22 +34,35 @@ jobs:
     - uses: actions/checkout@v3
       with:
         ref: ${{ needs.update-version-number.outputs.sha }}
-    - uses: actions/setup-dotnet@v3
+    - uses: actions/setup-dotnet@v5
       with:
         dotnet-version: |
-          9.0.x
+          10.0.x
     - run: dotnet build -c Release
     - run: dotnet test -c Release --no-build
       env:
         TZ: Asia/Tokyo
+        
     - run: dotnet pack -c Release --no-build -o ./publish
+      
     - uses: actions/upload-artifact@v4
       with:
         name: nuget
         path: ./publish
-    - name: Publish
-      if: github.event.inputs.dry-run == 'false'
-      run: dotnet nuget push ./publish/*.nupkg -s 'https://api.nuget.org/v3/index.json' -k ${{secrets.NUGET_API_KEY}}
+
+        
+    - name: Login to NuGet
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{secrets.NUGET_USERNAME}}
+
+    - name: Push to NuGet
+      run: |
+        dotnet nuget push ./nupkgs/*.nupkg \
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
       
   create-release:
     if: github.event.inputs.dry-run == 'false'    
