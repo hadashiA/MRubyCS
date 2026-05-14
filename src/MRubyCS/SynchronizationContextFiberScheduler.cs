@@ -15,38 +15,54 @@ namespace MRubyCS;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Timer / continuation callbacks still fire on the .NET threadpool; the
-/// scheduler then posts the actual <see cref="RFiber.Resume"/> back to the
-/// captured context so all VM work stays on the host's preferred thread.
-/// </para>
-/// <para>
 /// The <see cref="SynchronizationContext"/> is captured at construction
 /// time. Pass an explicit context to the constructor or call from the
 /// thread that owns it so <see cref="SynchronizationContext.Current"/>
 /// resolves correctly.
+/// </para>
+/// <para>
+/// Resume callbacks always run on the captured context. Wait primitives
+/// (<see cref="Task.Delay(TimeSpan, CancellationToken)"/>, the
+/// <see cref="TaskCompletionSource{TResult}"/> backing <see cref="Block"/>)
+/// fire on the threadpool internally, but their <c>await</c> continuations
+/// resume back on the captured context so no VM work runs off-thread.
 /// </para>
 /// </remarks>
 public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
 {
     readonly SynchronizationContext context;
     readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
-    readonly ConcurrentDictionary<RFiber, Timer> sleepTimers = new();
+    readonly ConcurrentDictionary<RFiber, CancellationTokenSource> sleepCancellations = new();
 
-    readonly TimerCallback sleepFireCallback;
-    readonly Action<object?> sleepCancelCallback;
-    readonly Action<Task<MRubyValue>, object?> blockContinuationCallback;
     readonly Action<object?> blockCancelCallback;
     readonly SendOrPostCallback postResumeCallback;
 
     sealed class BlockEntry() : TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    // Carries the (fiber, value) tuple through SynchronizationContext.Post
-    // without boxing a ValueTuple. Allocated per resume; pooled if profiling
-    // says it matters.
+    // Carries data through SynchronizationContext.Post without boxing a
+    // ValueTuple. Pooled below to avoid per-resume allocations.
     sealed class PostState
     {
         public RFiber Fiber = default!;
         public MRubyValue Value;
+    }
+
+    readonly ConcurrentStack<PostState> postStatePool = new();
+    const int PostStatePoolMax = 64;
+
+    PostState RentPostState(RFiber fiber, MRubyValue value)
+    {
+        if (!postStatePool.TryPop(out var s)) s = new PostState();
+        s.Fiber = fiber;
+        s.Value = value;
+        return s;
+    }
+
+    void ReturnPostState(PostState s)
+    {
+        s.Fiber = null!;
+        s.Value = default;
+        if (postStatePool.Count < PostStatePoolMax) postStatePool.Push(s);
     }
 
     /// <summary>
@@ -69,31 +85,12 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
             var ps = (PostState)state!;
             var fiber = ps.Fiber;
             var value = ps.Value;
-            ps.Fiber = null!;
-            try { if (fiber.IsAlive) fiber.Resume(value); }
-            catch { /* exception already routed via resumeSource */ }
+            ReturnPostState(ps);
+            if (!fiber.IsAlive) return;
+            try { fiber.Resume(value); }
+            catch { /* propagated via resumeSource */ }
         };
 
-        sleepFireCallback = s =>
-        {
-            var fiber = (RFiber)s!;
-            if (!sleepTimers.TryRemove(fiber, out var t)) return;
-            t.Dispose();
-            ScheduleResume(fiber, default);
-        };
-        sleepCancelCallback = s =>
-        {
-            var fiber = (RFiber)s!;
-            if (sleepTimers.TryRemove(fiber, out var t)) t.Dispose();
-        };
-        blockContinuationCallback = (task, s) =>
-        {
-            var fiber = (RFiber)s!;
-            if (!blockedFibers.TryRemove(fiber, out _)) return;
-            ScheduleResume(fiber, task.Status == TaskStatus.RanToCompletion
-                ? task.Result
-                : MRubyValue.Nil);
-        };
         blockCancelCallback = s =>
         {
             ((BlockEntry)s!).TrySetCanceled();
@@ -102,32 +99,74 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
 
     public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
     {
-        var timer = new Timer(sleepFireCallback, fiber, duration, Timeout.InfiniteTimeSpan);
-        sleepTimers[fiber] = timer;
-
-        if (cancellationToken.CanBeCanceled)
+        var cts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : new CancellationTokenSource();
+        if (!sleepCancellations.TryAdd(fiber, cts))
         {
-            cancellationToken.UnsafeRegister(sleepCancelCallback, fiber);
+            cts.Dispose();
+            ThrowAlreadyParked(fiber, "KernelSleep");
         }
 
+        _ = SleepAsync(duration, fiber, cts);
         fiber.Yield();
+    }
+
+    async ValueTask SleepAsync(TimeSpan duration, RFiber fiber, CancellationTokenSource cts)
+    {
+        try
+        {
+            // Force async boundary so the caller-side fiber.Yield() runs
+            // before our resume; otherwise a zero-duration Delay would
+            // trigger a "double resume" on the VM.
+            await Task.Yield();
+            try { await Task.Delay(duration, cts.Token); }
+            catch (OperationCanceledException) { /* fall through to resume */ }
+
+            if (!sleepCancellations.TryRemove(fiber, out _)) return;
+            TryResume(fiber, MRubyValue.Nil);
+        }
+        finally
+        {
+            cts.Dispose();
+        }
     }
 
     public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default)
     {
         var entry = new BlockEntry();
-        blockedFibers[fiber] = entry;
+        if (!blockedFibers.TryAdd(fiber, entry))
+        {
+            ThrowAlreadyParked(fiber, "Block");
+        }
 
         if (cancellationToken.CanBeCanceled)
         {
             cancellationToken.UnsafeRegister(blockCancelCallback, entry);
         }
 
-        entry.Task.ContinueWith(blockContinuationCallback, fiber, CancellationToken.None,
-            TaskContinuationOptions.None, TaskScheduler.Default);
-
+        _ = AwaitBlockAsync(entry, fiber);
         fiber.Yield();
     }
+
+    async ValueTask AwaitBlockAsync(BlockEntry entry, RFiber fiber)
+    {
+        // Force async boundary so Block's caller-side fiber.Yield() runs
+        // before our resume; otherwise an already-completed entry.Task
+        // would trigger a "double resume" on the VM.
+        await Task.Yield();
+        MRubyValue value;
+        try { value = await entry.Task; }
+        catch { value = MRubyValue.Nil; }
+
+        if (!blockedFibers.TryRemove(fiber, out _)) return;
+        TryResume(fiber, value);
+    }
+
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+    static void ThrowAlreadyParked(RFiber fiber, string op) =>
+        throw new InvalidOperationException(
+            $"{op}: fiber is already parked under this scheduler. Each park must be matched by an Unblock/timeout/cancel before another can be issued.");
 
     public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default)
     {
@@ -177,128 +216,108 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         fiber.Yield();
     }
 
-    async Task AwaitAsync(ValueTask task, RFiber fiber, MRubyValue resumeValue, CancellationToken ct)
+    // AwaitAsync intentionally does NOT use ConfigureAwait(false): each
+    // await captures the host SynchronizationContext, so continuations run
+    // on the VM thread. The Task.Yield() at the top forces an async
+    // boundary (caller's fiber.Yield() must run before our resume) and
+    // hops onto the captured context; from then on `await task` resumes us
+    // back there too, so we can call fiber.Resume directly without an
+    // explicit context.Post. The implicit assumption is that Await was
+    // invoked from a fiber body running on the captured context's thread
+    // (the scheduler contract).
+    async ValueTask AwaitAsync(ValueTask task, RFiber fiber, MRubyValue resumeValue, CancellationToken ct)
     {
         await Task.Yield();
         try
         {
-            await task.ConfigureAwait(false);
+            await task;
         }
         catch (OperationCanceledException)
         {
-            ScheduleResume(fiber, MRubyValue.Nil);
+            TryResume(fiber, MRubyValue.Nil);
             return;
         }
         catch (Exception ex)
         {
-            ScheduleResumeWithException(fiber, ex);
+            TryResumeWithException(fiber, ex);
             return;
         }
 
         if (ct.IsCancellationRequested)
         {
-            ScheduleResume(fiber, MRubyValue.Nil);
+            TryResume(fiber, MRubyValue.Nil);
             return;
         }
-        ScheduleResume(fiber, resumeValue);
+        TryResume(fiber, resumeValue);
     }
 
-    async Task AwaitAsync<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken ct)
+    async ValueTask AwaitAsync<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken ct)
     {
         await Task.Yield();
         T result;
-        try { result = await task.ConfigureAwait(false); }
-        catch (OperationCanceledException) { ScheduleResume(fiber, MRubyValue.Nil); return; }
-        catch (Exception ex) { ScheduleResumeWithException(fiber, ex); return; }
+        try { result = await task; }
+        catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
+        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
 
-        if (ct.IsCancellationRequested) { ScheduleResume(fiber, MRubyValue.Nil); return; }
+        if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
 
-        // The projection runs on the captured context (where it's safe to
-        // touch MRubyState). Post the whole "map + resume" step together.
-        context.Post(state =>
-        {
-            var ps = (MapResumeState<T>)state!;
-            try
-            {
-                if (!ps.Fiber.IsAlive) return;
-                ps.Fiber.Resume(ps.Map(ps.Result));
-            }
-            catch { /* propagated via resumeSource */ }
-        }, new MapResumeState<T> { Fiber = fiber, Result = result, Map = mapResult });
+        MRubyValue mapped;
+        try { mapped = mapResult(result); }
+        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+        TryResume(fiber, mapped);
     }
 
-    async Task AwaitAsync<T, TState>(
+    async ValueTask AwaitAsync<T, TState>(
         ValueTask<T> task, RFiber fiber,
         Func<T, TState, MRubyValue> mapResult, TState state,
         CancellationToken ct)
     {
         await Task.Yield();
         T result;
-        try { result = await task.ConfigureAwait(false); }
-        catch (OperationCanceledException) { ScheduleResume(fiber, MRubyValue.Nil); return; }
-        catch (Exception ex) { ScheduleResumeWithException(fiber, ex); return; }
+        try { result = await task; }
+        catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
+        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
 
-        if (ct.IsCancellationRequested) { ScheduleResume(fiber, MRubyValue.Nil); return; }
+        if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
 
-        context.Post(s =>
+        MRubyValue mapped;
+        try { mapped = mapResult(result, state); }
+        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+        TryResume(fiber, mapped);
+    }
+
+    static void TryResume(RFiber fiber, MRubyValue value)
+    {
+        if (!fiber.IsAlive) return;
+        try { fiber.Resume(value); }
+        catch { /* propagated via resumeSource */ }
+    }
+
+    static void TryResumeWithException(RFiber fiber, Exception ex)
+    {
+        if (!fiber.IsAlive) return;
+        try
         {
-            var ps = (MapResumeState<T, TState>)s!;
-            try
-            {
-                if (!ps.Fiber.IsAlive) return;
-                ps.Fiber.Resume(ps.Map(ps.Result, ps.MapState));
-            }
-            catch { /* propagated via resumeSource */ }
-        }, new MapResumeState<T, TState> { Fiber = fiber, Result = result, Map = mapResult, MapState = state });
-    }
-
-    sealed class MapResumeState<T>
-    {
-        public RFiber Fiber = default!;
-        public T Result = default!;
-        public Func<T, MRubyValue> Map = default!;
-    }
-
-    sealed class MapResumeState<T, TState>
-    {
-        public RFiber Fiber = default!;
-        public T Result = default!;
-        public Func<T, TState, MRubyValue> Map = default!;
-        public TState MapState = default!;
+            var mrb = fiber.MRubyState;
+            var msg = ex.Message ?? ex.GetType().Name;
+            fiber.PendingException = new RException(
+                mrb.NewString(System.Text.Encoding.UTF8.GetBytes(msg)),
+                mrb.GetExceptionClass(Names.RuntimeError));
+            fiber.Resume();
+        }
+        catch { /* propagated via resumeSource */ }
     }
 
     void ScheduleResume(RFiber fiber, MRubyValue value)
     {
-        // PostState allocation per call. SynchronizationContext.Post itself
-        // typically allocates; this addition is negligible.
-        context.Post(postResumeCallback, new PostState { Fiber = fiber, Value = value });
-    }
-
-    void ScheduleResumeWithException(RFiber fiber, Exception ex)
-    {
-        if (!fiber.IsAlive) return;
-        var state = fiber.MRubyState;
-        var msg = ex.Message ?? ex.GetType().Name;
-        context.Post(s =>
-        {
-            var entry = (PostState)s!;
-            try
-            {
-                if (!entry.Fiber.IsAlive) return;
-                entry.Fiber.PendingException = new RException(
-                    state.NewString(System.Text.Encoding.UTF8.GetBytes(msg)),
-                    state.GetExceptionClass(Names.RuntimeError));
-                entry.Fiber.Resume();
-            }
-            catch { /* propagated via resumeSource */ }
-        }, new PostState { Fiber = fiber, Value = default });
+        context.Post(postResumeCallback, RentPostState(fiber, value));
     }
 
     public void Dispose()
     {
         foreach (var kv in blockedFibers) kv.Value.TrySetCanceled();
         blockedFibers.Clear();
-        foreach (var kv in sleepTimers) kv.Value.Dispose();
-        sleepTimers.Clear();
+        foreach (var kv in sleepCancellations) kv.Value.Cancel();
+        sleepCancellations.Clear();
     }
 }

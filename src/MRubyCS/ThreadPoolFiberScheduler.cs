@@ -11,11 +11,6 @@ namespace MRubyCS;
 /// host where the VM is only touched from inside fiber bodies. Resume
 /// callbacks fire on threadpool threads.
 /// </summary>
-/// <remarks>
-/// Hosts requiring main-thread affinity (Unity, WPF) implement their own
-/// <see cref="IMRubyFiberScheduler"/> that hops back to the VM thread
-/// before calling <see cref="RFiber.Resume"/>.
-/// </remarks>
 public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
 {
     readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
@@ -61,8 +56,15 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
     public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
     {
         // TODO: Support TimeProvider for testability.
-        var timer = new Timer(sleepFireCallback, fiber, duration, Timeout.InfiniteTimeSpan);
-        sleepTimers[fiber] = timer;
+        var timer = new Timer(sleepFireCallback, fiber, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        if (!sleepTimers.TryAdd(fiber, timer))
+        {
+            timer.Dispose();
+            ThrowAlreadyParked(fiber, "KernelSleep");
+        }
+        // Arm only after the registration succeeds, so the fire callback can't
+        // race ahead and observe a missing dict entry.
+        timer.Change(duration, Timeout.InfiniteTimeSpan);
 
         if (cancellationToken.CanBeCanceled)
         {
@@ -75,7 +77,10 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
     public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default)
     {
         var entry = new BlockEntry();
-        blockedFibers[fiber] = entry;
+        if (!blockedFibers.TryAdd(fiber, entry))
+        {
+            ThrowAlreadyParked(fiber, "Block");
+        }
 
         if (cancellationToken.CanBeCanceled)
         {
@@ -87,6 +92,11 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
 
         fiber.Yield();
     }
+
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+    static void ThrowAlreadyParked(RFiber fiber, string op) =>
+        throw new InvalidOperationException(
+            $"{op}: fiber is already parked under this scheduler. Each park must be matched by an Unblock/timeout/cancel before another can be issued.");
 
     public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default)
     {

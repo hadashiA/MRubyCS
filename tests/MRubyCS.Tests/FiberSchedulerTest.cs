@@ -423,6 +423,53 @@ public class FiberSchedulerTest
         Assert.That(result.As<RString>().AsSpan().SequenceEqual("boom"u8), Is.True);
     }
 
+    [Test]
+    public void Block_TwiceForSameFiber_Throws()
+    {
+        // Re-blocking a fiber that's already parked would orphan the previous
+        // BlockEntry (its TCS would never resolve), so the scheduler must
+        // reject the second registration instead of silently overwriting.
+        using var scheduler = new ThreadPoolFiberScheduler();
+        mrb.SetFiberScheduler(scheduler);
+
+        Exception? caught = null;
+        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("park_twice"u8),
+            new MRubyMethod((state, self) =>
+            {
+                var fiber = state.CurrentFiber;
+                var sched = state.FiberScheduler!;
+                var blocker = new MRubyValue(state.NewString("b"u8));
+                sched.Block(blocker, fiber);
+                // Unreachable on the normal path (Block yields), but if the
+                // guard misfires we still want a deterministic failure.
+                try { sched.Block(blocker, fiber); }
+                catch (InvalidOperationException ex) { caught = ex; }
+                return MRubyValue.Nil;
+            }));
+
+        // Drive the second Block from outside the fiber: after the fiber
+        // yields on the first Block, call Block again on the same fiber.
+        var fiber = compiler.LoadSourceCodeAsFiber("park_twice"u8);
+        fiber.Resume();
+
+        Assert.Throws<InvalidOperationException>(
+            () => scheduler.Block(new MRubyValue(mrb.NewString("b"u8)), fiber));
+    }
+
+    [Test]
+    public void KernelSleep_TwiceForSameFiber_Throws()
+    {
+        using var scheduler = new ThreadPoolFiberScheduler();
+        mrb.SetFiberScheduler(scheduler);
+
+        var fiber = compiler.LoadSourceCodeAsFiber("sleep 10; :done"u8);
+        fiber.Resume();
+        // fiber is now parked in KernelSleep. A second KernelSleep on the
+        // same fiber must throw rather than overwrite the timer.
+        Assert.Throws<InvalidOperationException>(
+            () => scheduler.KernelSleep(TimeSpan.FromSeconds(1), fiber));
+    }
+
     sealed class SpyScheduler : IMRubyFiberScheduler
     {
         public int SleepCallCount;

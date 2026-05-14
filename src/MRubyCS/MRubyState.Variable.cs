@@ -1,4 +1,3 @@
-using System;
 using MRubyCS.StdLib;
 
 namespace MRubyCS;
