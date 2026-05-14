@@ -43,6 +43,24 @@ static class FiberMembers
     [MRubyMethod]
     public static MRubyMethod Current = new((state, _) => state.CurrentFiber);
 
+    /// <summary>
+    /// <c>Fiber.schedule { ... }</c> — convenience for creating a fiber and
+    /// starting it immediately under the installed scheduler. Returns the
+    /// new <see cref="RFiber"/>; the caller can observe it via
+    /// <c>alive?</c> or just rely on the scheduler to drive it to completion.
+    /// CRuby's <c>blocking: false</c> distinction is implicit here: any
+    /// fiber under a scheduler that hits <c>sleep</c>/<c>Thread.pass</c>/IO
+    /// will dispatch through the scheduler.
+    /// </summary>
+    [MRubyMethod(BlockArgument = true)]
+    public static MRubyMethod Schedule = new((state, _) =>
+    {
+        var block = state.GetBlockArgument(false)!;
+        var fiber = state.CreateFiber(block);
+        fiber.Resume();
+        return new MRubyValue(fiber);
+    });
+
     [MRubyMethod]
     public static MRubyMethod Alive = new((state, self) =>
     {

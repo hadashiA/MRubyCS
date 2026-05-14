@@ -311,6 +311,13 @@ static class KernelMembers
         // return below is unused on the resume path.
         if (scheduler is not null && !fiber.IsRoot)
         {
+            // sleep 0 → cooperative yield (Thread.pass semantics).
+            if (seconds <= 0 && !double.IsPositiveInfinity(seconds))
+            {
+                scheduler.Yield(fiber);
+                return MRubyValue.Nil;
+            }
+
             var duration = double.IsPositiveInfinity(seconds)
                 ? Timeout.InfiniteTimeSpan
                 : TimeSpan.FromSeconds(seconds);

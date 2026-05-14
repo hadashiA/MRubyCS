@@ -16,6 +16,15 @@ public sealed class RFiber : RObject
 
     internal MRubyState MRubyState => state;
 
+    /// <summary>
+    /// Exception to raise inside the fiber on the next resume. Set by
+    /// <see cref="IMRubyFiberScheduler"/> implementations when an awaited
+    /// task throws, so Ruby code at the yield point observes a normal
+    /// <c>raise</c> (catchable by <c>rescue</c>) instead of the fiber
+    /// silently returning. Cleared automatically once consumed.
+    /// </summary>
+    public RException? PendingException { get; set; }
+
     readonly MRubyContext context = new();
     readonly MRubyState state;
     readonly MultiConsumerValueTaskNotifier<MRubyValue> resumeSource = new();
@@ -201,6 +210,13 @@ public sealed class RFiber : RObject
             state.SwitchToContext(context);
             context.State = FiberState.Running;
 
+            // PendingException is consumed below: vmexec passes it into
+            // Execute so the raise lands at the resumed PC (catchable by a
+            // surrounding Ruby `rescue`); the non-vmexec path falls back to
+            // raising on the spot, which unwinds through the caller's VM.
+            var pending = PendingException;
+            PendingException = null;
+
             MRubyValue result;
             // Slot (absolute in context.Stack) where the resume value was
             // written, so Execute's stackKeep below preserves it. -1 means
@@ -274,7 +290,7 @@ public sealed class RFiber : RObject
                     var resumeSlotRelative = resumeWriteSlot - callInfo.StackPointer + 1;
                     if (resumeSlotRelative > stackKeep) stackKeep = resumeSlotRelative;
                 }
-                result = state.Execute(callInfo.Proc!.Irep, callInfo.ProgramCounter, stackKeep);
+                result = state.Execute(callInfo.Proc!.Irep, callInfo.ProgramCounter, stackKeep, pending);
                 state.SwitchToContext(currentContext);
                 currentContext.State = FiberState.Running;
                 // restore values as they may have changed in Fiber.yield
@@ -283,6 +299,7 @@ public sealed class RFiber : RObject
             else
             {
                 context.CurrentCallInfo.MarkContextModify();
+                if (pending is not null) state.Raise(pending);
             }
 
             resumeSource.SetResult(result);

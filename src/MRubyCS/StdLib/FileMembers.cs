@@ -1,0 +1,130 @@
+using System;
+using System.IO;
+using System.Text;
+
+namespace MRubyCS.StdLib;
+
+static class FileMembers
+{
+    /// <summary>
+    /// <c>File.open(path, mode = "r")</c> — open the file, return an
+    /// <see cref="RFile"/>. The <b>block form</b>
+    /// (<c>File.open(path) { |f| ... }</c> with auto-close) is implemented
+    /// in Ruby on top of this method (see <c>StdLib/lib.rb</c>) so the
+    /// block can <c>yield</c>/<c>sleep</c>/<c>I/O</c> without crossing a
+    /// C# stack frame (<see cref="MRubyState.EnsureValidFiberBoundary"/>).
+    /// </summary>
+    [MRubyMethod(RequiredArguments = 1, OptionalArguments = 1)]
+    public static MRubyMethod Open = new((state, self) =>
+    {
+        var path = PathArg(state);
+        var mode = ModeArg(state);
+        var (fileMode, fileAccess) = ResolveMode(state, mode);
+
+        var stream = new FileStream(path, fileMode, fileAccess, FileShare.ReadWrite,
+            bufferSize: 4096, useAsync: true);
+        var rfile = new RFile(state.FileClass, stream, path);
+        return new MRubyValue(rfile);
+    });
+
+    /// <summary>
+    /// <c>File.read(path)</c> — convenience: read whole file as a String.
+    /// </summary>
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod Read = new((state, self) =>
+    {
+        var path = PathArg(state);
+        var fiber = state.CurrentFiber;
+        var scheduler = state.FiberScheduler;
+
+        if (scheduler is not null && !fiber.IsRoot)
+        {
+            scheduler.Await(
+                ReadAllAsync(path),
+                fiber,
+                static (bytes, s) => new MRubyValue(s.NewString(bytes)),
+                state);
+            return MRubyValue.Nil;
+        }
+
+        return state.NewString(File.ReadAllBytes(path));
+    });
+
+    /// <summary>
+    /// <c>File.write(path, content)</c> — convenience: replace file content.
+    /// Returns the number of bytes written.
+    /// </summary>
+    [MRubyMethod(RequiredArguments = 2)]
+    public static MRubyMethod Write = new((state, self) =>
+    {
+        var path = PathArg(state);
+        var content = state.GetArgumentAsStringAt(1);
+        var data = content.AsSpan().ToArray();
+        var fiber = state.CurrentFiber;
+        var scheduler = state.FiberScheduler;
+
+        if (scheduler is not null && !fiber.IsRoot)
+        {
+            scheduler.Await(
+                WriteAllAsync(path, data),
+                fiber,
+                new MRubyValue((long)data.Length));
+            return MRubyValue.Nil;
+        }
+
+        File.WriteAllBytes(path, data);
+        return new MRubyValue((long)data.Length);
+    });
+
+    [MRubyMethod(RequiredArguments = 1)]
+    public static MRubyMethod ExistQ = new((state, self) =>
+    {
+        var path = PathArg(state);
+        return File.Exists(path) ? MRubyValue.True : MRubyValue.False;
+    });
+
+    static string PathArg(MRubyState state)
+        => Encoding.UTF8.GetString(state.GetArgumentAsStringAt(0).AsSpan());
+
+    static string ModeArg(MRubyState state)
+    {
+        if (state.GetArgumentCount() < 2 || state.GetArgumentAt(1).IsNil) return "r";
+        return Encoding.UTF8.GetString(state.GetArgumentAsStringAt(1).AsSpan());
+    }
+
+    static (FileMode, FileAccess) ResolveMode(MRubyState state, string mode)
+    {
+        // Ignore the "b" binary marker — all I/O here is byte-oriented.
+        var m = mode.Replace("b", "");
+        return m switch
+        {
+            "r" => (FileMode.Open, FileAccess.Read),
+            "r+" => (FileMode.Open, FileAccess.ReadWrite),
+            "w" => (FileMode.Create, FileAccess.Write),
+            "w+" => (FileMode.Create, FileAccess.ReadWrite),
+            "a" => (FileMode.Append, FileAccess.Write),
+            "a+" => (FileMode.Append, FileAccess.ReadWrite),
+            _ => ((Func<(FileMode, FileAccess)>)(() =>
+            {
+                state.Raise(Names.ArgumentError, $"invalid file mode: {mode}");
+                return default;
+            }))()
+        };
+    }
+
+    static async System.Threading.Tasks.ValueTask<byte[]> ReadAllAsync(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.Read, 4096, useAsync: true);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms).ConfigureAwait(false);
+        return ms.ToArray();
+    }
+
+    static async System.Threading.Tasks.ValueTask WriteAllAsync(string path, byte[] data)
+    {
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write,
+            FileShare.None, 4096, useAsync: true);
+        await stream.WriteAsync(data, 0, data.Length).ConfigureAwait(false);
+    }
+}

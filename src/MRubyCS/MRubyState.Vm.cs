@@ -331,7 +331,7 @@ partial class MRubyState
     /// <summary>
     /// Execute irep assuming the Stack values are placed
     /// </summary>
-    internal MRubyValue Execute(Irep irep, int pc, int stackKeep)
+    internal MRubyValue Execute(Irep irep, int pc, int stackKeep, RException? injectedRaise = null)
     {
         Exception = null;
 
@@ -359,6 +359,25 @@ partial class MRubyState
 
         ref var registers = ref Unsafe.Add(ref GetArrayDataReference(Context.Stack), callInfo.StackPointer);
         callInfo.ProgramCounter = pc;
+
+        // Inject a raise at the resume point so a Ruby `rescue` wrapping the
+        // suspension (e.g. begin ... sleep ... rescue ... end) catches it.
+        // Search rescue handlers exactly as if the raise originated at the
+        // current PC; if none match, propagate out of the fiber as before.
+        if (injectedRaise is not null)
+        {
+            var ex = new MRubyRaiseException(this, injectedRaise, Context.CallDepth);
+            Exception = ex;
+            if (!TryRaiseJump(ref Context.CurrentCallInfo))
+            {
+                throw ex;
+            }
+            callInfo = ref Context.CurrentCallInfo;
+            irep = callInfo.Proc!.Irep;
+            registers = ref Unsafe.Add(ref GetArrayDataReference(Context.Stack), callInfo.StackPointer);
+            sequence = ref GetArrayDataReference(irep.Sequence);
+            symbols = ref GetArrayDataReference(irep.Symbols);
+        }
 
         while (true)
         {

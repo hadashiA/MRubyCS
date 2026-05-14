@@ -34,6 +34,8 @@ public partial class MRubyState : IDisposable
         state.InitRange();
         state.InitEnumerable();
         state.InitFiber();
+        state.InitThread();
+        state.InitIO();
         state.InitMrbLib();
         state.InitObjectExt();
         state.InitTime();
@@ -58,6 +60,8 @@ public partial class MRubyState : IDisposable
     public RClass NilClass { get; private set; } = default!;
     public RClass SymbolClass { get; private set; } = default!;
     public RClass FiberClass { get; private set; } = default!;
+    public RClass IOClass { get; private set; } = default!;
+    public RClass FileClass { get; private set; } = default!;
     public RClass KernelModule { get; private set; } = default!;
     public RClass ExceptionClass { get; private set; } = default!;
     public RClass StandardErrorClass { get; private set; } = default!;
@@ -109,10 +113,8 @@ public partial class MRubyState : IDisposable
 
         if (disposing)
         {
-            // Managed resources. The scheduler holds Timers, which back
-            // onto unmanaged OS timer handles — disposing it here matters
-            // even though MRubyState itself has no unmanaged members.
             FiberScheduler?.Dispose();
+            FiberScheduler = null;
         }
 
         disposed = true;
@@ -665,8 +667,36 @@ public partial class MRubyState : IDisposable
         DefineMethod(FiberClass, Intern("alive?"u8), FiberMembers.Alive);
         DefineClassMethod(FiberClass, Intern("yield"u8), FiberMembers.Yield);
         DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
+        DefineClassMethod(FiberClass, Intern("schedule"u8), FiberMembers.Schedule);
 
         DefineClass(Intern("FiberError"u8), StandardErrorClass);
+    }
+
+    void InitThread()
+    {
+        // Stub Thread class — MRubyCS doesn't expose OS threads. It exists
+        // to host CRuby-compatible cooperative-scheduling entry points
+        // (notably Thread.pass) that fan out to the fiber scheduler.
+        var threadClass = DefineClass(Intern("Thread"u8), ObjectClass, MRubyVType.Object);
+        DefineClassMethod(threadClass, Intern("pass"u8), ThreadMembers.Pass);
+    }
+
+    void InitIO()
+    {
+        IOClass = DefineClass(Intern("IO"u8), ObjectClass, MRubyVType.Object);
+        DefineMethod(IOClass, Intern("read"u8), IOMembers.Read);
+        DefineMethod(IOClass, Intern("write"u8), IOMembers.Write);
+        DefineMethod(IOClass, Intern("close"u8), IOMembers.Close);
+        DefineMethod(IOClass, Intern("closed?"u8), IOMembers.ClosedQ);
+
+        FileClass = DefineClass(Intern("File"u8), IOClass, MRubyVType.Object);
+        DefineClassMethod(FileClass, Intern("open"u8), FileMembers.Open);
+        DefineClassMethod(FileClass, Intern("read"u8), FileMembers.Read);
+        DefineClassMethod(FileClass, Intern("write"u8), FileMembers.Write);
+        DefineClassMethod(FileClass, Intern("exist?"u8), FileMembers.ExistQ);
+        DefineClassMethod(FileClass, Intern("exists?"u8), FileMembers.ExistQ);
+
+        DefineClass(Intern("IOError"u8), StandardErrorClass);
     }
 
     void InitObjectExt()

@@ -5,100 +5,62 @@ using System.Threading.Tasks;
 
 namespace MRubyCS;
 
+/// <summary>
+/// Default <see cref="IMRubyFiberScheduler"/> implementation backed by .NET
+/// thread-pool tasks and timers. Suitable for tests, CLI tools, and any
+/// host where the VM is only touched from inside fiber bodies. Resume
+/// callbacks fire on threadpool threads.
+/// </summary>
+/// <remarks>
+/// Hosts requiring main-thread affinity (Unity, WPF) implement their own
+/// <see cref="IMRubyFiberScheduler"/> that hops back to the VM thread
+/// before calling <see cref="RFiber.Resume"/>.
+/// </remarks>
 public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
 {
-    public static readonly ThreadPoolFiberScheduler Instance = new();
-
     readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
     readonly ConcurrentDictionary<RFiber, Timer> sleepTimers = new();
-    readonly ConcurrentDictionary<RFiber, TimeoutEntry> timeouts = new();
 
-    // Delegates are cached once per scheduler instance so per-call paths
-    // don't allocate a closure or box a ValueTuple<this, fiber> when
-    // marshaling state through Timer / CancellationToken.UnsafeRegister /
-    // Task.ContinueWith. Per-call state is always a single reference type
-    // (typically the RFiber).
+    // Cached delegates: capture `this` once, never box ValueTuple<this,...>
+    // when marshaling state through Timer / UnsafeRegister / ContinueWith.
     readonly TimerCallback sleepFireCallback;
     readonly Action<object?> sleepCancelCallback;
     readonly Action<Task<MRubyValue>, object?> blockContinuationCallback;
     readonly Action<object?> blockCancelCallback;
-    readonly TimerCallback blockTimeoutCallback;
-    readonly TimerCallback timeoutFireCallback;
-    readonly Action<object?> timeoutCancelCallback;
 
-    sealed class BlockEntry() : TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously)
-    {
-        public Timer? Timer;
-    }
-
-    readonly struct TimeoutEntry
-    {
-        public Timer? Timer { get; init; }
-        // Captured for diagnostics / future Fiber#raise wiring; not yet
-        // injected into Ruby execution (see TimeoutAfter remarks).
-        public RClass? ExceptionClass { get; init; }
-    }
+    sealed class BlockEntry() : TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public ThreadPoolFiberScheduler()
     {
         sleepFireCallback = state =>
         {
             var fiber = (RFiber)state!;
-            // CAS race guard: whoever removes the entry owns the resume
-            // (e.g., concurrent Cancel / TimeoutAfter / sleep-fire).
             if (!sleepTimers.TryRemove(fiber, out var t)) return;
             t.Dispose();
-            fiber.Resume();
+            ResumeSafe(fiber);
         };
         sleepCancelCallback = state =>
         {
             var fiber = (RFiber)state!;
             if (sleepTimers.TryRemove(fiber, out var t)) t.Dispose();
         };
-        blockTimeoutCallback = state =>
+        blockContinuationCallback = (task, state) =>
         {
-            ((BlockEntry)state!).TrySetCanceled();
+            var fiber = (RFiber)state!;
+            if (!blockedFibers.TryRemove(fiber, out _)) return;
+            ResumeSafe(fiber, task.Status == TaskStatus.RanToCompletion
+                ? task.Result
+                : MRubyValue.Nil);
         };
         blockCancelCallback = state =>
         {
             ((BlockEntry)state!).TrySetCanceled();
         };
-        blockContinuationCallback = (task, state) =>
-        {
-            var fiber = (RFiber)state!;
-            if (!blockedFibers.TryRemove(fiber, out var entry)) return;
-            entry.Timer?.Dispose();
-
-            fiber.Resume(task.Status == TaskStatus.RanToCompletion
-                ? task.Result
-                : MRubyValue.Nil);
-        };
-        timeoutFireCallback = state =>
-        {
-            var fiber = (RFiber)state!;
-            if (timeouts.TryRemove(fiber, out var te)) te.Timer?.Dispose();
-
-            if (blockedFibers.TryGetValue(fiber, out var entry))
-            {
-                // Block's continuation will dispose its timer + Resume.
-                entry.TrySetCanceled();
-            }
-            else if (sleepTimers.TryRemove(fiber, out var st))
-            {
-                st.Dispose();
-                fiber.Resume();
-            }
-        };
-        timeoutCancelCallback = state =>
-        {
-            var fiber = (RFiber)state!;
-            if (timeouts.TryRemove(fiber, out var entry)) entry.Timer?.Dispose();
-        };
     }
 
     public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
     {
-        // TODO: Support TimeProvider
+        // TODO: Support TimeProvider for testability.
         var timer = new Timer(sleepFireCallback, fiber, duration, Timeout.InfiniteTimeSpan);
         sleepTimers[fiber] = timer;
 
@@ -107,21 +69,13 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
             cancellationToken.UnsafeRegister(sleepCancelCallback, fiber);
         }
 
-        // CRuby-style: the hook performs the yield itself. The calling
-        // C# primitive (e.g. Kernel#sleep) just calls KernelSleep and
-        // returns; this Yield unwinds back to whoever resumed the fiber.
         fiber.Yield();
     }
 
-    public void Block(MRubyValue blocker, RFiber fiber, TimeSpan timeout = default, CancellationToken cancellationToken = default)
+    public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default)
     {
         var entry = new BlockEntry();
         blockedFibers[fiber] = entry;
-
-        if (timeout > TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
-        {
-            entry.Timer = new Timer(blockTimeoutCallback, entry, timeout, Timeout.InfiniteTimeSpan);
-        }
 
         if (cancellationToken.CanBeCanceled)
         {
@@ -142,24 +96,183 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         }
     }
 
-    public void TimeoutAfter(
-        TimeSpan timeout,
-        RClass exceptionClass,
+    static readonly WaitCallback YieldResumeCallback = static state => ResumeSafe((RFiber)state!);
+
+    public void Yield(RFiber fiber, CancellationToken cancellationToken = default)
+    {
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(YieldResumeCallback, fiber);
+        }
+        fiber.Yield();
+    }
+
+    public void Await(
+        ValueTask task,
         RFiber fiber,
+        MRubyValue resumeValue = default,
         CancellationToken cancellationToken = default)
     {
-        if (timeout <= TimeSpan.Zero || timeout == Timeout.InfiniteTimeSpan) return;
+        _ = AwaitAsync(task, fiber, resumeValue, cancellationToken);
+        fiber.Yield();
+    }
 
-        var entry = new TimeoutEntry
-        {
-            ExceptionClass = exceptionClass,
-            Timer = new Timer(timeoutFireCallback, fiber, timeout, Timeout.InfiniteTimeSpan)
-        };
-        timeouts[fiber] = entry;
+    public void Await<T>(
+        ValueTask<T> task,
+        RFiber fiber,
+        Func<T, MRubyValue> mapResult,
+        CancellationToken cancellationToken = default)
+    {
+        _ = AwaitAsync(task, fiber, mapResult, cancellationToken);
+        fiber.Yield();
+    }
 
-        if (cancellationToken.CanBeCanceled)
+    public void Await<T, TState>(
+        ValueTask<T> task,
+        RFiber fiber,
+        Func<T, TState, MRubyValue> mapResult,
+        TState state,
+        CancellationToken cancellationToken = default)
+    {
+        _ = AwaitAsync(task, fiber, mapResult, state, cancellationToken);
+        fiber.Yield();
+    }
+
+    static async Task AwaitAsync(ValueTask task, RFiber fiber, MRubyValue resumeValue, CancellationToken ct)
+    {
+        // Force an async boundary so the caller's fiber.Yield() runs
+        // before Resume — synchronously-completed tasks would otherwise
+        // call Resume before Yield, triggering a "double resume" error.
+        await Task.Yield();
+        try
         {
-            cancellationToken.UnsafeRegister(timeoutCancelCallback, fiber);
+            await task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            ResumeSafe(fiber, MRubyValue.Nil);
+            return;
+        }
+        catch (Exception ex)
+        {
+            ResumeWithException(fiber, ex);
+            return;
+        }
+
+        if (ct.IsCancellationRequested)
+        {
+            ResumeSafe(fiber, MRubyValue.Nil);
+            return;
+        }
+
+        ResumeSafe(fiber, resumeValue);
+    }
+
+    static async Task AwaitAsync<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken ct)
+    {
+        await Task.Yield();
+        T result;
+        try
+        {
+            result = await task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            ResumeSafe(fiber, MRubyValue.Nil);
+            return;
+        }
+        catch (Exception ex)
+        {
+            ResumeWithException(fiber, ex);
+            return;
+        }
+
+        if (ct.IsCancellationRequested)
+        {
+            ResumeSafe(fiber, MRubyValue.Nil);
+            return;
+        }
+
+        MRubyValue mapped;
+        try
+        {
+            mapped = mapResult(result);
+        }
+        catch (Exception ex)
+        {
+            ResumeWithException(fiber, ex);
+            return;
+        }
+        ResumeSafe(fiber, mapped);
+    }
+
+    static async Task AwaitAsync<T, TState>(
+        ValueTask<T> task, RFiber fiber,
+        Func<T, TState, MRubyValue> mapResult, TState state,
+        CancellationToken ct)
+    {
+        await Task.Yield();
+        T result;
+        try
+        {
+            result = await task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            ResumeSafe(fiber, MRubyValue.Nil);
+            return;
+        }
+        catch (Exception ex)
+        {
+            ResumeWithException(fiber, ex);
+            return;
+        }
+
+        if (ct.IsCancellationRequested)
+        {
+            ResumeSafe(fiber, MRubyValue.Nil);
+            return;
+        }
+
+        MRubyValue mapped;
+        try
+        {
+            mapped = mapResult(result, state);
+        }
+        catch (Exception ex)
+        {
+            ResumeWithException(fiber, ex);
+            return;
+        }
+        ResumeSafe(fiber, mapped);
+    }
+
+    static void ResumeSafe(RFiber fiber, MRubyValue value = default)
+    {
+        if (!fiber.IsAlive) return;
+        try { fiber.Resume(value); }
+        catch
+        {
+            // Resume's exception already routed through resumeSource for
+            // WaitForTerminate observers; swallow here so the threadpool /
+            // timer infrastructure doesn't crash the process.
+        }
+    }
+
+    static void ResumeWithException(RFiber fiber, Exception ex)
+    {
+        if (!fiber.IsAlive) return;
+        var state = fiber.MRubyState;
+        var msg = ex.Message ?? ex.GetType().Name;
+        var rex = new RException(state.NewString(System.Text.Encoding.UTF8.GetBytes(msg)),
+            state.GetExceptionClass(Names.RuntimeError));
+        fiber.PendingException = rex;
+        try { fiber.Resume(); }
+        catch
+        {
+            // PendingException raises MRubyLongJumpException out of MoveNext.
+            // Resume's catch already sets resumeSource.Exception; swallow
+            // here to keep the threadpool callback safe.
         }
     }
 
@@ -176,11 +289,5 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
             kv.Value.Dispose();
         }
         sleepTimers.Clear();
-
-        foreach (var kv in timeouts)
-        {
-            kv.Value.Timer?.Dispose();
-        }
-        timeouts.Clear();
     }
 }

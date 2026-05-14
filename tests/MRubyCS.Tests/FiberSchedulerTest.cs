@@ -103,6 +103,127 @@ public class FiberSchedulerTest
     }
 
     [Test]
+    public async Task SyncContextScheduler_Sleep_RoundTrip()
+    {
+        // SynchronizationContextFiberScheduler with a one-thread pumped
+        // context. Verifies that scheduler hooks route resume callbacks
+        // through SynchronizationContext.Post.
+        using var ctx = new PumpedSyncContext();
+        using var scheduler = new SynchronizationContextFiberScheduler(ctx);
+        mrb.SetFiberScheduler(scheduler);
+
+        var code = """
+                   sleep 0.02
+                   :done
+                   """u8;
+
+        var fiber = compiler.LoadSourceCodeAsFiber(code);
+        fiber.Resume();
+        await ctx.PumpUntilAsync(() => !fiber.IsAlive, TimeSpan.FromSeconds(2));
+
+        Assert.That(fiber.IsAlive, Is.False);
+        Assert.That(ctx.PostCount, Is.GreaterThan(0), "Post should have been invoked");
+    }
+
+    /// <summary>Minimal pumped SyncContext for the test above.</summary>
+    sealed class PumpedSyncContext : SynchronizationContext, IDisposable
+    {
+        readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback cb, object? state)> queue = new();
+        public int PostCount;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref PostCount);
+            queue.Add((d, state));
+        }
+
+        public async Task PumpUntilAsync(Func<bool> condition, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (!condition() && DateTime.UtcNow < deadline)
+            {
+                if (queue.TryTake(out var item, 50))
+                {
+                    item.cb(item.state);
+                }
+                else
+                {
+                    await Task.Yield();
+                }
+            }
+        }
+
+        public void Dispose() => queue.Dispose();
+    }
+
+    [Test]
+    public async Task ThreadPass_YieldsToScheduler()
+    {
+        // Thread.pass must hit the scheduler's Yield hook and resume on
+        // the next tick. With ThreadPoolFiberScheduler the resume hops
+        // through the threadpool, so a counter incremented before+after
+        // observes the yield round-trip.
+        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+
+        var code = """
+                   x = 0
+                   Thread.pass
+                   x = 1
+                   x
+                   """u8;
+
+        var fiber = compiler.LoadSourceCodeAsFiber(code);
+        fiber.Resume();
+        var result = await fiber.WaitForTerminateAsync();
+
+        Assert.That(fiber.IsAlive, Is.False);
+        Assert.That(result.IntegerValue, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SleepZero_RoutesToYield()
+    {
+        // sleep 0 must NOT call KernelSleep — it routes to Yield to avoid
+        // an unnecessary Timer allocation.
+        var spy = new TrackingScheduler();
+        mrb.SetFiberScheduler(spy);
+
+        var fiber = compiler.LoadSourceCodeAsFiber("sleep 0; :done"u8);
+        fiber.Resume();
+        await fiber.WaitForTerminateAsync();
+
+        Assert.That(spy.KernelSleepCalls, Is.EqualTo(0));
+        Assert.That(spy.YieldCalls, Is.EqualTo(1));
+    }
+
+    sealed class TrackingScheduler : IMRubyFiberScheduler
+    {
+        public int KernelSleepCalls;
+        public int YieldCalls;
+
+        public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
+        {
+            KernelSleepCalls++;
+            // We still have to drive the fiber to completion or the test
+            // hangs. Resume on threadpool to mimic ThreadPoolFiberScheduler.
+            ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
+            fiber.Yield();
+        }
+        public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default) { }
+        public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default) { }
+        public void Yield(RFiber fiber, CancellationToken cancellationToken = default)
+        {
+            YieldCalls++;
+            ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
+            fiber.Yield();
+        }
+        public void Await(ValueTask task, RFiber fiber, MRubyValue resumeValue = default, CancellationToken cancellationToken = default) { }
+        public void Await<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken cancellationToken = default) { }
+        public void Await<T, TState>(ValueTask<T> task, RFiber fiber, Func<T, TState, MRubyValue> mapResult, TState state, CancellationToken cancellationToken = default) { }
+        public void Dispose() { }
+    }
+
+    [Test]
     public void ExistingFiberSemantics_Unchanged()
     {
         // Regression: the scheduler hook is invisible to ordinary
@@ -243,7 +364,8 @@ public class FiberSchedulerTest
                 var fiber = state.CurrentFiber;
                 var sched = state.FiberScheduler!;
                 var blocker = new MRubyValue(state.NewString("blocker-key"u8));
-                sched.Block(blocker, fiber, timeout: TimeSpan.FromMilliseconds(20));
+                var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+                sched.Block(blocker, fiber, cts.Token);
                 return MRubyValue.Nil;
             }));
 
@@ -259,6 +381,48 @@ public class FiberSchedulerTest
         Assert.That(fiber.IsAlive, Is.False, "fiber should resume after timeout (not stay parked)");
     }
 
+    [Test]
+    public async Task PendingException_IsCatchableByRubyRescue()
+    {
+        // The scheduler delivers an exception by setting PendingException
+        // before Resume. The fiber wraps the parking call in begin/rescue
+        // and must observe a normal Ruby raise that the rescue clause
+        // catches — not a fiber-killing unwind.
+        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+
+        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_boom"u8),
+            new MRubyMethod((state, self) =>
+            {
+                var fiber = state.CurrentFiber;
+                Task.Run(() =>
+                {
+                    fiber.PendingException = new RException(
+                        state.NewString("boom"u8),
+                        state.GetExceptionClass(Names.RuntimeError));
+                    fiber.Resume();
+                });
+                fiber.Yield();
+                return MRubyValue.Nil;
+            }));
+
+        var code = """
+                   begin
+                     await_boom
+                     :no_raise
+                   rescue => e
+                     e.message
+                   end
+                   """u8;
+
+        var fiber = compiler.LoadSourceCodeAsFiber(code);
+        fiber.Resume();
+        var result = await fiber.WaitForTerminateAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.That(fiber.IsAlive, Is.False);
+        Assert.That(result.VType, Is.EqualTo(MRubyVType.String), $"expected rescue to catch and return e.message; got {result.VType}");
+        Assert.That(result.As<RString>().AsSpan().SequenceEqual("boom"u8), Is.True);
+    }
+
     sealed class SpyScheduler : IMRubyFiberScheduler
     {
         public int SleepCallCount;
@@ -266,9 +430,12 @@ public class FiberSchedulerTest
         public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
             => SleepCallCount++;
 
-        public void Block(MRubyValue blocker, RFiber fiber, TimeSpan timeout = default, CancellationToken cancellationToken = default) { }
+        public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default) { }
         public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default) { }
-        public void TimeoutAfter(TimeSpan timeout, RClass exceptionClass, RFiber fiber, CancellationToken cancellationToken = default) { }
+        public void Yield(RFiber fiber, CancellationToken cancellationToken = default) { }
+        public void Await(ValueTask task, RFiber fiber, MRubyValue resumeValue = default, CancellationToken cancellationToken = default) { }
+        public void Await<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken cancellationToken = default) { }
+        public void Await<T, TState>(ValueTask<T> task, RFiber fiber, Func<T, TState, MRubyValue> mapResult, TState state, CancellationToken cancellationToken = default) { }
         public void Dispose() { }
     }
 }
