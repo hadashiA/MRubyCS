@@ -198,4 +198,14 @@ partial class MRubyState
         EnsureNotFrozen(targetClass);
         targetClass.InstanceVariables.Set(id, value);
     }
+
+    public bool GlobalVariableDefined(Symbol name) => globalVariables.Defined(name);
+
+    public MRubyValue GetGlobalVariable(Symbol name) => globalVariables.Get(name);
+
+    public void SetGlobalVariable(Symbol name, MRubyValue value) =>
+        globalVariables.Set(name, value);
+
+    public bool RemoveGlobalVariable(Symbol name, out MRubyValue removedValue) =>
+        globalVariables.Remove(name, out removedValue);
 }
