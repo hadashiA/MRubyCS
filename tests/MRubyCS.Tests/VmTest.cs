@@ -340,6 +340,34 @@ public class VmTest
         Assert.That(classC.IsObject, Is.True);
     }
 
+    [Test]
+    public void GlobalVariables()
+    {
+        var name = mrb.Intern("$foo"u8);
+
+        Assert.That(mrb.GlobalVariableDefined(name), Is.False);
+        Assert.That(mrb.GetGlobalVariable(name), Is.EqualTo(MRubyValue.Nil));
+
+        mrb.SetGlobalVariable(name, new MRubyValue(123));
+        Assert.That(mrb.GlobalVariableDefined(name), Is.True);
+        Assert.That(mrb.GetGlobalVariable(name), Is.EqualTo(new MRubyValue(123)));
+
+        // visible from Ruby
+        var fromRuby = Exec("$foo"u8);
+        Assert.That(fromRuby, Is.EqualTo(new MRubyValue(123)));
+
+        // writable from Ruby, observable from C#
+        Exec("$foo = 'hello'"u8);
+        var updated = mrb.GetGlobalVariable(name);
+        Assert.That(updated.Object, Is.InstanceOf<RString>());
+        Assert.That(updated.As<RString>().ToString(), Is.EqualTo("hello"));
+
+        Assert.That(mrb.RemoveGlobalVariable(name, out var removed), Is.True);
+        Assert.That(removed.As<RString>().ToString(), Is.EqualTo("hello"));
+        Assert.That(mrb.GlobalVariableDefined(name), Is.False);
+        Assert.That(mrb.RemoveGlobalVariable(name, out _), Is.False);
+    }
+
     MRubyValue Exec(ReadOnlySpan<byte> code)
     {
         using var compilation = compiler.Compile(code);

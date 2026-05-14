@@ -75,7 +75,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
     - [Call ruby method from C# side](#call-ruby-method-from-c-side)
         - [Send with block / keyword arguments](#send-with-block--keyword-arguments)
         - [Type conversion & introspection](#type-conversion--introspection)
-        - [Instance variables / class variables](#instance-variables--class-variables)
+        - [Instance variables / class variables / global variables](#instance-variables--class-variables--global-variables)
         - [Clone / Dup / Freeze](#clone--dup--freeze)
     - [MRubyValue](#mrubyvalue)
         - [Symbol/String](#symbolstring)
@@ -603,7 +603,7 @@ mrb.ValueCompare(a, b);  //=> -1, 0, 1
 mrb.RespondTo(value, mrb.Intern("to_s"u8)); //=> true
 ```
 
-#### Instance variables / class variables
+#### Instance variables / class variables / global variables
 
 ```cs
 // Instance variables
@@ -614,6 +614,12 @@ mrb.RemoveInstanceVariable(obj, mrb.Intern("@name"u8));
 // Class variables
 mrb.SetClassVariable(myClass, mrb.Intern("@@count"u8), 0);
 var count = mrb.GetClassVariable(myClass, mrb.Intern("@@count"u8));
+
+// Global variables (the symbol name includes the leading `$`)
+mrb.SetGlobalVariable(mrb.Intern("$game_map"u8), gameMapValue);
+var gameMap = mrb.GetGlobalVariable(mrb.Intern("$game_map"u8)); // returns nil if undefined
+mrb.GlobalVariableDefined(mrb.Intern("$game_map"u8));            //=> true
+mrb.RemoveGlobalVariable(mrb.Intern("$game_map"u8), out _);
 ```
 
 #### Clone / Dup / Freeze
