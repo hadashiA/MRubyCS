@@ -147,20 +147,21 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
 
         _ = AwaitBlockAsync(entry, fiber);
         fiber.Yield();
-    }
+        return;
 
-    async ValueTask AwaitBlockAsync(BlockEntry entry, RFiber fiber)
-    {
-        // Force async boundary so Block's caller-side fiber.Yield() runs
-        // before our resume; otherwise an already-completed entry.Task
-        // would trigger a "double resume" on the VM.
-        await Task.Yield();
-        MRubyValue value;
-        try { value = await entry.Task; }
-        catch { value = MRubyValue.Nil; }
+        async ValueTask AwaitBlockAsync(BlockEntry entry, RFiber fiber)
+        {
+            // Force async boundary so Block's caller-side fiber.Yield() runs
+            // before our resume; otherwise an already-completed entry.Task
+            // would trigger a "double resume" on the VM.
+            await Task.Yield();
+            MRubyValue value;
+            try { value = await entry.Task; }
+            catch { value = MRubyValue.Nil; }
 
-        if (!blockedFibers.TryRemove(fiber, out _)) return;
-        TryResume(fiber, value);
+            if (!blockedFibers.TryRemove(fiber, out _)) return;
+            TryResume(fiber, value);
+        }
     }
 
     [System.Diagnostics.CodeAnalysis.DoesNotReturn]
@@ -191,8 +192,35 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         MRubyValue resumeValue = default,
         CancellationToken cancellationToken = default)
     {
-        _ = AwaitAsync(task, fiber, resumeValue, cancellationToken);
+        _ = AwaitAsync1(task, fiber, resumeValue, cancellationToken);
         fiber.Yield();
+        return;
+
+        async ValueTask AwaitAsync1(ValueTask task, RFiber fiber, MRubyValue resumeValue, CancellationToken ct)
+        {
+            await Task.Yield();
+            try
+            {
+                await task;
+            }
+            catch (OperationCanceledException)
+            {
+                TryResume(fiber, MRubyValue.Nil);
+                return;
+            }
+            catch (Exception ex)
+            {
+                TryResumeWithException(fiber, ex);
+                return;
+            }
+
+            if (ct.IsCancellationRequested)
+            {
+                TryResume(fiber, MRubyValue.Nil);
+                return;
+            }
+            TryResume(fiber, resumeValue);
+        }
     }
 
     public void Await<T>(
@@ -201,8 +229,25 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         Func<T, MRubyValue> mapResult,
         CancellationToken cancellationToken = default)
     {
-        _ = AwaitAsync(task, fiber, mapResult, cancellationToken);
+        _ = AwaitAsync1(task, fiber, mapResult, cancellationToken);
         fiber.Yield();
+        return;
+
+        async ValueTask AwaitAsync1<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken ct)
+        {
+            await Task.Yield();
+            T result;
+            try { result = await task; }
+            catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
+            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+
+            if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
+
+            MRubyValue mapped;
+            try { mapped = mapResult(result); }
+            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+            TryResume(fiber, mapped);
+        }
     }
 
     public void Await<T, TState>(
@@ -214,76 +259,26 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
     {
         _ = AwaitAsync(task, fiber, mapResult, state, cancellationToken);
         fiber.Yield();
-    }
+        return;
 
-    // AwaitAsync intentionally does NOT use ConfigureAwait(false): each
-    // await captures the host SynchronizationContext, so continuations run
-    // on the VM thread. The Task.Yield() at the top forces an async
-    // boundary (caller's fiber.Yield() must run before our resume) and
-    // hops onto the captured context; from then on `await task` resumes us
-    // back there too, so we can call fiber.Resume directly without an
-    // explicit context.Post. The implicit assumption is that Await was
-    // invoked from a fiber body running on the captured context's thread
-    // (the scheduler contract).
-    async ValueTask AwaitAsync(ValueTask task, RFiber fiber, MRubyValue resumeValue, CancellationToken ct)
-    {
-        await Task.Yield();
-        try
+        async ValueTask AwaitAsync<T, TState>(
+            ValueTask<T> task, RFiber fiber,
+            Func<T, TState, MRubyValue> mapResult, TState state,
+            CancellationToken ct)
         {
-            await task;
+            await Task.Yield();
+            T result;
+            try { result = await task; }
+            catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
+            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+
+            if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
+
+            MRubyValue mapped;
+            try { mapped = mapResult(result, state); }
+            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+            TryResume(fiber, mapped);
         }
-        catch (OperationCanceledException)
-        {
-            TryResume(fiber, MRubyValue.Nil);
-            return;
-        }
-        catch (Exception ex)
-        {
-            TryResumeWithException(fiber, ex);
-            return;
-        }
-
-        if (ct.IsCancellationRequested)
-        {
-            TryResume(fiber, MRubyValue.Nil);
-            return;
-        }
-        TryResume(fiber, resumeValue);
-    }
-
-    async ValueTask AwaitAsync<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken ct)
-    {
-        await Task.Yield();
-        T result;
-        try { result = await task; }
-        catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
-        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-
-        if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
-
-        MRubyValue mapped;
-        try { mapped = mapResult(result); }
-        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-        TryResume(fiber, mapped);
-    }
-
-    async ValueTask AwaitAsync<T, TState>(
-        ValueTask<T> task, RFiber fiber,
-        Func<T, TState, MRubyValue> mapResult, TState state,
-        CancellationToken ct)
-    {
-        await Task.Yield();
-        T result;
-        try { result = await task; }
-        catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
-        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-
-        if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
-
-        MRubyValue mapped;
-        try { mapped = mapResult(result, state); }
-        catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-        TryResume(fiber, mapped);
     }
 
     static void TryResume(RFiber fiber, MRubyValue value)

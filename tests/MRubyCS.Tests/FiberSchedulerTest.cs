@@ -112,13 +112,13 @@ public class FiberSchedulerTest
         using var scheduler = new SynchronizationContextFiberScheduler(ctx);
         mrb.SetFiberScheduler(scheduler);
 
-        var code = """
-                   sleep 0.02
-                   :done
-                   """u8;
+        var fiber = compiler.LoadSourceCodeAsFiber("sleep 0.02; :done"u8);
 
-        var fiber = compiler.LoadSourceCodeAsFiber(code);
-        fiber.Resume();
+        // Real hosts have SynchronizationContext.Current == captured ctx
+        // on the VM thread; mirror that here so scheduler-hook awaits
+        // capture our pumped context.
+        ctx.Run(() => fiber.Resume());
+
         await ctx.PumpUntilAsync(() => !fiber.IsAlive, TimeSpan.FromSeconds(2));
 
         Assert.That(fiber.IsAlive, Is.False);
@@ -137,6 +137,14 @@ public class FiberSchedulerTest
             queue.Add((d, state));
         }
 
+        public void Run(Action body)
+        {
+            var prev = Current;
+            SetSynchronizationContext(this);
+            try { body(); }
+            finally { SetSynchronizationContext(prev); }
+        }
+
         public async Task PumpUntilAsync(Func<bool> condition, TimeSpan timeout)
         {
             var deadline = DateTime.UtcNow + timeout;
@@ -144,7 +152,12 @@ public class FiberSchedulerTest
             {
                 if (queue.TryTake(out var item, 50))
                 {
-                    item.cb(item.state);
+                    // Mirror real sync contexts: set Current=self while
+                    // invoking the callback so its inner awaits capture us.
+                    var prev = Current;
+                    SetSynchronizationContext(this);
+                    try { item.cb(item.state); }
+                    finally { SetSynchronizationContext(prev); }
                 }
                 else
                 {
