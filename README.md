@@ -1095,8 +1095,8 @@ MRubyCS exposes a CRuby-style `Fiber::Scheduler` hook surface (`IMRubyFiberSched
 |---|---|---|
 | `Kernel#sleep` | `KernelSleep` | `sleep 0` routes to `Yield` to avoid a Timer allocation |
 | `Thread.pass` | `Yield` | Cooperative yield |
-| `IO#read(n)` / `File.read` | `ReadStream` / `ReadStreamToEnd` | Stream → caller buffer, with a sync projection that builds the resume value |
-| `IO#write(s)` / `File.write` | `WriteStream` | Fixed Integer resume (bytes-written) |
+| `IO#read(n)` / `File.read` | `ReadStream` / `ReadStreamToEnd` | Resumes with a `String` of the read bytes (or `nil` at EOF for bounded reads) |
+| `IO#write(s)` / `File.write` | `WriteStream` | Resumes with the bytes-written count as `Integer` |
 | (host-defined) | `Block` / `Unblock` | Park a fiber on an arbitrary external completion |
 
 > [!NOTE]
@@ -1202,13 +1202,13 @@ Mechanics:
 
 The bundled `IO` / `File` primitives — once registered via `mrb.DefineIO()` (see the opt-in note above) — delegate to specialized scheduler hooks for `Stream` reads and writes:
 
-- `ReadStream(stream, buffer, state, projection, fiber, ...)` — bounded read into a caller-owned `Memory<byte>`. The scheduler awaits the read internally, then invokes the **sync** `projection(bytesRead, state)` on the VM thread to build the resume value (typically constructing an `RString` from the read slice).
-- `ReadStreamToEnd(stream, writer, state, projection, fiber, ...)` — unbounded read into a caller-supplied `IBufferWriter<byte>` until EOF. Projection receives the total count.
-- `WriteStream(stream, data, fiber, ...)` — writes a `ReadOnlyMemory<byte>` to the stream; resumes with the bytes-written count as `Integer`. No projection.
+- `ReadStream(fiber, stream, maxBytes, ...)` — bounded read into a **scheduler-owned** buffer (rented from `ArrayPool<byte>.Shared`). Resumes the fiber with a `String` of the read bytes, or `nil` at EOF (matching `IO#read(n)`).
+- `ReadStreamToEnd(fiber, stream, ...)` — unbounded read into a scheduler-owned growing buffer until EOF. Resumes with a `String` of the full content.
+- `WriteStream(fiber, stream, data, ...)` — writes a `ReadOnlyMemory<byte>` to the stream; resumes with the bytes-written count as `Integer`.
 
-All three accept an optional `disposeStream: true` flag — the scheduler disposes the stream after the I/O completes (before invoking the projection / resuming), which is convenient for `File.read` / `File.write` style operations that own the stream.
+All three accept an optional `disposeStream: true` flag — the scheduler disposes the stream after the I/O completes (before resume), convenient for `File.read` / `File.write` style operations.
 
-**Why a sync projection instead of an async lambda?** Stream I/O hooks deliberately avoid taking a `Func<..., ValueTask<MRubyValue>>`: that would let host code introduce additional `await`s and `ConfigureAwait` between scheduler-managed continuations, fragmenting thread-affinity control. With a non-async `Func<..., MRubyValue>` the scheduler retains full authority over where each continuation runs.
+**No user callback in the continuation chain.** Hosts cannot inject code between the scheduler's `await stream.ReadAsync(...)` and `fiber.Resume(...)`: the only thing that runs there is the scheduler's own `state.NewString(buffer)` call. This keeps thread-affinity control entirely in the scheduler. For operations that need richer host logic (HTTP clients, custom marshalling, etc.), use `Block` / `Unblock` (above) and arrange the async work yourself.
 
 ```cs
 // Host-defined: read up to n bytes from a custom stream.
@@ -1216,22 +1216,10 @@ mrb.DefineMethod(myStreamClass, mrb.Intern("read"u8), (state, self) =>
 {
     var stream = self.As<MyStreamObject>().Stream;
     var n = (int)state.GetArgumentAsIntegerAt(0);
-    var buffer = new byte[n];
-    var sched = state.FiberScheduler!;
-
-    sched.ReadStream(
-        stream,
-        buffer,
-        (State: state, Buffer: buffer),  // ctx tuple — TState is one value
-        static (bytesRead, ctx) => bytesRead == 0
-            ? MRubyValue.Nil
-            : new MRubyValue(ctx.State.NewString(ctx.Buffer.AsSpan(0, bytesRead))),
-        state.CurrentFiber);
-    return MRubyValue.Nil; // unreached on async path
+    state.FiberScheduler!.ReadStream(state.CurrentFiber, stream, n);
+    return MRubyValue.Nil; // unreached on async path; the scheduler resumes with a String / nil
 });
 ```
-
-For arbitrary host tasks that don't fit a stream shape (HTTP clients, database drivers, etc.), use **`Block` / `Unblock`** (above) instead — that pattern keeps user-supplied async work outside the scheduler's own continuation chain.
 
 If the awaited task throws, the scheduler injects the exception so the fiber can `rescue` it:
 
@@ -1299,26 +1287,28 @@ Implement `IMRubyFiberScheduler` to integrate MRubyCS with your own async runtim
 ```cs
 public interface IMRubyFiberScheduler : IDisposable
 {
-    void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken ct = default);
+    // Parameter convention: RFiber first, CancellationToken last.
+    void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken ct = default);
     void Block(RFiber fiber, CancellationToken ct = default);
     void Unblock(RFiber fiber, MRubyValue resumeValue = default);
     void Yield(RFiber fiber, CancellationToken ct = default);
 
-    // Stream I/O — projection is sync (Func, not async Func), so user code
-    // can't inject await points between scheduler-managed continuations.
-    void ReadStream<TState>(
-        Stream stream, Memory<byte> buffer,
-        TState state, Func<int, TState, MRubyValue> projection,
-        RFiber fiber, CancellationToken ct = default, bool disposeStream = false);
+    // Stream I/O. Resume values are fixed (String for reads, Integer for
+    // writes), so the scheduler owns the read buffer (ArrayPool /
+    // ArrayBufferWriter) and constructs the resulting RString on the VM
+    // thread — no user callback is invoked between scheduler-managed
+    // continuations.
+    void ReadStream(
+        RFiber fiber, Stream stream, int maxBytes,
+        bool disposeStream = false, CancellationToken ct = default);
 
-    void ReadStreamToEnd<TState>(
-        Stream stream, IBufferWriter<byte> writer,
-        TState state, Func<long, TState, MRubyValue> projection,
-        RFiber fiber, CancellationToken ct = default, bool disposeStream = false);
+    void ReadStreamToEnd(
+        RFiber fiber, Stream stream,
+        bool disposeStream = false, CancellationToken ct = default);
 
     void WriteStream(
-        Stream stream, ReadOnlyMemory<byte> data,
-        RFiber fiber, CancellationToken ct = default, bool disposeStream = false);
+        RFiber fiber, Stream stream, ReadOnlyMemory<byte> data,
+        bool disposeStream = false, CancellationToken ct = default);
 }
 ```
 

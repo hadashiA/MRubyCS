@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.IO;
 using System.Text;
 
@@ -22,8 +21,17 @@ static class FileMembers
         var mode = ModeArg(state);
         var (fileMode, fileAccess) = ResolveMode(state, mode);
 
-        var stream = new FileStream(path, fileMode, fileAccess, FileShare.ReadWrite,
-            bufferSize: 4096, useAsync: true);
+        // useAsync only when a scheduler is installed (= async I/O might be
+        // requested later). With no scheduler, IO#read/write go through the
+        // synchronous Stream.Read/Write path so async overhead is wasted.
+        var useAsync = state.FiberScheduler is not null;
+        var stream = new FileStream(
+            path,
+            fileMode,
+            fileAccess,
+            FileShare.ReadWrite,
+            bufferSize: 4096,
+            useAsync: useAsync);
         var rfile = new RFile(state.FileClass, stream, path);
         return new MRubyValue(rfile);
     });
@@ -42,14 +50,7 @@ static class FileMembers
         {
             var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.Read, 4096, useAsync: true);
-            var writer = new ArrayBufferWriter<byte>();
-            scheduler.ReadStreamToEnd(
-                stream,
-                writer,
-                (State: state, Writer: writer),
-                static (_, ctx) => new MRubyValue(ctx.State.NewString(ctx.Writer.WrittenSpan)),
-                fiber,
-                disposeStream: true);
+            scheduler.ReadStreamToEnd(fiber, stream, disposeStream: true);
             return MRubyValue.Nil;
         }
 
@@ -73,7 +74,7 @@ static class FileMembers
         {
             var stream = new FileStream(path, FileMode.Create, FileAccess.Write,
                 FileShare.None, 4096, useAsync: true);
-            scheduler.WriteStream(stream, data, fiber, disposeStream: true);
+            scheduler.WriteStream(fiber, stream, data, disposeStream: true);
             return MRubyValue.Nil;
         }
 

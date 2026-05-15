@@ -321,7 +321,7 @@ static class KernelMembers
             var duration = double.IsPositiveInfinity(seconds)
                 ? Timeout.InfiniteTimeSpan
                 : TimeSpan.FromSeconds(seconds);
-            scheduler.KernelSleep(duration, fiber);
+            scheduler.KernelSleep(fiber, duration);
             return MRubyValue.Nil;
         }
 

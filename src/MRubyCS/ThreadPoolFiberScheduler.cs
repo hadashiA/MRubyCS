@@ -55,7 +55,7 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         };
     }
 
-    public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
+    public void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken cancellationToken = default)
     {
         // TODO: Support TimeProvider for testability.
         var timer = new Timer(sleepFireCallback, fiber, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -119,60 +119,58 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         fiber.Yield();
     }
 
-    public void ReadStream<TState>(
-        Stream stream,
-        Memory<byte> buffer,
-        TState state,
-        Func<int, TState, MRubyValue> projection,
+    public void ReadStream(
         RFiber fiber,
-        CancellationToken cancellationToken = default,
-        bool disposeStream = false)
+        Stream stream,
+        int maxBytes,
+        bool disposeStream = false,
+        CancellationToken cancellationToken = default)
     {
-        _ = ReadStreamAsync(stream, buffer, state, projection, fiber, cancellationToken, disposeStream);
+        _ = ReadStreamAsync(fiber, stream, maxBytes, disposeStream, cancellationToken);
         fiber.Yield();
     }
 
-    static async Task ReadStreamAsync<TState>(
-        Stream stream, Memory<byte> buffer,
-        TState state, Func<int, TState, MRubyValue> projection,
-        RFiber fiber, CancellationToken ct, bool disposeStream)
+    static async Task ReadStreamAsync(
+        RFiber fiber, Stream stream, int maxBytes,
+        bool disposeStream, CancellationToken ct)
     {
-        // Force async boundary so the caller's fiber.Yield() runs before
-        // Resume — synchronously-completed reads would otherwise Resume
-        // before Yield, triggering a "double resume" error.
+        // Force async boundary so the caller's fiber.Yield() runs first.
         await Task.Yield();
-        int bytesRead;
-        try { bytesRead = await stream.ReadAsync(buffer, ct).ConfigureAwait(false); }
-        catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); ResumeSafe(fiber, MRubyValue.Nil); return; }
-        catch (Exception ex) { if (disposeStream) stream.Dispose(); ResumeWithException(fiber, ex); return; }
+        var buffer = ArrayPool<byte>.Shared.Rent(maxBytes);
+        try
+        {
+            int bytesRead;
+            try { bytesRead = await stream.ReadAsync(buffer.AsMemory(0, maxBytes), ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); ResumeSafe(fiber, MRubyValue.Nil); return; }
+            catch (Exception ex) { if (disposeStream) stream.Dispose(); ResumeWithException(fiber, ex); return; }
 
-        if (disposeStream) stream.Dispose();
-        MRubyValue result;
-        try { result = projection(bytesRead, state); }
-        catch (Exception ex) { ResumeWithException(fiber, ex); return; }
-        ResumeSafe(fiber, result);
+            if (disposeStream) stream.Dispose();
+            // EOF → nil, otherwise a String of the read bytes (IO#read(n) semantics).
+            ResumeSafe(fiber, bytesRead == 0
+                ? MRubyValue.Nil
+                : new MRubyValue(fiber.MRubyState.NewString(buffer.AsSpan(0, bytesRead))));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
-    public void ReadStreamToEnd<TState>(
-        Stream stream,
-        IBufferWriter<byte> writer,
-        TState state,
-        Func<long, TState, MRubyValue> projection,
+    public void ReadStreamToEnd(
         RFiber fiber,
-        CancellationToken cancellationToken = default,
-        bool disposeStream = false)
+        Stream stream,
+        bool disposeStream = false,
+        CancellationToken cancellationToken = default)
     {
-        _ = ReadStreamToEndAsync(stream, writer, state, projection, fiber, cancellationToken, disposeStream);
+        _ = ReadStreamToEndAsync(fiber, stream, disposeStream, cancellationToken);
         fiber.Yield();
     }
 
-    static async Task ReadStreamToEndAsync<TState>(
-        Stream stream, IBufferWriter<byte> writer,
-        TState state, Func<long, TState, MRubyValue> projection,
-        RFiber fiber, CancellationToken ct, bool disposeStream)
+    static async Task ReadStreamToEndAsync(
+        RFiber fiber, Stream stream, bool disposeStream, CancellationToken ct)
     {
         await Task.Yield();
-        long total = 0;
+        var writer = new ArrayBufferWriter<byte>();
         try
         {
             while (true)
@@ -181,32 +179,29 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
                 var read = await stream.ReadAsync(mem, ct).ConfigureAwait(false);
                 if (read == 0) break;
                 writer.Advance(read);
-                total += read;
             }
         }
         catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); ResumeSafe(fiber, MRubyValue.Nil); return; }
         catch (Exception ex) { if (disposeStream) stream.Dispose(); ResumeWithException(fiber, ex); return; }
 
         if (disposeStream) stream.Dispose();
-        MRubyValue result;
-        try { result = projection(total, state); }
-        catch (Exception ex) { ResumeWithException(fiber, ex); return; }
-        ResumeSafe(fiber, result);
+        ResumeSafe(fiber, new MRubyValue(fiber.MRubyState.NewString(writer.WrittenSpan)));
     }
 
     public void WriteStream(
+        RFiber fiber,
         Stream stream,
         ReadOnlyMemory<byte> data,
-        RFiber fiber,
-        CancellationToken cancellationToken = default,
-        bool disposeStream = false)
+        bool disposeStream = false,
+        CancellationToken cancellationToken = default)
     {
-        _ = WriteStreamAsync(stream, data, fiber, cancellationToken, disposeStream);
+        _ = WriteStreamAsync(fiber, stream, data, disposeStream, cancellationToken);
         fiber.Yield();
     }
 
     static async Task WriteStreamAsync(
-        Stream stream, ReadOnlyMemory<byte> data, RFiber fiber, CancellationToken ct, bool disposeStream)
+        RFiber fiber, Stream stream, ReadOnlyMemory<byte> data,
+        bool disposeStream, CancellationToken ct)
     {
         await Task.Yield();
         try { await stream.WriteAsync(data, ct).ConfigureAwait(false); }
@@ -219,13 +214,10 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
     static void ResumeSafe(RFiber fiber, MRubyValue value = default)
     {
         if (!fiber.IsAlive) return;
+        // Exceptions are routed via resumeSource for WaitForTerminate observers;
+        // swallow here so threadpool / timer callbacks don't crash the process.
         try { fiber.Resume(value); }
-        catch
-        {
-            // Resume's exception already routed through resumeSource for
-            // WaitForTerminate observers; swallow here so the threadpool /
-            // timer infrastructure doesn't crash the process.
-        }
+        catch { }
     }
 
     static void ResumeWithException(RFiber fiber, Exception ex)
@@ -233,16 +225,11 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         if (!fiber.IsAlive) return;
         var state = fiber.MRubyState;
         var msg = ex.Message ?? ex.GetType().Name;
-        var rex = new RException(state.NewString(System.Text.Encoding.UTF8.GetBytes(msg)),
+        fiber.PendingException = new RException(
+            state.NewString(System.Text.Encoding.UTF8.GetBytes(msg)),
             state.GetExceptionClass(Names.RuntimeError));
-        fiber.PendingException = rex;
         try { fiber.Resume(); }
-        catch
-        {
-            // PendingException raises MRubyLongJumpException out of MoveNext.
-            // Resume's catch already sets resumeSource.Exception; swallow
-            // here to keep the threadpool callback safe.
-        }
+        catch { }
     }
 
     public void Dispose()

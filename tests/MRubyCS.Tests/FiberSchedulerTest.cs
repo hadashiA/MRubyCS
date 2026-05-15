@@ -214,7 +214,7 @@ public class FiberSchedulerTest
         public int KernelSleepCalls;
         public int YieldCalls;
 
-        public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
+        public void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken cancellationToken = default)
         {
             KernelSleepCalls++;
             // We still have to drive the fiber to completion or the test
@@ -230,9 +230,9 @@ public class FiberSchedulerTest
             ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
             fiber.Yield();
         }
-        public void ReadStream<TState>(System.IO.Stream stream, Memory<byte> buffer, TState state, Func<int, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
-        public void ReadStreamToEnd<TState>(System.IO.Stream stream, System.Buffers.IBufferWriter<byte> writer, TState state, Func<long, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
-        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
+        public void ReadStream(RFiber fiber, System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void ReadStreamToEnd(RFiber fiber, System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void WriteStream(RFiber fiber, System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
         public void Dispose() { }
     }
 
@@ -476,22 +476,22 @@ public class FiberSchedulerTest
         // fiber is now parked in KernelSleep. A second KernelSleep on the
         // same fiber must throw rather than overwrite the timer.
         Assert.Throws<InvalidOperationException>(
-            () => scheduler.KernelSleep(TimeSpan.FromSeconds(1), fiber));
+            () => scheduler.KernelSleep(fiber, TimeSpan.FromSeconds(1)));
     }
 
     sealed class SpyScheduler : IMRubyFiberScheduler
     {
         public int SleepCallCount;
 
-        public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
+        public void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken cancellationToken = default)
             => SleepCallCount++;
 
         public void Block(RFiber fiber, CancellationToken cancellationToken = default) { }
         public void Unblock(RFiber fiber, MRubyValue resumeValue = default) { }
         public void Yield(RFiber fiber, CancellationToken cancellationToken = default) { }
-        public void ReadStream<TState>(System.IO.Stream stream, Memory<byte> buffer, TState state, Func<int, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
-        public void ReadStreamToEnd<TState>(System.IO.Stream stream, System.Buffers.IBufferWriter<byte> writer, TState state, Func<long, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
-        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
+        public void ReadStream(RFiber fiber, System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void ReadStreamToEnd(RFiber fiber, System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void WriteStream(RFiber fiber, System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
         public void Dispose() { }
     }
 }

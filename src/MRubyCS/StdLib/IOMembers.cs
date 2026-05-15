@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.IO;
 
 namespace MRubyCS.StdLib;
@@ -22,13 +21,7 @@ static class IOMembers
             // Read-to-EOF path.
             if (scheduler is not null && !fiber.IsRoot)
             {
-                var writer = new ArrayBufferWriter<byte>();
-                scheduler.ReadStreamToEnd(
-                    stream,
-                    writer,
-                    (State: state, Writer: writer),
-                    static (_, ctx) => new MRubyValue(ctx.State.NewString(ctx.Writer.WrittenSpan)),
-                    fiber);
+                scheduler.ReadStreamToEnd(fiber, stream);
                 return MRubyValue.Nil;
             }
             using var ms = new MemoryStream();
@@ -40,21 +33,13 @@ static class IOMembers
         if (n < 0) state.Raise(Names.ArgumentError, "negative length"u8);
         if (n == 0) return state.NewString([]);
 
-        var buffer = new byte[n];
-
         if (scheduler is not null && !fiber.IsRoot)
         {
-            scheduler.ReadStream(
-                stream,
-                buffer,
-                (State: state, Buffer: buffer),
-                static (bytesRead, ctx) => bytesRead == 0
-                    ? MRubyValue.Nil
-                    : new MRubyValue(ctx.State.NewString(ctx.Buffer.AsSpan(0, bytesRead))),
-                fiber);
+            scheduler.ReadStream(fiber, stream, n);
             return MRubyValue.Nil;
         }
 
+        var buffer = new byte[n];
         var read = stream.Read(buffer, 0, n);
         return read == 0
             ? MRubyValue.Nil
@@ -79,7 +64,7 @@ static class IOMembers
             // Copy because the source may outlive `bytes`'s lifetime once we
             // yield. Cheap relative to the syscall.
             var data = bytes.ToArray();
-            scheduler.WriteStream(stream, data, fiber);
+            scheduler.WriteStream(fiber, stream, data);
             return MRubyValue.Nil;
         }
 
