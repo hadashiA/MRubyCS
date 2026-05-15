@@ -401,12 +401,19 @@ public class FiberSchedulerTest
         // catches — not a fiber-killing unwind.
         mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
 
+        // Gates the threadpool Resume on the fiber actually having yielded.
+        // Without it, Task.Run can win the race and call Resume while the
+        // fiber is still Running → FiberError lost on the threadpool thread,
+        // leaving the fiber parked forever.
+        var yielded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_boom"u8),
             new MRubyMethod((state, self) =>
             {
                 var fiber = state.CurrentFiber;
-                Task.Run(() =>
+                _ = Task.Run(async () =>
                 {
+                    await yielded.Task;
                     fiber.PendingException = new RException(
                         state.NewString("boom"u8),
                         state.GetExceptionClass(Names.RuntimeError));
@@ -427,6 +434,7 @@ public class FiberSchedulerTest
 
         var fiber = compiler.LoadSourceCodeAsFiber(code);
         fiber.Resume();
+        yielded.SetResult();
         var result = await fiber.WaitForTerminateAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.That(fiber.IsAlive, Is.False);
