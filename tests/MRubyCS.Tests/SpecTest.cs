@@ -116,6 +116,7 @@ public class SpecTest
     // [TestCase("namerror.rb")]
     [TestCase("time.rb")]
     [TestCase("random.rb")]
+    [TestCase("regexp.rb")]
     public void RubyScript(string fileName)
     {
         Assert.Multiple(() =>

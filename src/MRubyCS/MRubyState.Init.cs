@@ -630,6 +630,7 @@ public partial class MRubyState
         DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
 
         DefineClass(Intern("FiberError"u8), StandardErrorClass);
+        DefineClass(Names.RegexpError, StandardErrorClass);
     }
 
     void InitObjectExt()
