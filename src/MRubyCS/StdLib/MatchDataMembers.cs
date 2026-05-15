@@ -26,8 +26,7 @@ static class MatchDataMembers
 {
     public static RData CreateRDataFromMatchData(MRubyState mrb, MRubyMatchData matchData)
     {
-        var matchDataClass = mrb.MatchDataClass;
-        return new RData(matchDataClass, matchData);
+        return new RData(mrb.GetConst(mrb.Intern("MatchData"u8)).As<RClass>(), matchData);
     }
 
     public static bool TryGetMatchData(MRubyValue value, out MRubyMatchData data)

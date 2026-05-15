@@ -20,7 +20,10 @@ public class SpecTest
     [SetUp]
     public void Before()
     {
-        mrb = MRubyState.Create();
+        mrb = MRubyState.Create(x =>
+        {
+            x.DefineRegexp();
+        });
 
         compiler = MRubyCompiler.Create(mrb);
 

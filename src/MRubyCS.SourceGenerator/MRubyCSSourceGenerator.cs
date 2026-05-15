@@ -109,7 +109,7 @@ public class MRubyCSSourceGenerator : IIncrementalGenerator
         new("OpOr", "|"),
         new("OpNeg", "~"),
         new("OpNeq", "!="),
-        new("OpMatch", "~="),
+        new("OpMatch", "=~"),
         new("OpAndAnd", "&&"),
         new("OpPow", "**"),
         new("OpPlus", "+@"),

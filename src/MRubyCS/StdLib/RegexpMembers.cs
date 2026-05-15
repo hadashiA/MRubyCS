@@ -68,8 +68,7 @@ static class RegexpMembers
 {
     public static RData CreateRDataFromRegexp(MRubyState mrb, MRubyRegexpData regexpData)
     {
-        var regexpClass = mrb.RegexpClass;
-        return new RData(regexpClass, regexpData);
+        return new RData(mrb.GetConst(mrb.Intern("Regexp"u8)).As<RClass>(), regexpData);
     }
 
     public static bool TryGetRegexpData(MRubyValue value, out MRubyRegexpData data)
