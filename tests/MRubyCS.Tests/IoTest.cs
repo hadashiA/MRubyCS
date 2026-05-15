@@ -17,6 +17,7 @@ public class IoTest
     public void Before()
     {
         mrb = MRubyState.Create();
+        mrb.DefineIO();
         compiler = MRubyCompiler.Create(mrb);
         tempDir = Path.Combine(Path.GetTempPath(), $"mrubycs-io-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);

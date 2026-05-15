@@ -222,17 +222,17 @@ public class FiberSchedulerTest
             ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
             fiber.Yield();
         }
-        public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default) { }
-        public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default) { }
+        public void Block(RFiber fiber, CancellationToken cancellationToken = default) { }
+        public void Unblock(RFiber fiber, MRubyValue resumeValue = default) { }
         public void Yield(RFiber fiber, CancellationToken cancellationToken = default)
         {
             YieldCalls++;
             ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
             fiber.Yield();
         }
-        public void Await(ValueTask task, RFiber fiber, MRubyValue resumeValue = default, CancellationToken cancellationToken = default) { }
-        public void Await<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken cancellationToken = default) { }
-        public void Await<T, TState>(ValueTask<T> task, RFiber fiber, Func<T, TState, MRubyValue> mapResult, TState state, CancellationToken cancellationToken = default) { }
+        public void ReadStream<TState>(System.IO.Stream stream, Memory<byte> buffer, TState state, Func<int, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
+        public void ReadStreamToEnd<TState>(System.IO.Stream stream, System.Buffers.IBufferWriter<byte> writer, TState state, Func<long, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
+        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
         public void Dispose() { }
     }
 
@@ -334,13 +334,12 @@ public class FiberSchedulerTest
             {
                 var fiber = state.CurrentFiber;
                 var sched = state.FiberScheduler!;
-                var blocker = new MRubyValue(state.NewString("blocker-key"u8));
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(20);
-                    sched.Unblock(blocker, fiber, new MRubyValue(helloSym));
+                    sched.Unblock(fiber, new MRubyValue(helloSym));
                 });
-                sched.Block(blocker, fiber);
+                sched.Block(fiber);
                 return MRubyValue.Nil;
             }));
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("record"u8),
@@ -376,9 +375,8 @@ public class FiberSchedulerTest
             {
                 var fiber = state.CurrentFiber;
                 var sched = state.FiberScheduler!;
-                var blocker = new MRubyValue(state.NewString("blocker-key"u8));
                 var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
-                sched.Block(blocker, fiber, cts.Token);
+                sched.Block(fiber, cts.Token);
                 return MRubyValue.Nil;
             }));
 
@@ -451,11 +449,10 @@ public class FiberSchedulerTest
             {
                 var fiber = state.CurrentFiber;
                 var sched = state.FiberScheduler!;
-                var blocker = new MRubyValue(state.NewString("b"u8));
-                sched.Block(blocker, fiber);
+                sched.Block(fiber);
                 // Unreachable on the normal path (Block yields), but if the
                 // guard misfires we still want a deterministic failure.
-                try { sched.Block(blocker, fiber); }
+                try { sched.Block(fiber); }
                 catch (InvalidOperationException ex) { caught = ex; }
                 return MRubyValue.Nil;
             }));
@@ -465,8 +462,7 @@ public class FiberSchedulerTest
         var fiber = compiler.LoadSourceCodeAsFiber("park_twice"u8);
         fiber.Resume();
 
-        Assert.Throws<InvalidOperationException>(
-            () => scheduler.Block(new MRubyValue(mrb.NewString("b"u8)), fiber));
+        Assert.Throws<InvalidOperationException>(() => scheduler.Block(fiber));
     }
 
     [Test]
@@ -490,12 +486,12 @@ public class FiberSchedulerTest
         public void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default)
             => SleepCallCount++;
 
-        public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default) { }
-        public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default) { }
+        public void Block(RFiber fiber, CancellationToken cancellationToken = default) { }
+        public void Unblock(RFiber fiber, MRubyValue resumeValue = default) { }
         public void Yield(RFiber fiber, CancellationToken cancellationToken = default) { }
-        public void Await(ValueTask task, RFiber fiber, MRubyValue resumeValue = default, CancellationToken cancellationToken = default) { }
-        public void Await<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken cancellationToken = default) { }
-        public void Await<T, TState>(ValueTask<T> task, RFiber fiber, Func<T, TState, MRubyValue> mapResult, TState state, CancellationToken cancellationToken = default) { }
+        public void ReadStream<TState>(System.IO.Stream stream, Memory<byte> buffer, TState state, Func<int, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
+        public void ReadStreamToEnd<TState>(System.IO.Stream stream, System.Buffers.IBufferWriter<byte> writer, TState state, Func<long, TState, MRubyValue> projection, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
+        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, RFiber fiber, CancellationToken cancellationToken = default, bool disposeStream = false) { }
         public void Dispose() { }
     }
 }

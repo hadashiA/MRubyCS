@@ -1,5 +1,7 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -74,7 +76,7 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         fiber.Yield();
     }
 
-    public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default)
+    public void Block(RFiber fiber, CancellationToken cancellationToken = default)
     {
         var entry = new BlockEntry();
         if (!blockedFibers.TryAdd(fiber, entry))
@@ -98,7 +100,7 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         throw new InvalidOperationException(
             $"{op}: fiber is already parked under this scheduler. Each park must be matched by an Unblock/timeout/cancel before another can be issued.");
 
-    public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default)
+    public void Unblock(RFiber fiber, MRubyValue resumeValue = default)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry))
         {
@@ -117,144 +119,101 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         fiber.Yield();
     }
 
-    public void Await(
-        ValueTask task,
-        RFiber fiber,
-        MRubyValue resumeValue = default,
-        CancellationToken cancellationToken = default)
-    {
-        _ = AwaitAsync(task, fiber, resumeValue, cancellationToken);
-        fiber.Yield();
-    }
-
-    public void Await<T>(
-        ValueTask<T> task,
-        RFiber fiber,
-        Func<T, MRubyValue> mapResult,
-        CancellationToken cancellationToken = default)
-    {
-        _ = AwaitAsync(task, fiber, mapResult, cancellationToken);
-        fiber.Yield();
-    }
-
-    public void Await<T, TState>(
-        ValueTask<T> task,
-        RFiber fiber,
-        Func<T, TState, MRubyValue> mapResult,
+    public void ReadStream<TState>(
+        Stream stream,
+        Memory<byte> buffer,
         TState state,
-        CancellationToken cancellationToken = default)
+        Func<int, TState, MRubyValue> projection,
+        RFiber fiber,
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false)
     {
-        _ = AwaitAsync(task, fiber, mapResult, state, cancellationToken);
+        _ = ReadStreamAsync(stream, buffer, state, projection, fiber, cancellationToken, disposeStream);
         fiber.Yield();
     }
 
-    static async Task AwaitAsync(ValueTask task, RFiber fiber, MRubyValue resumeValue, CancellationToken ct)
+    static async Task ReadStreamAsync<TState>(
+        Stream stream, Memory<byte> buffer,
+        TState state, Func<int, TState, MRubyValue> projection,
+        RFiber fiber, CancellationToken ct, bool disposeStream)
     {
-        // Force an async boundary so the caller's fiber.Yield() runs
-        // before Resume — synchronously-completed tasks would otherwise
-        // call Resume before Yield, triggering a "double resume" error.
+        // Force async boundary so the caller's fiber.Yield() runs before
+        // Resume — synchronously-completed reads would otherwise Resume
+        // before Yield, triggering a "double resume" error.
         await Task.Yield();
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            ResumeSafe(fiber, MRubyValue.Nil);
-            return;
-        }
-        catch (Exception ex)
-        {
-            ResumeWithException(fiber, ex);
-            return;
-        }
+        int bytesRead;
+        try { bytesRead = await stream.ReadAsync(buffer, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); ResumeSafe(fiber, MRubyValue.Nil); return; }
+        catch (Exception ex) { if (disposeStream) stream.Dispose(); ResumeWithException(fiber, ex); return; }
 
-        if (ct.IsCancellationRequested)
-        {
-            ResumeSafe(fiber, MRubyValue.Nil);
-            return;
-        }
-
-        ResumeSafe(fiber, resumeValue);
+        if (disposeStream) stream.Dispose();
+        MRubyValue result;
+        try { result = projection(bytesRead, state); }
+        catch (Exception ex) { ResumeWithException(fiber, ex); return; }
+        ResumeSafe(fiber, result);
     }
 
-    static async Task AwaitAsync<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken ct)
+    public void ReadStreamToEnd<TState>(
+        Stream stream,
+        IBufferWriter<byte> writer,
+        TState state,
+        Func<long, TState, MRubyValue> projection,
+        RFiber fiber,
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false)
     {
-        await Task.Yield();
-        T result;
-        try
-        {
-            result = await task.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            ResumeSafe(fiber, MRubyValue.Nil);
-            return;
-        }
-        catch (Exception ex)
-        {
-            ResumeWithException(fiber, ex);
-            return;
-        }
-
-        if (ct.IsCancellationRequested)
-        {
-            ResumeSafe(fiber, MRubyValue.Nil);
-            return;
-        }
-
-        MRubyValue mapped;
-        try
-        {
-            mapped = mapResult(result);
-        }
-        catch (Exception ex)
-        {
-            ResumeWithException(fiber, ex);
-            return;
-        }
-        ResumeSafe(fiber, mapped);
+        _ = ReadStreamToEndAsync(stream, writer, state, projection, fiber, cancellationToken, disposeStream);
+        fiber.Yield();
     }
 
-    static async Task AwaitAsync<T, TState>(
-        ValueTask<T> task, RFiber fiber,
-        Func<T, TState, MRubyValue> mapResult, TState state,
-        CancellationToken ct)
+    static async Task ReadStreamToEndAsync<TState>(
+        Stream stream, IBufferWriter<byte> writer,
+        TState state, Func<long, TState, MRubyValue> projection,
+        RFiber fiber, CancellationToken ct, bool disposeStream)
     {
         await Task.Yield();
-        T result;
+        long total = 0;
         try
         {
-            result = await task.ConfigureAwait(false);
+            while (true)
+            {
+                var mem = writer.GetMemory(4096);
+                var read = await stream.ReadAsync(mem, ct).ConfigureAwait(false);
+                if (read == 0) break;
+                writer.Advance(read);
+                total += read;
+            }
         }
-        catch (OperationCanceledException)
-        {
-            ResumeSafe(fiber, MRubyValue.Nil);
-            return;
-        }
-        catch (Exception ex)
-        {
-            ResumeWithException(fiber, ex);
-            return;
-        }
+        catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); ResumeSafe(fiber, MRubyValue.Nil); return; }
+        catch (Exception ex) { if (disposeStream) stream.Dispose(); ResumeWithException(fiber, ex); return; }
 
-        if (ct.IsCancellationRequested)
-        {
-            ResumeSafe(fiber, MRubyValue.Nil);
-            return;
-        }
+        if (disposeStream) stream.Dispose();
+        MRubyValue result;
+        try { result = projection(total, state); }
+        catch (Exception ex) { ResumeWithException(fiber, ex); return; }
+        ResumeSafe(fiber, result);
+    }
 
-        MRubyValue mapped;
-        try
-        {
-            mapped = mapResult(result, state);
-        }
-        catch (Exception ex)
-        {
-            ResumeWithException(fiber, ex);
-            return;
-        }
-        ResumeSafe(fiber, mapped);
+    public void WriteStream(
+        Stream stream,
+        ReadOnlyMemory<byte> data,
+        RFiber fiber,
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false)
+    {
+        _ = WriteStreamAsync(stream, data, fiber, cancellationToken, disposeStream);
+        fiber.Yield();
+    }
+
+    static async Task WriteStreamAsync(
+        Stream stream, ReadOnlyMemory<byte> data, RFiber fiber, CancellationToken ct, bool disposeStream)
+    {
+        await Task.Yield();
+        try { await stream.WriteAsync(data, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); ResumeSafe(fiber, MRubyValue.Nil); return; }
+        catch (Exception ex) { if (disposeStream) stream.Dispose(); ResumeWithException(fiber, ex); return; }
+        if (disposeStream) stream.Dispose();
+        ResumeSafe(fiber, new MRubyValue((long)data.Length));
     }
 
     static void ResumeSafe(RFiber fiber, MRubyValue value = default)

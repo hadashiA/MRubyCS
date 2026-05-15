@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Text;
 
@@ -39,15 +40,20 @@ static class FileMembers
 
         if (scheduler is not null && !fiber.IsRoot)
         {
-            scheduler.Await(
-                ReadAllAsync(path),
+            var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.Read, 4096, useAsync: true);
+            var writer = new ArrayBufferWriter<byte>();
+            scheduler.ReadStreamToEnd(
+                stream,
+                writer,
+                (State: state, Writer: writer),
+                static (_, ctx) => new MRubyValue(ctx.State.NewString(ctx.Writer.WrittenSpan)),
                 fiber,
-                static (bytes, s) => new MRubyValue(s.NewString(bytes)),
-                state);
+                disposeStream: true);
             return MRubyValue.Nil;
         }
 
-        return state.NewString(File.ReadAllBytes(path));
+        return state.NewStringOwned(File.ReadAllBytes(path));
     });
 
     /// <summary>
@@ -65,10 +71,9 @@ static class FileMembers
 
         if (scheduler is not null && !fiber.IsRoot)
         {
-            scheduler.Await(
-                WriteAllAsync(path, data),
-                fiber,
-                new MRubyValue((long)data.Length));
+            var stream = new FileStream(path, FileMode.Create, FileAccess.Write,
+                FileShare.None, 4096, useAsync: true);
+            scheduler.WriteStream(stream, data, fiber, disposeStream: true);
             return MRubyValue.Nil;
         }
 
@@ -112,19 +117,4 @@ static class FileMembers
         };
     }
 
-    static async System.Threading.Tasks.ValueTask<byte[]> ReadAllAsync(string path)
-    {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-            FileShare.Read, 4096, useAsync: true);
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms).ConfigureAwait(false);
-        return ms.ToArray();
-    }
-
-    static async System.Threading.Tasks.ValueTask WriteAllAsync(string path, byte[] data)
-    {
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write,
-            FileShare.None, 4096, useAsync: true);
-        await stream.WriteAsync(data, 0, data.Length).ConfigureAwait(false);
-    }
 }

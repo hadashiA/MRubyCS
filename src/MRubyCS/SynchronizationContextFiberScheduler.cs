@@ -1,5 +1,7 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -132,7 +134,7 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         }
     }
 
-    public void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default)
+    public void Block(RFiber fiber, CancellationToken cancellationToken = default)
     {
         var entry = new BlockEntry();
         if (!blockedFibers.TryAdd(fiber, entry))
@@ -145,13 +147,13 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
             cancellationToken.UnsafeRegister(blockCancelCallback, entry);
         }
 
-        _ = AwaitBlockAsync(entry, fiber);
+        _ = RunAsync();
         fiber.Yield();
         return;
 
-        async ValueTask AwaitBlockAsync(BlockEntry entry, RFiber fiber)
+        async ValueTask RunAsync()
         {
-            // Force async boundary so Block's caller-side fiber.Yield() runs
+            // Force async boundary so the caller-side fiber.Yield() runs
             // before our resume; otherwise an already-completed entry.Task
             // would trigger a "double resume" on the VM.
             await Task.Yield();
@@ -169,7 +171,7 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         throw new InvalidOperationException(
             $"{op}: fiber is already parked under this scheduler. Each park must be matched by an Unblock/timeout/cancel before another can be issued.");
 
-    public void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default)
+    public void Unblock(RFiber fiber, MRubyValue resumeValue = default)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry))
         {
@@ -186,98 +188,94 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         fiber.Yield();
     }
 
-    public void Await(
-        ValueTask task,
+    public void ReadStream<TState>(
+        Stream stream,
+        Memory<byte> buffer,
+        TState state,
+        Func<int, TState, MRubyValue> projection,
         RFiber fiber,
-        MRubyValue resumeValue = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false)
     {
-        _ = AwaitAsync1(task, fiber, resumeValue, cancellationToken);
+        _ = RunAsync();
         fiber.Yield();
         return;
 
-        async ValueTask AwaitAsync1(ValueTask task, RFiber fiber, MRubyValue resumeValue, CancellationToken ct)
+        async ValueTask RunAsync()
         {
             await Task.Yield();
+            int bytesRead;
+            try { bytesRead = await stream.ReadAsync(buffer, cancellationToken); }
+            catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); TryResume(fiber, MRubyValue.Nil); return; }
+            catch (Exception ex) { if (disposeStream) stream.Dispose(); TryResumeWithException(fiber, ex); return; }
+
+            if (disposeStream) stream.Dispose();
+            // On host thread now — projection runs synchronously here.
+            MRubyValue result;
+            try { result = projection(bytesRead, state); }
+            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+            TryResume(fiber, result);
+        }
+    }
+
+    public void ReadStreamToEnd<TState>(
+        Stream stream,
+        IBufferWriter<byte> writer,
+        TState state,
+        Func<long, TState, MRubyValue> projection,
+        RFiber fiber,
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false)
+    {
+        _ = RunAsync();
+        fiber.Yield();
+        return;
+
+        async ValueTask RunAsync()
+        {
+            await Task.Yield();
+            long total = 0;
             try
             {
-                await task;
+                while (true)
+                {
+                    var mem = writer.GetMemory(4096);
+                    var read = await stream.ReadAsync(mem, cancellationToken);
+                    if (read == 0) break;
+                    writer.Advance(read);
+                    total += read;
+                }
             }
-            catch (OperationCanceledException)
-            {
-                TryResume(fiber, MRubyValue.Nil);
-                return;
-            }
-            catch (Exception ex)
-            {
-                TryResumeWithException(fiber, ex);
-                return;
-            }
+            catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); TryResume(fiber, MRubyValue.Nil); return; }
+            catch (Exception ex) { if (disposeStream) stream.Dispose(); TryResumeWithException(fiber, ex); return; }
 
-            if (ct.IsCancellationRequested)
-            {
-                TryResume(fiber, MRubyValue.Nil);
-                return;
-            }
-            TryResume(fiber, resumeValue);
+            if (disposeStream) stream.Dispose();
+            MRubyValue result;
+            try { result = projection(total, state); }
+            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
+            TryResume(fiber, result);
         }
     }
 
-    public void Await<T>(
-        ValueTask<T> task,
+    public void WriteStream(
+        Stream stream,
+        ReadOnlyMemory<byte> data,
         RFiber fiber,
-        Func<T, MRubyValue> mapResult,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false)
     {
-        _ = AwaitAsync1(task, fiber, mapResult, cancellationToken);
+        _ = RunAsync();
         fiber.Yield();
         return;
 
-        async ValueTask AwaitAsync1<T>(ValueTask<T> task, RFiber fiber, Func<T, MRubyValue> mapResult, CancellationToken ct)
+        async ValueTask RunAsync()
         {
             await Task.Yield();
-            T result;
-            try { result = await task; }
-            catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
-            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-
-            if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
-
-            MRubyValue mapped;
-            try { mapped = mapResult(result); }
-            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-            TryResume(fiber, mapped);
-        }
-    }
-
-    public void Await<T, TState>(
-        ValueTask<T> task,
-        RFiber fiber,
-        Func<T, TState, MRubyValue> mapResult,
-        TState state,
-        CancellationToken cancellationToken = default)
-    {
-        _ = AwaitAsync(task, fiber, mapResult, state, cancellationToken);
-        fiber.Yield();
-        return;
-
-        async ValueTask AwaitAsync<T, TState>(
-            ValueTask<T> task, RFiber fiber,
-            Func<T, TState, MRubyValue> mapResult, TState state,
-            CancellationToken ct)
-        {
-            await Task.Yield();
-            T result;
-            try { result = await task; }
-            catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
-            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-
-            if (ct.IsCancellationRequested) { TryResume(fiber, MRubyValue.Nil); return; }
-
-            MRubyValue mapped;
-            try { mapped = mapResult(result, state); }
-            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
-            TryResume(fiber, mapped);
+            try { await stream.WriteAsync(data, cancellationToken); }
+            catch (OperationCanceledException) { if (disposeStream) stream.Dispose(); TryResume(fiber, MRubyValue.Nil); return; }
+            catch (Exception ex) { if (disposeStream) stream.Dispose(); TryResumeWithException(fiber, ex); return; }
+            if (disposeStream) stream.Dispose();
+            TryResume(fiber, new MRubyValue((long)data.Length));
         }
     }
 

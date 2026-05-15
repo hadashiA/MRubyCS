@@ -35,11 +35,12 @@ public partial class MRubyState : IDisposable
         state.InitEnumerable();
         state.InitFiber();
         state.InitThread();
-        state.InitIO();
         state.InitMrbLib();
         state.InitObjectExt();
         state.InitTime();
         state.InitRandom();
+
+        // IO / File are opt-in: call `state.DefineIO()` to enable them.
 
         return state;
     }
@@ -681,7 +682,13 @@ public partial class MRubyState : IDisposable
         DefineClassMethod(threadClass, Intern("pass"u8), ThreadMembers.Pass);
     }
 
-    void InitIO()
+    /// <summary>
+    /// Registers Ruby <c>IO</c>, <c>File</c>, and <c>IOError</c> classes
+    /// along with their built-in methods. Not called by <see cref="Create()"/>;
+    /// invoke explicitly when the host wants Ruby code to access streams or
+    /// the filesystem. Idempotent — calling more than once redefines.
+    /// </summary>
+    public void DefineIO()
     {
         IOClass = DefineClass(Intern("IO"u8), ObjectClass, MRubyVType.Object);
         DefineMethod(IOClass, Intern("read"u8), IOMembers.Read);

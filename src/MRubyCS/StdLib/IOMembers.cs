@@ -1,14 +1,11 @@
 using System;
+using System.Buffers;
 using System.IO;
 
 namespace MRubyCS.StdLib;
 
 static class IOMembers
 {
-    // State carried into the static map-lambda for IO#read so it doesn't
-    // capture state-machine fields (no closure allocation per call).
-    readonly record struct ReadCtx(MRubyState State, byte[] Buffer);
-
     [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod Read = new((state, self) =>
     {
@@ -25,16 +22,18 @@ static class IOMembers
             // Read-to-EOF path.
             if (scheduler is not null && !fiber.IsRoot)
             {
-                scheduler.Await(
-                    ReadAllAsync(stream),
-                    fiber,
-                    static (bytes, s) => new MRubyValue(s.NewString(bytes)),
-                    state);
+                var writer = new ArrayBufferWriter<byte>();
+                scheduler.ReadStreamToEnd(
+                    stream,
+                    writer,
+                    (State: state, Writer: writer),
+                    static (_, ctx) => new MRubyValue(ctx.State.NewString(ctx.Writer.WrittenSpan)),
+                    fiber);
                 return MRubyValue.Nil;
             }
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
-            return state.NewString(ms.ToArray());
+            return state.NewStringOwned(ms.ToArray());
         }
 
         var n = (int)state.GetArgumentAsIntegerAt(0);
@@ -45,19 +44,21 @@ static class IOMembers
 
         if (scheduler is not null && !fiber.IsRoot)
         {
-            scheduler.Await(
-                stream.ReadAsync(buffer, 0, n).ToValueTask(),
-                fiber,
-                static (bytesRead, ctx) =>
-                    bytesRead == 0
-                        ? MRubyValue.Nil
-                        : new MRubyValue(ctx.State.NewString(ctx.Buffer.AsSpan(0, bytesRead))),
-                new ReadCtx(state, buffer));
+            scheduler.ReadStream(
+                stream,
+                buffer,
+                (State: state, Buffer: buffer),
+                static (bytesRead, ctx) => bytesRead == 0
+                    ? MRubyValue.Nil
+                    : new MRubyValue(ctx.State.NewString(ctx.Buffer.AsSpan(0, bytesRead))),
+                fiber);
             return MRubyValue.Nil;
         }
 
         var read = stream.Read(buffer, 0, n);
-        return read == 0 ? MRubyValue.Nil : state.NewString(buffer.AsSpan(0, read));
+        return read == 0
+            ? MRubyValue.Nil
+            : state.NewString(buffer.AsSpan(0, read));
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -75,13 +76,10 @@ static class IOMembers
 
         if (scheduler is not null && !fiber.IsRoot)
         {
-            // Copy because the stream may outlive `bytes`'s lifetime once we
+            // Copy because the source may outlive `bytes`'s lifetime once we
             // yield. Cheap relative to the syscall.
             var data = bytes.ToArray();
-            scheduler.Await(
-                stream.WriteAsync(data, 0, data.Length).ToValueTask(),
-                fiber,
-                new MRubyValue((long)data.Length));
+            scheduler.WriteStream(stream, data, fiber);
             return MRubyValue.Nil;
         }
 
@@ -109,20 +107,4 @@ static class IOMembers
             state.Raise(state.Intern("IOError"u8), "closed stream"u8);
         }
     }
-
-    static async System.Threading.Tasks.ValueTask<byte[]> ReadAllAsync(Stream stream)
-    {
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms).ConfigureAwait(false);
-        return ms.ToArray();
-    }
-}
-
-static class IOExtensions
-{
-    public static System.Threading.Tasks.ValueTask<int> ToValueTask(this System.Threading.Tasks.Task<int> task)
-        => new(task);
-
-    public static System.Threading.Tasks.ValueTask ToValueTask(this System.Threading.Tasks.Task task)
-        => new(task);
 }

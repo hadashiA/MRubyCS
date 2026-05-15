@@ -1,4 +1,6 @@
 using System;
+using System.Buffers;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -7,8 +9,8 @@ namespace MRubyCS;
 /// <summary>
 /// CRuby-style Fiber scheduler hook surface, adapted for C# integration.
 /// Hosts implement this to make blocking Ruby primitives (currently
-/// <c>Kernel#sleep</c>, <c>Fiber.pass</c>, I/O via <see cref="Await{T}"/>)
-/// cooperate with an async runtime such as UniTask.
+/// <c>Kernel#sleep</c>, <c>Fiber.pass</c>, stream I/O) cooperate with an
+/// async runtime such as UniTask.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,7 +27,15 @@ namespace MRubyCS;
 /// would fire on Unity's PlayerLoop main thread.
 /// </para>
 /// <para>
-/// <b>Exception delivery</b>: if a <see cref="Await"/> task throws,
+/// <b>Projection delegates are synchronous</b>. The Stream I/O hooks accept
+/// <see cref="Func{T1, T2, TResult}"/> projections that build the Ruby
+/// resume value from the byte count + caller state; the scheduler invokes
+/// them on the VM thread right before resuming. Because they are non-async
+/// (no <c>ValueTask</c> return), the caller can't introduce its own awaits
+/// — threading remains under the scheduler's exclusive control.
+/// </para>
+/// <para>
+/// <b>Exception delivery</b>: if a stream I/O hook's await throws,
 /// implementations should wrap the exception as an <see cref="RException"/>
 /// and set <see cref="RFiber.PendingException"/> before resuming the fiber.
 /// MRubyCS detects the pending exception on resume and re-raises it inside
@@ -43,9 +53,8 @@ public interface IMRubyFiberScheduler : IDisposable
     void KernelSleep(TimeSpan duration, RFiber fiber, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Park <paramref name="fiber"/> until <see cref="Unblock"/> is called
-    /// with the same <paramref name="blocker"/>, or until
-    /// <paramref name="cancellationToken"/> fires.
+    /// Park <paramref name="fiber"/> until <see cref="Unblock"/> is called,
+    /// or until <paramref name="cancellationToken"/> fires.
     /// </summary>
     /// <remarks>
     /// Callers must arrange the eventual <see cref="Unblock"/> (e.g. queue
@@ -55,7 +64,7 @@ public interface IMRubyFiberScheduler : IDisposable
     /// <see cref="CancellationToken"/> with one that auto-cancels (e.g.
     /// <see cref="CancellationTokenSource.CancelAfter(TimeSpan)"/>).
     /// </remarks>
-    void Block(MRubyValue blocker, RFiber fiber, CancellationToken cancellationToken = default);
+    void Block(RFiber fiber, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Wake a fiber currently parked in <see cref="Block"/>.
@@ -63,7 +72,7 @@ public interface IMRubyFiberScheduler : IDisposable
     /// C#-side primitive that called <see cref="Block"/>.
     /// May be called from any thread.
     /// </summary>
-    void Unblock(MRubyValue blocker, RFiber fiber, MRubyValue resumeValue = default);
+    void Unblock(RFiber fiber, MRubyValue resumeValue = default);
 
     /// <summary>
     /// Cooperative yield (<c>Thread.pass</c> equivalent): park the current
@@ -73,36 +82,65 @@ public interface IMRubyFiberScheduler : IDisposable
     void Yield(RFiber fiber, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Await a fire-and-forget task on the scheduler's preferred thread.
-    /// When complete, resume <paramref name="fiber"/> with
-    /// <paramref name="resumeValue"/>. On exception, deliver via
-    /// <see cref="RFiber.PendingException"/>.
+    /// Bounded async read: fill (up to) <paramref name="buffer"/>'s length
+    /// from <paramref name="stream"/>. When complete, the scheduler invokes
+    /// <paramref name="projection"/> on the VM thread with the actual byte
+    /// count + <paramref name="state"/>, and resumes the fiber with the
+    /// returned <see cref="MRubyValue"/>. <paramref name="buffer"/> is
+    /// caller-owned and must outlive the resume.
     /// </summary>
-    void Await(
-        ValueTask task,
-        RFiber fiber,
-        MRubyValue resumeValue = default,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Await a value-returning task on the scheduler's preferred thread,
-    /// project the result on the VM thread, and resume the fiber with it.
-    /// </summary>
-    void Await<T>(
-        ValueTask<T> task,
-        RFiber fiber,
-        Func<T, MRubyValue> mapResult,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Hot-path overload of <see cref="Await{T}"/>: passes
-    /// <paramref name="state"/> alongside the result so callers can supply
-    /// a static (non-capturing) <paramref name="mapResult"/> delegate.
-    /// </summary>
-    void Await<T, TState>(
-        ValueTask<T> task,
-        RFiber fiber,
-        Func<T, TState, MRubyValue> mapResult,
+    /// <param name="disposeStream">
+    /// When <c>true</c>, the scheduler disposes <paramref name="stream"/>
+    /// once the read completes (or fails) — strictly before the projection
+    /// runs and before the fiber resumes. Use for caller-opened streams
+    /// whose lifetime is bound to this single operation.
+    /// </param>
+    void ReadStream<TState>(
+        Stream stream,
+        Memory<byte> buffer,
         TState state,
-        CancellationToken cancellationToken = default);
+        Func<int, TState, MRubyValue> projection,
+        RFiber fiber,
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false);
+
+    /// <summary>
+    /// Unbounded async read: read from <paramref name="stream"/> into
+    /// <paramref name="writer"/> until EOF (or
+    /// <paramref name="cancellationToken"/>). When complete, the scheduler
+    /// invokes <paramref name="projection"/> on the VM thread with the
+    /// total byte count + <paramref name="state"/>, and resumes the fiber
+    /// with the returned <see cref="MRubyValue"/>. The scheduler may
+    /// allocate internal chunk buffers as needed.
+    /// </summary>
+    /// <param name="disposeStream">
+    /// When <c>true</c>, the scheduler disposes <paramref name="stream"/>
+    /// once the read completes (or fails), before projection / resume.
+    /// </param>
+    void ReadStreamToEnd<TState>(
+        Stream stream,
+        IBufferWriter<byte> writer,
+        TState state,
+        Func<long, TState, MRubyValue> projection,
+        RFiber fiber,
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false);
+
+    /// <summary>
+    /// Async write: push <paramref name="data"/> into
+    /// <paramref name="stream"/>. On completion the fiber is resumed with
+    /// the bytes-written count as an <c>Integer</c> (always equal to
+    /// <c>data.Length</c> on success).
+    /// </summary>
+    /// <param name="disposeStream">
+    /// When <c>true</c>, the scheduler disposes <paramref name="stream"/>
+    /// (and so flushes its buffers) once the write completes (or fails),
+    /// before the fiber resumes.
+    /// </param>
+    void WriteStream(
+        Stream stream,
+        ReadOnlyMemory<byte> data,
+        RFiber fiber,
+        CancellationToken cancellationToken = default,
+        bool disposeStream = false);
 }
