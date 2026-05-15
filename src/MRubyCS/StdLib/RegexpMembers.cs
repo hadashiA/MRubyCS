@@ -97,23 +97,24 @@ static class RegexpMembers
     /// </summary>
     public static void UpdateRegexpGlobalVariables(MRubyState mrb, MRubyMatchData? matchData)
     {
+        var gvMatch = mrb.Intern("$~"u8);
+        var gvMatchedString = mrb.Intern("$&"u8);
+        var gvPreMatch = mrb.Intern("$`"u8);
+        var gvPostMatch = mrb.Intern("$'"u8);
+        var gvLastCapture = mrb.Intern("$+"u8);
+
         if (matchData == null)
         {
             // Clear all global variables
-            mrb.SetGlobalVariable(Names.GvMatch, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.GvMatchedString, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.GvPreMatch, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.GvPostMatch, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.GvLastCapture, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv1, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv2, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv3, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv4, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv5, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv6, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv7, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv8, MRubyValue.Nil);
-            mrb.SetGlobalVariable(Names.Gv9, MRubyValue.Nil);
+            mrb.SetGlobalVariable(gvMatch, MRubyValue.Nil);
+            mrb.SetGlobalVariable(gvMatchedString, MRubyValue.Nil);
+            mrb.SetGlobalVariable(gvPreMatch, MRubyValue.Nil);
+            mrb.SetGlobalVariable(gvPostMatch, MRubyValue.Nil);
+            mrb.SetGlobalVariable(gvLastCapture, MRubyValue.Nil);
+            for (var i = 1; i <= 9; i++)
+            {
+                mrb.SetGlobalVariable(mrb.Intern($"${i}"), MRubyValue.Nil);
+            }
             return;
         }
 
@@ -122,16 +123,17 @@ static class RegexpMembers
 
         // $~ = MatchData object
         var matchDataRData = MatchDataMembers.CreateRDataFromMatchData(mrb, matchData);
-        mrb.SetGlobalVariable(Names.GvMatch, matchDataRData);
+        mrb.SetGlobalVariable(gvMatch, matchDataRData);
 
         // $& = matched string
-        mrb.SetGlobalVariable(Names.GvMatchedString, mrb.NewString(match.Value));
+        mrb.SetGlobalVariable(gvMatchedString, mrb.NewString(match.Value));
 
         // $` = pre_match
-        mrb.SetGlobalVariable(Names.GvPreMatch, mrb.NewString(input.Substring(0, match.Index)));
+        var preMatchValue = mrb.NewString(input.Substring(0, match.Index));
+        mrb.SetGlobalVariable(gvPreMatch, preMatchValue);
 
         // $' = post_match
-        mrb.SetGlobalVariable(Names.GvPostMatch, mrb.NewString(input.Substring(match.Index + match.Length)));
+        mrb.SetGlobalVariable(gvPostMatch, mrb.NewString(input.Substring(match.Index + match.Length)));
 
         // $+ = last successful capture (last non-empty group)
         MRubyValue lastCapture = MRubyValue.Nil;
@@ -144,20 +146,19 @@ static class RegexpMembers
                 break;
             }
         }
-        mrb.SetGlobalVariable(Names.GvLastCapture, lastCapture);
+        mrb.SetGlobalVariable(gvLastCapture, lastCapture);
 
         // $1-$9 capture groups
-        Symbol[] gvSymbols = [Names.Gv1, Names.Gv2, Names.Gv3, Names.Gv4, Names.Gv5, Names.Gv6, Names.Gv7, Names.Gv8, Names.Gv9];
-        for (var i = 0; i < 9; i++)
+        for (var i = 1; i <= 9; i++)
         {
-            var groupIndex = i + 1;
-            if (groupIndex < match.Groups.Count && match.Groups[groupIndex].Success)
+            var sym = mrb.Intern($"${i}");
+            if (i < match.Groups.Count && match.Groups[i].Success)
             {
-                mrb.SetGlobalVariable(gvSymbols[i], mrb.NewString(match.Groups[groupIndex].Value));
+                mrb.SetGlobalVariable(sym, mrb.NewString(match.Groups[i].Value));
             }
             else
             {
-                mrb.SetGlobalVariable(gvSymbols[i], MRubyValue.Nil);
+                mrb.SetGlobalVariable(sym, MRubyValue.Nil);
             }
         }
     }
@@ -375,7 +376,7 @@ static class RegexpMembers
     [MRubyMethod(OptionalArguments = 1)]
     public static MRubyMethod LastMatch = new((mrb, self) =>
     {
-        var matchValue = mrb.GetGlobalVariable(Names.GvMatch);
+        var matchValue = mrb.GetGlobalVariable(mrb.Intern("$~"u8));
         if (matchValue.IsNil)
         {
             return MRubyValue.Nil;

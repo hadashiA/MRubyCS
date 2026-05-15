@@ -452,9 +452,14 @@ partial class MRubyState
                         globalVariables.Set(Unsafe.Add(ref symbols, bb.B), Unsafe.Add(ref registers, bb.A));
                         goto Next;
                     case OpCode.GetSV:
-                    case OpCode.SetSV:
                         Markers.GetSV();
-                        callInfo.ProgramCounter += 3;
+                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        Unsafe.Add(ref registers, bb.A) = globalVariables.Get(Unsafe.Add(ref symbols, bb.B));
+                        goto Next;
+                    case OpCode.SetSV:
+                        Markers.SetSV();
+                        bb = OperandBB.Read(ref sequence, ref callInfo.ProgramCounter);
+                        globalVariables.Set(Unsafe.Add(ref symbols, bb.B), Unsafe.Add(ref registers, bb.A));
                         goto Next;
                     case OpCode.GetIV:
                         Markers.GetIV();

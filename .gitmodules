@@ -4,3 +4,7 @@
 [submodule "sandbox/MRubyCS.Benchmark/mruby"]
 	path = sandbox/MRubyCS.Benchmark/mruby
 	url = https://github.com/mruby/mruby.git
+[submodule "src/MRubyCS.Compiler/mruby-compiler2"]
+	path = src/MRubyCS.Compiler/mruby-compiler2
+	url = git@github.com:hadashiA/mruby-compiler2.git
+	branch = master
