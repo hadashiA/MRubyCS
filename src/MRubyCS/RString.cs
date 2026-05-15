@@ -119,6 +119,7 @@ public class RString : RObject, IEquatable<RString>
         return Encoding.UTF8.GetString(buffer, offset, Length);
     }
 
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<byte> AsSpan() => buffer.AsSpan(offset, Length);
 

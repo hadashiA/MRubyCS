@@ -2,8 +2,7 @@
 MRuby::CrossBuild.new("linux-x64") do |conf|
   conf.toolchain :gcc
 
-  conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '71749bc54a710ac4567130ebd1609c331ba60e7a'
+  conf.gem './mruby-compiler2'
   conf.gem './mrbgems/mrubycs-compiler'
 
   # Note: mruby 4.0 removed MRB_NO_PRESYM and `disable_presym`; presym is always on.
@@ -31,8 +30,7 @@ end
 MRuby::CrossBuild.new("linux-arm64") do |conf|
   conf.toolchain :gcc
 
-  conf.gem github: 'hadashiA/mruby-compiler2',
-           checksum_hash: '71749bc54a710ac4567130ebd1609c331ba60e7a'
+  conf.gem './mruby-compiler2'
   conf.gem './mrbgems/mrubycs-compiler'
   
   conf.cc.command = 'aarch64-linux-gnu-gcc'

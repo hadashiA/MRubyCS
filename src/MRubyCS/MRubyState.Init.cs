@@ -630,6 +630,7 @@ public partial class MRubyState
         DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
 
         DefineClass(Intern("FiberError"u8), StandardErrorClass);
+        DefineClass(Names.RegexpError, StandardErrorClass);
     }
 
     void InitObjectExt()
@@ -737,6 +738,82 @@ public partial class MRubyState
         DefineMethod(ArrayClass, Intern("shuffle"u8), RandomMembers.ArrayShuffle);
         DefineMethod(ArrayClass, Intern("shuffle!"u8), RandomMembers.ArrayShuffleBang);
         DefineMethod(ArrayClass, Intern("sample"u8), RandomMembers.ArraySample);
+    }
+
+    /// <summary>
+    /// Registers Ruby <c>Regexp</c>, <c>MatchData</c>, and the Regexp-related
+    /// <c>String</c> methods (<c>=~</c>, <c>match</c>, <c>sub</c>, <c>gsub</c>,
+    /// <c>scan</c>, <c>index</c>). Not called by <see cref="Create()"/>;
+    /// invoke explicitly when the host wants Ruby-level regular expressions.
+    /// </summary>
+    public void DefineRegexp()
+    {
+        // Define Regexp class
+        var regexpClass = DefineClass(Intern("Regexp"u8), ObjectClass, MRubyVType.CSharpData);
+
+        // Constants
+        DefineConst(regexpClass, Intern("IGNORECASE"u8), MRubyRegexpData.RubyIgnoreCase);
+        DefineConst(regexpClass, Intern("EXTENDED"u8), MRubyRegexpData.RubyExtended);
+        DefineConst(regexpClass, Intern("MULTILINE"u8), MRubyRegexpData.RubyMultiline);
+
+        // Class methods
+        DefineSingletonMethod(regexpClass, Intern("new"u8), RegexpMembers.New);
+        DefineClassMethod(regexpClass, Intern("compile"u8), RegexpMembers.Compile);
+        DefineClassMethod(regexpClass, Intern("escape"u8), RegexpMembers.Escape);
+        DefineClassMethod(regexpClass, Intern("quote"u8), RegexpMembers.Quote);
+        DefineClassMethod(regexpClass, Intern("union"u8), RegexpMembers.Union);
+        DefineClassMethod(regexpClass, Intern("try_convert"u8), RegexpMembers.TryConvert);
+        DefineClassMethod(regexpClass, Intern("last_match"u8), RegexpMembers.LastMatch);
+
+        // Instance methods
+        DefineMethod(regexpClass, Intern("initialize"u8), RegexpMembers.New);
+        DefineMethod(regexpClass, Intern("match"u8), RegexpMembers.Match);
+        DefineMethod(regexpClass, Intern("match?"u8), RegexpMembers.QMatch);
+        DefineMethod(regexpClass, Intern("=~"u8), RegexpMembers.OpMatch);
+        DefineMethod(regexpClass, Intern("==="u8), RegexpMembers.Eqq);
+        DefineMethod(regexpClass, Intern("source"u8), RegexpMembers.Source);
+        DefineMethod(regexpClass, Intern("options"u8), RegexpMembers.Options);
+        DefineMethod(regexpClass, Intern("casefold?"u8), RegexpMembers.QCasefold);
+        DefineMethod(regexpClass, Intern("to_s"u8), RegexpMembers.ToS);
+        DefineMethod(regexpClass, Intern("inspect"u8), RegexpMembers.Inspect);
+        DefineMethod(regexpClass, Intern("=="u8), RegexpMembers.OpEq);
+        DefineMethod(regexpClass, Intern("eql?"u8), RegexpMembers.QEql);
+        DefineMethod(regexpClass, Intern("hash"u8), RegexpMembers.Hash);
+        DefineMethod(regexpClass, Intern("named_captures"u8), RegexpMembers.NamedCaptures);
+        DefineMethod(regexpClass, Intern("names"u8), RegexpMembers.NamesMethod);
+
+        // Define MatchData class
+        var matchDataClass = DefineClass(Intern("MatchData"u8), ObjectClass, MRubyVType.CSharpData);
+
+        // Instance methods
+        DefineMethod(matchDataClass, Intern("[]"u8), MatchDataMembers.OpAref);
+        DefineMethod(matchDataClass, Intern("begin"u8), MatchDataMembers.Begin);
+        DefineMethod(matchDataClass, Intern("end"u8), MatchDataMembers.End);
+        DefineMethod(matchDataClass, Intern("offset"u8), MatchDataMembers.Offset);
+        DefineMethod(matchDataClass, Intern("captures"u8), MatchDataMembers.Captures);
+        DefineMethod(matchDataClass, Intern("to_a"u8), MatchDataMembers.ToA);
+        DefineMethod(matchDataClass, Intern("to_s"u8), MatchDataMembers.ToS);
+        DefineMethod(matchDataClass, Intern("size"u8), MatchDataMembers.Size);
+        DefineMethod(matchDataClass, Intern("length"u8), MatchDataMembers.Length);
+        DefineMethod(matchDataClass, Intern("pre_match"u8), MatchDataMembers.PreMatch);
+        DefineMethod(matchDataClass, Intern("post_match"u8), MatchDataMembers.PostMatch);
+        DefineMethod(matchDataClass, Intern("regexp"u8), MatchDataMembers.Regexp);
+        DefineMethod(matchDataClass, Intern("string"u8), MatchDataMembers.String);
+        DefineMethod(matchDataClass, Intern("named_captures"u8), MatchDataMembers.NamedCaptures);
+        DefineMethod(matchDataClass, Intern("names"u8), MatchDataMembers.NamesMethod);
+        DefineMethod(matchDataClass, Intern("values_at"u8), MatchDataMembers.ValuesAt);
+        DefineMethod(matchDataClass, Intern("inspect"u8), MatchDataMembers.Inspect);
+
+        // Regexp-related String methods
+        DefineMethod(StringClass, Intern("=~"u8), StringRegexpMembers.OpMatch);
+        DefineMethod(StringClass, Intern("match"u8), StringRegexpMembers.Match);
+        DefineMethod(StringClass, Intern("match?"u8), StringRegexpMembers.QMatch);
+        DefineMethod(StringClass, Intern("sub"u8), StringRegexpMembers.Sub);
+        DefineMethod(StringClass, Intern("sub!"u8), StringRegexpMembers.SubBang);
+        DefineMethod(StringClass, Intern("gsub"u8), StringRegexpMembers.Gsub);
+        DefineMethod(StringClass, Intern("gsub!"u8), StringRegexpMembers.GsubBang);
+        DefineMethod(StringClass, Intern("scan"u8), StringRegexpMembers.Scan);
+        DefineMethod(StringClass, Intern("index"u8), StringRegexpMembers.Index);
     }
 
     bool TrySetClassPathLink(RClass outer, RClass c, Symbol name)
