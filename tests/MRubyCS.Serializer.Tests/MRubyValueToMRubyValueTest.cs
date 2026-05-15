@@ -3,12 +3,18 @@ namespace MRubyCS.Serializer.Tests;
 [TestFixture]
 public class MRubyValueToMRubyValueTest
 {
-    MRubyState mrb;
+    MRubyState mrb = default!;
 
     [SetUp]
     public void Setup()
     {
         mrb = MRubyState.Create();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        mrb.Dispose();
     }
 
     [Test]

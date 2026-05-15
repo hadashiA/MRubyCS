@@ -19,6 +19,12 @@ public class EnumAsStringFormatterTest
         mrb = MRubyState.Create();
     }
 
+    [TearDown]
+    public void TearDown()
+    {
+        mrb.Dispose();
+    }
+
     [Test]
     public void Serialize()
     {
