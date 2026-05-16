@@ -263,12 +263,6 @@ mrb.Execute(irep);
 The MRubyCS runtime is pure C#, but the mrb compiler uses the native prism compiler.
 Note that the compiler's supported target platforms are subject to the following limitations.
 
-| OS      | Architecture |
-|:--------|:-------------|
-| Linux   | x64, arm64   |
-| macOS   | x64, arm64   |
-| Windows | x64          |
-
 ##### MRubyCS.Compiler.Cli (dotnet tool)
 
 The `mruby-compiler` CLI supports additional output formats beyond simple `.mrb`:
@@ -306,6 +300,14 @@ $ ./build/host/bin/mrbc -o output.mrb input.rb
 ##### MRubyCS.Compiler (library)
 
 `MRubyCS.Compiler` is a thin wrapper of the C# API for the native compiler.
+
+NOTE: This is a wrapper for native compilers. Currently, only the following platforms are supported:
+
+| OS      | Architecture |
+|:--------|:-------------|
+| Linux   | x64, arm64   |
+| macOS   | x64, arm64   |
+| Windows | x64          |
 
 ```bash
 dotnet add package MRubyCS.Compiler
