@@ -49,8 +49,9 @@ end
   - [Syntax](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [Literals](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/literals.rb), [Lang](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/lang.rb), [Methods](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/methods.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Exception](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/exception.rb), ...
   - Supported Types: [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb), [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [Enumerator](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/enumerator.rb), [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb), [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb), [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb), [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb), [Proc](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/proc.rb), [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb), [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb), [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb), [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb), [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
   - Enumerable extensions ([mruby-enum-ext](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/enum_ext.rb)): `each_cons`, `each_slice`, `each_with_object`, `flat_map`, `group_by`, `sort_by`, `min_by`/`max_by`, `minmax`/`minmax_by`, `tally`, `filter_map`, `chunk`/`chunk_while`, `zip`, `to_h`, `uniq`, `cycle`, etc.
-  - **Optional**
-      - Regexp, IO, File
+  - **Optional (opt-in)** — see [Optional Classes](#optional-classes-opt-in)
+      - `Regexp` / `MatchData` (via `mrb.DefineRegexp()`)
+      - `IO` / `File` / `IOError` (via `mrb.DefineIO()`)
 - **Fiber & async/await integration** — suspend Ruby execution and await C# async methods without blocking threads.
 - **Prism-based compiler** — uses [mruby-compiler2](https://github.com/picoruby/mruby-compiler2), the next-generation mruby compiler built on [Prism](https://github.com/ruby/prism) (the official CRuby parser), for more accurate and modern Ruby syntax support.
 
@@ -68,7 +69,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 
 - As of mruby 4.0, almost all bundled classes/methods are supported.
     - Support for extensions split into [mrbgems](https://github.com/mruby/mruby/tree/master/mrbgems) remains limited.
-- `IO` / `File` are **opt-in**: `MRubyState.Create()` doesn't register them, so embedding hosts that don't need stream/filesystem access aren't paying for it. Call `mrb.DefineIO()` to add them. See [Define async Ruby method (FiberScheduler) — opt-in IO note](#define-async-ruby-method-fiberscheduler).
+- `Regexp` and `IO` / `File` are **opt-in**: `MRubyState.Create()` doesn't register them, so embedding hosts that don't need them aren't paying for it. Call `mrb.DefineRegexp()` / `mrb.DefineIO()` to add them. See [Optional Classes](#optional-classes-opt-in).
 
 ## Table of Contents
 
@@ -93,6 +94,9 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
         - [Symbol/String](#symbolstring)
         - [Array/Hash](#arrayhash)
         - [Embedded custom C# data into MRubyValue](#embedded-custom-c-data-into-mrubyvalue)
+- [Optional Classes (opt-in)](#optional-classes-opt-in)
+    - [Regexp](#regexp)
+    - [IO / File](#io--file)
 - [Fiber (Coroutine)](#fiber-coroutine)
 - [Define async Ruby method (FiberScheduler)](#define-async-ruby-method-fiberscheduler)
     - [Default behavior (no scheduler)](#default-behavior-no-scheduler)
@@ -899,6 +903,76 @@ mrb.DefineMethod(yourClass, mrb.Intern("foo_method"u8), (s, self) =>
 });
 
 ```
+
+
+## Optional Classes (opt-in)
+
+Some bundled classes are **not** registered by `MRubyState.Create()` so that embedding hosts only pay for the surface area they actually need. Enable them explicitly per `MRubyState` instance:
+
+| Class | Enable with | Adds |
+|---|---|---|
+| `Regexp` | `mrb.DefineRegexp()` | `Regexp`, `MatchData`, and `String#=~` / `#match` / `#sub` / `#gsub` / `#scan` / `#index` |
+| `IO` / `File` | `mrb.DefineIO()` | `IO`, `File`, `IOError` |
+
+Both calls are idempotent and must be made **before** compiling/running Ruby code that references the classes.
+
+```cs
+using var mrb = MRubyState.Create();
+mrb.DefineRegexp();
+mrb.DefineIO();
+using var compiler = MRubyCompiler.Create(mrb);
+```
+
+### Regexp
+
+Once enabled, both literal `/.../` regular expressions and `Regexp.new` are available, along with `MatchData` and the regexp-related `String` methods.
+
+```cs
+using var mrb = MRubyState.Create();
+mrb.DefineRegexp();
+using var compiler = MRubyCompiler.Create(mrb);
+
+compiler.LoadSourceCode("""
+    re = /(\w+)@(\w+\.\w+)/
+    if m = "contact: alice@example.com".match(re)
+      puts m[0]        # => "alice@example.com"
+      puts m[1]        # => "alice"
+      puts m[2]        # => "example.com"
+    end
+
+    # case-insensitive flag via Regexp.new
+    Regexp.new("hello", Regexp::IGNORECASE) =~ "HELLO"   # => 0
+
+    # sub / gsub / scan
+    "foo bar foo".gsub(/foo/, "baz")     # => "baz bar baz"
+    "a1 b2 c3".scan(/[a-z]\d/)           # => ["a1", "b2", "c3"]
+    """u8);
+```
+
+### IO / File
+
+`File.read` / `File.write` provide a quick round-trip; `File.open` returns an `IO`/`File` instance for streaming reads and writes. `IOError` is raised when operating on a closed handle.
+
+```cs
+using var mrb = MRubyState.Create();
+mrb.DefineIO();
+using var compiler = MRubyCompiler.Create(mrb);
+
+compiler.LoadSourceCode("""
+    File.write("/tmp/greeting.txt", "hello world")
+    puts File.read("/tmp/greeting.txt")    # => "hello world"
+    puts File.exist?("/tmp/greeting.txt")  # => true
+
+    f = File.open("/tmp/greeting.txt")
+    begin
+      puts f.read
+    ensure
+      f.close
+    end
+    """u8);
+```
+
+When a `FiberScheduler` is installed, `IO`/`File` reads and writes route through the scheduler's stream hooks instead of blocking the host thread. See [Stream I/O hooks](#stream-io-hooks-readstream--readstreamtoend--writestream) for details.
 
 
 ## Fiber (Coroutine)
