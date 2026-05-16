@@ -1,6 +1,6 @@
 # mruby/cs
 
-MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine implementation designed for seamless integration with C# game engines. It combines high Ruby-level compatibility with the performance and extensibility of modern C#.
+MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine implementation  It combines high Ruby-level compatibility with the performance and extensibility of modern C#. 
 
 Easily embed Ruby into Unity or .NET—empowering users to script game logic while keeping your core engine in C#.
 
@@ -13,17 +13,26 @@ Ruby's elegant, expressive syntax makes it ideal for building DSLs (Domain-Speci
 
 ```ruby
 # Example: game event DSL
-quest "The Lost Sword" do
-  trigger :enter, area: :ancient_ruins
-  condition { player.level >= 10 }
+scene :throne_room_betrayal do
+  sequence do
+    camera.focus_on :king, over: 1.2.seconds
+    king.say "You have served me well, knight."
+    wait 0.5.seconds
+    advisor.move_to :behind_king
+    advisor.say "Too well, perhaps."
 
-  on_start do
-    npc(:elder).say "A legendary blade rests within these ruins..."
-    give_item :rusty_map
-  end
+    choice do
+      option "Draw your sword" do
+        player.equip :longsword
+        goto :combat_phase
+      end
 
-  on_complete do
-    reward gold: 500, exp: 1200
+      option "Kneel" do
+        player.animate :kneel
+        king.say "Loyalty. How rare."
+        complete_scene
+      end
+    end
   end
 end
 ```
@@ -40,6 +49,8 @@ end
   - [Syntax](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/syntax.rb), [Literals](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/literals.rb), [Lang](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/lang.rb), [Methods](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/methods.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Exception](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/exception.rb), ...
   - Supported Types: [Array](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/array.rb), [Class](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/class.rb), [Enumerator](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/enumerator.rb), [Fiber](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/fiber.rb), [Float](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/float.rb), [Hash](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/hash.rb), [Integer](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/integer.rb), [Module](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/module.rb), [Nil](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/nil.rb), [Proc](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/proc.rb), [Random](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/random.rb), [Range](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/range.rb), [Symbol](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/symbol.rb), [String](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/string.rb), [Time](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/time.rb)
   - Enumerable extensions ([mruby-enum-ext](https://github.com/hadashiA/MRubyCS/blob/main/tests/MRubyCS.Tests/ruby/test/enum_ext.rb)): `each_cons`, `each_slice`, `each_with_object`, `flat_map`, `group_by`, `sort_by`, `min_by`/`max_by`, `minmax`/`minmax_by`, `tally`, `filter_map`, `chunk`/`chunk_while`, `zip`, `to_h`, `uniq`, `cycle`, etc.
+  - **Optional**
+      - Regexp, IO, File
 - **Fiber & async/await integration** — suspend Ruby execution and await C# async methods without blocking threads.
 - **Prism-based compiler** — uses [mruby-compiler2](https://github.com/picoruby/mruby-compiler2), the next-generation mruby compiler built on [Prism](https://github.com/ruby/prism) (the official CRuby parser), for more accurate and modern Ruby syntax support.
 
