@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 namespace MRubyCS.StdLib;
 
@@ -283,5 +284,54 @@ static class KernelMembers
             return dup;
         }
         return block;
+    });
+
+    [MRubyMethod(OptionalArguments = 1)]
+    public static MRubyMethod Sleep = new((state, self) =>
+    {
+        double seconds;
+        if (state.GetArgumentCount() == 0 || state.GetArgumentAt(0).IsNil)
+        {
+            // Sleep forever — only meaningful with a scheduler that can
+            // wake the fiber via Unblock.
+            seconds = double.PositiveInfinity;
+        }
+        else
+        {
+            seconds = state.GetArgumentAsFloatAt(0);
+        }
+
+        // Dispatch to the scheduler when one is installed and the call site
+        // is inside a non-root fiber. The scheduler hook performs the
+        // Fiber.yield itself (CRuby-style); the resume value is delivered
+        // to the VM stack via the existing vmexec=true path, so the C#
+        // return below is unused on the resume path.
+        if (state.TryGetActiveFiberScheduler(out var scheduler))
+        {
+            // sleep 0 → cooperative yield (Thread.pass semantics).
+            if (seconds <= 0 && !double.IsPositiveInfinity(seconds))
+            {
+                scheduler.Yield();
+                return MRubyValue.Nil;
+            }
+
+            var duration = double.IsPositiveInfinity(seconds)
+                ? Timeout.InfiniteTimeSpan
+                : TimeSpan.FromSeconds(seconds);
+            scheduler.KernelSleep(duration);
+            return MRubyValue.Nil;
+        }
+
+        // Blocking-fiber path: synchronous host-thread sleep.
+        if (double.IsPositiveInfinity(seconds))
+        {
+            state.Raise(Names.NotImplementedError,
+                "sleep without a duration requires a non-blocking fiber and a scheduler"u8);
+        }
+        if (seconds > 0)
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(seconds));
+        }
+        return new MRubyValue((long)seconds);
     });
 }

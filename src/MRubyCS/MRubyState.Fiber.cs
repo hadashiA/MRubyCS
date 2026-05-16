@@ -7,6 +7,30 @@ partial class MRubyState
 {
     public RFiber CurrentFiber => Context.Fiber ??= new RFiber(Context, this, FiberClass);
 
+    public IMRubyFiberScheduler? FiberScheduler { get; private set; }
+
+    /// <summary>
+    /// Returns the installed scheduler iff it can drive the current call
+    /// site (a scheduler is installed AND <see cref="CurrentFiber"/> is
+    /// non-root). Use from Ruby method implementations to decide between
+    /// the cooperative path and the synchronous fallback.
+    /// </summary>
+    public bool TryGetActiveFiberScheduler(
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IMRubyFiberScheduler? scheduler)
+    {
+        scheduler = FiberScheduler is { } s && !CurrentFiber.IsRoot ? s : null;
+        return scheduler is not null;
+    }
+
+    public void SetFiberScheduler(IMRubyFiberScheduler scheduler)
+    {
+        if (scheduler is null) throw new ArgumentNullException(nameof(scheduler));
+        scheduler.Attach(this);
+        FiberScheduler = scheduler;
+    }
+
+    public void ClearFiberScheduler() => FiberScheduler = null;
+
     public RProc ParseBytecodeAsProc(ReadOnlySpan<byte> bytecode)
     {
         var irep = ParseBytecode(bytecode);

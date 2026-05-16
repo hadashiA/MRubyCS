@@ -29,6 +29,12 @@ public class CompositeResolverTest
         mrb = MRubyState.Create();
     }
 
+    [TearDown]
+    public void TearDown()
+    {
+        mrb.Dispose();
+    }
+
     [Test]
     public void CreateWithCustomFormatter()
     {

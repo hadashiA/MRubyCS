@@ -78,6 +78,7 @@ public class SpecTest
     public void After()
     {
         compiler.Dispose();
+        mrb.Dispose();
     }
 
     [Test]

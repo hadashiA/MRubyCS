@@ -13,7 +13,7 @@ public class RDataTest
         };
 
         var data = new RData(userdata);
-        var state = MRubyState.Create();
+        using var state = MRubyState.Create();
 
         state.SetConst(state.Intern("MYDATA"u8), state.ObjectClass, data);
 

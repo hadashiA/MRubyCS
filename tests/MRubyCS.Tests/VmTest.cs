@@ -26,6 +26,7 @@ public class VmTest
     public void After()
     {
         compiler.Dispose();
+        mrb.Dispose();
     }
 
     [Test]

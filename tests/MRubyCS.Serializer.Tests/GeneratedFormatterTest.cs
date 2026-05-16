@@ -3,12 +3,18 @@
 [TestFixture]
 public class GeneratedFormatterTest
 {
-    MRubyState state;
+    MRubyState state = default!;
 
     [SetUp]
     public void Setup()
     {
         state = MRubyState.Create();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        state.Dispose();
     }
 
     [Test]

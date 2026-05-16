@@ -7,7 +7,7 @@ using Utf8StringInterpolation;
 
 namespace MRubyCS;
 
-public partial class MRubyState
+public partial class MRubyState : IDisposable
 {
     public static MRubyState Create(Action<MRubyState> configure)
     {
@@ -34,10 +34,13 @@ public partial class MRubyState
         state.InitRange();
         state.InitEnumerable();
         state.InitFiber();
+        state.InitThread();
         state.InitMrbLib();
         state.InitObjectExt();
         state.InitTime();
         state.InitRandom();
+
+        // IO / File are opt-in: call `state.DefineIO()` to enable them.
 
         return state;
     }
@@ -58,6 +61,8 @@ public partial class MRubyState
     public RClass NilClass { get; private set; } = default!;
     public RClass SymbolClass { get; private set; } = default!;
     public RClass FiberClass { get; private set; } = default!;
+    public RClass IOClass { get; private set; } = default!;
+    public RClass FileClass { get; private set; } = default!;
     public RClass KernelModule { get; private set; } = default!;
     public RClass ExceptionClass { get; private set; } = default!;
     public RClass StandardErrorClass { get; private set; } = default!;
@@ -85,6 +90,40 @@ public partial class MRubyState
         Context = ContextRoot;
         ValueEqualityComparer = new MRubyValueEqualityComparer(this);
         HashKeyEqualityComparer = new MRubyValueHashKeyEqualityComparer(this);
+    }
+
+    bool disposed;
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Core dispose path. Override in derived types to release additional
+    /// resources, calling <c>base.Dispose(disposing)</c>.
+    /// <paramref name="disposing"/> is <c>true</c> when invoked from
+    /// <see cref="Dispose()"/> (safe to touch other managed objects) and
+    /// <c>false</c> when invoked from the finalizer (touch only unmanaged
+    /// state).
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposed) return;
+
+        if (disposing)
+        {
+            FiberScheduler?.Dispose();
+            FiberScheduler = null;
+        }
+
+        disposed = true;
+    }
+
+    ~MRubyState()
+    {
+        Dispose(disposing: false);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -271,6 +310,7 @@ public partial class MRubyState
         DefineMethod(KernelModule, Intern("object_id"u8), KernelMembers.ObjectId);
         DefineMethod(KernelModule, Intern("p"u8), KernelMembers.P);
         DefineMethod(KernelModule, Intern("print"u8), KernelMembers.Print);
+        DefineMethod(KernelModule, Intern("sleep"u8), KernelMembers.Sleep);
         DefineMethod(KernelModule, Intern("remove_instance_variable"u8), KernelMembers.RemoveInstanceVariable);
         DefineMethod(KernelModule, Names.QRespondTo, KernelMembers.RespondTo);
         DefineMethod(KernelModule, Names.QRespondToMissing, MRubyMethod.False);
@@ -628,9 +668,43 @@ public partial class MRubyState
         DefineMethod(FiberClass, Intern("alive?"u8), FiberMembers.Alive);
         DefineClassMethod(FiberClass, Intern("yield"u8), FiberMembers.Yield);
         DefineClassMethod(FiberClass, Intern("current"u8), FiberMembers.Current);
+        DefineClassMethod(FiberClass, Intern("schedule"u8), FiberMembers.Schedule);
 
         DefineClass(Intern("FiberError"u8), StandardErrorClass);
         DefineClass(Names.RegexpError, StandardErrorClass);
+    }
+
+    void InitThread()
+    {
+        // Stub Thread class — MRubyCS doesn't expose OS threads. It exists
+        // to host CRuby-compatible cooperative-scheduling entry points
+        // (notably Thread.pass) that fan out to the fiber scheduler.
+        var threadClass = DefineClass(Intern("Thread"u8), ObjectClass, MRubyVType.Object);
+        DefineClassMethod(threadClass, Intern("pass"u8), ThreadMembers.Pass);
+    }
+
+    /// <summary>
+    /// Registers Ruby <c>IO</c>, <c>File</c>, and <c>IOError</c> classes
+    /// along with their built-in methods. Not called by <see cref="Create()"/>;
+    /// invoke explicitly when the host wants Ruby code to access streams or
+    /// the filesystem. Idempotent — calling more than once redefines.
+    /// </summary>
+    public void DefineIO()
+    {
+        IOClass = DefineClass(Intern("IO"u8), ObjectClass, MRubyVType.Object);
+        DefineMethod(IOClass, Intern("read"u8), IOMembers.Read);
+        DefineMethod(IOClass, Intern("write"u8), IOMembers.Write);
+        DefineMethod(IOClass, Intern("close"u8), IOMembers.Close);
+        DefineMethod(IOClass, Intern("closed?"u8), IOMembers.ClosedQ);
+
+        FileClass = DefineClass(Intern("File"u8), IOClass, MRubyVType.Object);
+        DefineClassMethod(FileClass, Intern("open"u8), FileMembers.Open);
+        DefineClassMethod(FileClass, Intern("read"u8), FileMembers.Read);
+        DefineClassMethod(FileClass, Intern("write"u8), FileMembers.Write);
+        DefineClassMethod(FileClass, Intern("exist?"u8), FileMembers.ExistQ);
+        DefineClassMethod(FileClass, Intern("exists?"u8), FileMembers.ExistQ);
+
+        DefineClass(Intern("IOError"u8), StandardErrorClass);
     }
 
     void InitObjectExt()

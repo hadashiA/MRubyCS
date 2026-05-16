@@ -11,6 +11,12 @@ public class BuiltinClassFormatterTest
         mrb = MRubyState.Create();
     }
 
+    [TearDown]
+    public void TearDown()
+    {
+        mrb.Dispose();
+    }
+
     [Test]
     public void Serialize_Guid()
     {

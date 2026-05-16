@@ -14,6 +14,17 @@ public sealed class RFiber : RObject
     public bool IsAlive => context.State != FiberState.Terminated;
     public bool IsRoot => context == state.ContextRoot;
 
+    internal MRubyState MRubyState => state;
+
+    /// <summary>
+    /// Exception to raise inside the fiber on the next resume. Set by
+    /// <see cref="IMRubyFiberScheduler"/> implementations when an awaited
+    /// task throws, so Ruby code at the yield point observes a normal
+    /// <c>raise</c> (catchable by <c>rescue</c>) instead of the fiber
+    /// silently returning. Cleared automatically once consumed.
+    /// </summary>
+    public RException? PendingException { get; set; }
+
     readonly MRubyContext context = new();
     readonly MRubyState state;
     readonly MultiConsumerValueTaskNotifier<MRubyValue> resumeSource = new();
@@ -199,7 +210,19 @@ public sealed class RFiber : RObject
             state.SwitchToContext(context);
             context.State = FiberState.Running;
 
+            // PendingException is consumed below: vmexec passes it into
+            // Execute so the raise lands at the resumed PC (catchable by a
+            // surrounding Ruby `rescue`); the non-vmexec path falls back to
+            // raising on the spot, which unwinds through the caller's VM.
+            var pending = PendingException;
+            PendingException = null;
+
             MRubyValue result;
+            // Slot (absolute in context.Stack) where the resume value was
+            // written, so Execute's stackKeep below preserves it. -1 means
+            // we didn't write a resume value (Created branch handles its
+            // own arg layout).
+            var resumeWriteSlot = -1;
             if (currentStatus == FiberState.Created)
             {
                 if (context.CurrentCallInfo.Proc == null)
@@ -243,7 +266,8 @@ public sealed class RFiber : RObject
                 if (vmexec)
                 {
                     if (context.CallDepth > 0) context.PopCallStack(); // pop dummy callinfo
-                    context.Stack[context.CallStack[context.CallDepth + 1].StackPointer] = result;
+                    resumeWriteSlot = context.CallStack[context.CallDepth + 1].StackPointer;
+                    context.Stack[resumeWriteSlot] = result;
                 }
             }
 
@@ -253,7 +277,20 @@ public sealed class RFiber : RObject
                 context.VmExecutedByFiber = true;
 
                 ref var callInfo = ref context.CurrentCallInfo;
-                result = state.Execute(callInfo.Proc!.Irep, callInfo.ProgramCounter, args.Length + 1);
+                // stackKeep must protect every slot the resumed bytecode
+                // relies on. Baseline args.Length+1 covers self + args at
+                // slots 0..argc (Created path). For resume-from-yield we
+                // additionally need to preserve the slot where the resume
+                // value was just written -- it lives at the original
+                // Send's dst register A, which can be above the args
+                // window. Without this Execute's ClearStack would wipe it.
+                var stackKeep = args.Length + 1;
+                if (resumeWriteSlot >= 0)
+                {
+                    var resumeSlotRelative = resumeWriteSlot - callInfo.StackPointer + 1;
+                    if (resumeSlotRelative > stackKeep) stackKeep = resumeSlotRelative;
+                }
+                result = state.Execute(callInfo.Proc!.Irep, callInfo.ProgramCounter, stackKeep, pending);
                 state.SwitchToContext(currentContext);
                 currentContext.State = FiberState.Running;
                 // restore values as they may have changed in Fiber.yield
@@ -262,6 +299,7 @@ public sealed class RFiber : RObject
             else
             {
                 context.CurrentCallInfo.MarkContextModify();
+                if (pending is not null) state.Raise(pending);
             }
 
             resumeSource.SetResult(result);
