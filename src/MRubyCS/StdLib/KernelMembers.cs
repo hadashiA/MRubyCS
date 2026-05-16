@@ -301,27 +301,24 @@ static class KernelMembers
             seconds = state.GetArgumentAsFloatAt(0);
         }
 
-        var fiber = state.CurrentFiber;
-        var scheduler = state.FiberScheduler;
-
         // Dispatch to the scheduler when one is installed and the call site
         // is inside a non-root fiber. The scheduler hook performs the
         // Fiber.yield itself (CRuby-style); the resume value is delivered
         // to the VM stack via the existing vmexec=true path, so the C#
         // return below is unused on the resume path.
-        if (scheduler is not null && !fiber.IsRoot)
+        if (state.TryGetActiveFiberScheduler(out var scheduler))
         {
             // sleep 0 → cooperative yield (Thread.pass semantics).
             if (seconds <= 0 && !double.IsPositiveInfinity(seconds))
             {
-                scheduler.Yield(fiber);
+                scheduler.Yield();
                 return MRubyValue.Nil;
             }
 
             var duration = double.IsPositiveInfinity(seconds)
                 ? Timeout.InfiniteTimeSpan
                 : TimeSpan.FromSeconds(seconds);
-            scheduler.KernelSleep(fiber, duration);
+            scheduler.KernelSleep(duration);
             return MRubyValue.Nil;
         }
 

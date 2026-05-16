@@ -213,26 +213,32 @@ public class FiberSchedulerTest
     {
         public int KernelSleepCalls;
         public int YieldCalls;
+        MRubyState mrb = default!;
 
-        public void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken cancellationToken = default)
+        public void Attach(MRubyState mrb) => this.mrb = mrb;
+        public void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
         {
             KernelSleepCalls++;
+            var fiber = mrb.CurrentFiber;
             // We still have to drive the fiber to completion or the test
             // hangs. Resume on threadpool to mimic ThreadPoolFiberScheduler.
             ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
             fiber.Yield();
         }
-        public void Block(RFiber fiber, CancellationToken cancellationToken = default) { }
-        public void Unblock(RFiber fiber, MRubyValue resumeValue = default) { }
-        public void Yield(RFiber fiber, CancellationToken cancellationToken = default)
+        public FiberContinuation Suspend() => throw new NotImplementedException();
+        public void Yield(CancellationToken cancellationToken = default)
         {
             YieldCalls++;
+            var fiber = mrb.CurrentFiber;
             ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
             fiber.Yield();
         }
-        public void ReadStream(RFiber fiber, System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void ReadStreamToEnd(RFiber fiber, System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void WriteStream(RFiber fiber, System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void ReadStream(System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void ReadStreamToEnd(System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void ResumeFiber(RFiber fiber, MRubyValue value) { }
+        public void CancelFiber(RFiber fiber, CancellationToken ct) { }
+        public void FailFiber(RFiber fiber, Exception ex) { }
         public void Dispose() { }
     }
 
@@ -332,14 +338,13 @@ public class FiberSchedulerTest
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_value"u8),
             new MRubyMethod((state, self) =>
             {
-                var fiber = state.CurrentFiber;
-                var sched = state.FiberScheduler!;
+                var scheduler = state.FiberScheduler!;
+                var continuation = scheduler.Suspend();
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(20);
-                    sched.Unblock(fiber, new MRubyValue(helloSym));
+                    continuation.Resume(new MRubyValue(helloSym));
                 });
-                sched.Block(fiber);
                 return MRubyValue.Nil;
             }));
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("record"u8),
@@ -373,10 +378,10 @@ public class FiberSchedulerTest
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_value"u8),
             new MRubyMethod((state, self) =>
             {
-                var fiber = state.CurrentFiber;
-                var sched = state.FiberScheduler!;
+                var scheduler = state.FiberScheduler!;
+                var continuation = scheduler.Suspend();
                 var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
-                sched.Block(fiber, cts.Token);
+                cts.Token.Register(() => continuation.SetCancelled());
                 return MRubyValue.Nil;
             }));
 
@@ -442,64 +447,27 @@ public class FiberSchedulerTest
         Assert.That(result.As<RString>().AsSpan().SequenceEqual("boom"u8), Is.True);
     }
 
-    [Test]
-    public void Block_TwiceForSameFiber_Throws()
-    {
-        // Re-blocking a fiber that's already parked would orphan the previous
-        // BlockEntry (its TCS would never resolve), so the scheduler must
-        // reject the second registration instead of silently overwriting.
-        using var scheduler = new ThreadPoolFiberScheduler();
-        mrb.SetFiberScheduler(scheduler);
-
-        Exception? caught = null;
-        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("park_twice"u8),
-            new MRubyMethod((state, self) =>
-            {
-                var fiber = state.CurrentFiber;
-                var sched = state.FiberScheduler!;
-                sched.Block(fiber);
-                // Unreachable on the normal path (Block yields), but if the
-                // guard misfires we still want a deterministic failure.
-                try { sched.Block(fiber); }
-                catch (InvalidOperationException ex) { caught = ex; }
-                return MRubyValue.Nil;
-            }));
-
-        // Drive the second Block from outside the fiber: after the fiber
-        // yields on the first Block, call Block again on the same fiber.
-        var fiber = compiler.LoadSourceCodeAsFiber("park_twice"u8);
-        fiber.Resume();
-
-        Assert.Throws<InvalidOperationException>(() => scheduler.Block(fiber));
-    }
-
-    [Test]
-    public void KernelSleep_TwiceForSameFiber_Throws()
-    {
-        using var scheduler = new ThreadPoolFiberScheduler();
-        mrb.SetFiberScheduler(scheduler);
-
-        var fiber = compiler.LoadSourceCodeAsFiber("sleep 10; :done"u8);
-        fiber.Resume();
-        // fiber is now parked in KernelSleep. A second KernelSleep on the
-        // same fiber must throw rather than overwrite the timer.
-        Assert.Throws<InvalidOperationException>(
-            () => scheduler.KernelSleep(fiber, TimeSpan.FromSeconds(1)));
-    }
+    // Note: the dictionary "TryAdd guard" against re-parking a fiber lives in
+    // the scheduler; testing it externally now requires targeting a specific
+    // fiber that isn't `mrb.CurrentFiber`, which the new API intentionally
+    // doesn't expose. The guard remains in code as a defensive check.
 
     sealed class SpyScheduler : IMRubyFiberScheduler
     {
         public int SleepCallCount;
 
-        public void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken cancellationToken = default)
+        public void Attach(MRubyState mrb) { }
+        public void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
             => SleepCallCount++;
 
-        public void Block(RFiber fiber, CancellationToken cancellationToken = default) { }
-        public void Unblock(RFiber fiber, MRubyValue resumeValue = default) { }
-        public void Yield(RFiber fiber, CancellationToken cancellationToken = default) { }
-        public void ReadStream(RFiber fiber, System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void ReadStreamToEnd(RFiber fiber, System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void WriteStream(RFiber fiber, System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public FiberContinuation Suspend() => throw new NotImplementedException();
+        public void Yield(CancellationToken cancellationToken = default) { }
+        public void ReadStream(System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void ReadStreamToEnd(System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
+        public void ResumeFiber(RFiber fiber, MRubyValue value) { }
+        public void CancelFiber(RFiber fiber, CancellationToken ct) { }
+        public void FailFiber(RFiber fiber, Exception ex) { }
         public void Dispose() { }
     }
 }

@@ -43,14 +43,12 @@ static class FileMembers
     public static MRubyMethod Read = new((state, self) =>
     {
         var path = PathArg(state);
-        var fiber = state.CurrentFiber;
-        var scheduler = state.FiberScheduler;
 
-        if (scheduler is not null && !fiber.IsRoot)
+        if (state.TryGetActiveFiberScheduler(out var scheduler))
         {
             var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.Read, 4096, useAsync: true);
-            scheduler.ReadStreamToEnd(fiber, stream, disposeStream: true);
+            scheduler.ReadStreamToEnd(stream, disposeStream: true);
             return MRubyValue.Nil;
         }
 
@@ -67,14 +65,12 @@ static class FileMembers
         var path = PathArg(state);
         var content = state.GetArgumentAsStringAt(1);
         var data = content.AsSpan().ToArray();
-        var fiber = state.CurrentFiber;
-        var scheduler = state.FiberScheduler;
 
-        if (scheduler is not null && !fiber.IsRoot)
+        if (state.TryGetActiveFiberScheduler(out var scheduler))
         {
             var stream = new FileStream(path, FileMode.Create, FileAccess.Write,
                 FileShare.None, 4096, useAsync: true);
-            scheduler.WriteStream(fiber, stream, data, disposeStream: true);
+            scheduler.WriteStream(stream, data, disposeStream: true);
             return MRubyValue.Nil;
         }
 

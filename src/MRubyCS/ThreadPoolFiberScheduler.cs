@@ -15,6 +15,7 @@ namespace MRubyCS;
 /// </summary>
 public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
 {
+    MRubyState mrb = default!;
     readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
     readonly ConcurrentDictionary<RFiber, Timer> sleepTimers = new();
 
@@ -23,7 +24,6 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
     readonly TimerCallback sleepFireCallback;
     readonly Action<object?> sleepCancelCallback;
     readonly Action<Task<MRubyValue>, object?> blockContinuationCallback;
-    readonly Action<object?> blockCancelCallback;
 
     sealed class BlockEntry() : TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -45,18 +45,26 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         {
             var fiber = (RFiber)state!;
             if (!blockedFibers.TryRemove(fiber, out _)) return;
-            ResumeSafe(fiber, task.Status == TaskStatus.RanToCompletion
-                ? task.Result
-                : MRubyValue.Nil);
-        };
-        blockCancelCallback = state =>
-        {
-            ((BlockEntry)state!).TrySetCanceled();
+            switch (task.Status)
+            {
+                case TaskStatus.RanToCompletion:
+                    ResumeSafe(fiber, task.Result);
+                    break;
+                case TaskStatus.Faulted:
+                    ResumeWithException(fiber, task.Exception?.InnerException ?? task.Exception!);
+                    break;
+                default:
+                    ResumeSafe(fiber, MRubyValue.Nil);
+                    break;
+            }
         };
     }
 
-    public void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken cancellationToken = default)
+    public void Attach(MRubyState mrb) => this.mrb = mrb;
+
+    public void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         // TODO: Support TimeProvider for testability.
         var timer = new Timer(sleepFireCallback, fiber, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         if (!sleepTimers.TryAdd(fiber, timer))
@@ -76,42 +84,48 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         fiber.Yield();
     }
 
-    public void Block(RFiber fiber, CancellationToken cancellationToken = default)
+    public FiberContinuation Suspend()
     {
+        var fiber = mrb.CurrentFiber;
         var entry = new BlockEntry();
         if (!blockedFibers.TryAdd(fiber, entry))
         {
-            ThrowAlreadyParked(fiber, "Block");
-        }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            cancellationToken.UnsafeRegister(blockCancelCallback, entry);
+            ThrowAlreadyParked(fiber, "Suspend");
         }
 
         entry.Task.ContinueWith(blockContinuationCallback, fiber, CancellationToken.None,
             TaskContinuationOptions.None, TaskScheduler.Default);
 
+        var continuation = new FiberContinuation(this, fiber);
         fiber.Yield();
+        return continuation;
+    }
+
+    public void ResumeFiber(RFiber fiber, MRubyValue value)
+    {
+        if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetResult(value);
+    }
+
+    public void CancelFiber(RFiber fiber, CancellationToken cancellationToken)
+    {
+        if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetCanceled(cancellationToken);
+    }
+
+    public void FailFiber(RFiber fiber, Exception exception)
+    {
+        if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetException(exception);
     }
 
     [System.Diagnostics.CodeAnalysis.DoesNotReturn]
     static void ThrowAlreadyParked(RFiber fiber, string op) =>
         throw new InvalidOperationException(
-            $"{op}: fiber is already parked under this scheduler. Each park must be matched by an Unblock/timeout/cancel before another can be issued.");
-
-    public void Unblock(RFiber fiber, MRubyValue resumeValue = default)
-    {
-        if (blockedFibers.TryGetValue(fiber, out var entry))
-        {
-            entry.TrySetResult(resumeValue);
-        }
-    }
+            $"{op}: fiber is already parked under this scheduler. Each park must be matched by Resume/SetCancelled/SetException/cancel before another can be issued.");
 
     static readonly WaitCallback YieldResumeCallback = static state => ResumeSafe((RFiber)state!);
 
-    public void Yield(RFiber fiber, CancellationToken cancellationToken = default)
+    public void Yield(CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         if (!cancellationToken.IsCancellationRequested)
         {
             ThreadPool.UnsafeQueueUserWorkItem(YieldResumeCallback, fiber);
@@ -120,12 +134,12 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
     }
 
     public void ReadStream(
-        RFiber fiber,
         Stream stream,
         int maxBytes,
         bool disposeStream = false,
         CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         _ = ReadStreamAsync(fiber, stream, maxBytes, disposeStream, cancellationToken);
         fiber.Yield();
     }
@@ -157,11 +171,11 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
     }
 
     public void ReadStreamToEnd(
-        RFiber fiber,
         Stream stream,
         bool disposeStream = false,
         CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         _ = ReadStreamToEndAsync(fiber, stream, disposeStream, cancellationToken);
         fiber.Yield();
     }
@@ -189,12 +203,12 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
     }
 
     public void WriteStream(
-        RFiber fiber,
         Stream stream,
         ReadOnlyMemory<byte> data,
         bool disposeStream = false,
         CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         _ = WriteStreamAsync(fiber, stream, data, disposeStream, cancellationToken);
         fiber.Yield();
     }

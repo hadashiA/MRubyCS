@@ -11,17 +11,14 @@ static class IOMembers
         var io = self.As<RIO>();
         EnsureOpen(state, io);
         var stream = io.Stream!;
-
-        var fiber = state.CurrentFiber;
-        var scheduler = state.FiberScheduler;
+        state.TryGetActiveFiberScheduler(out var scheduler);
         var hasArg = state.GetArgumentCount() > 0 && !state.GetArgumentAt(0).IsNil;
 
         if (!hasArg)
         {
-            // Read-to-EOF path.
-            if (scheduler is not null && !fiber.IsRoot)
+            if (scheduler is not null)
             {
-                scheduler.ReadStreamToEnd(fiber, stream);
+                scheduler.ReadStreamToEnd(stream);
                 return MRubyValue.Nil;
             }
             using var ms = new MemoryStream();
@@ -33,9 +30,9 @@ static class IOMembers
         if (n < 0) state.Raise(Names.ArgumentError, "negative length"u8);
         if (n == 0) return state.NewString([]);
 
-        if (scheduler is not null && !fiber.IsRoot)
+        if (scheduler is not null)
         {
-            scheduler.ReadStream(fiber, stream, n);
+            scheduler.ReadStream(stream, n);
             return MRubyValue.Nil;
         }
 
@@ -56,15 +53,12 @@ static class IOMembers
         var arg = state.GetArgumentAsStringAt(0);
         var bytes = arg.AsSpan();
 
-        var fiber = state.CurrentFiber;
-        var scheduler = state.FiberScheduler;
-
-        if (scheduler is not null && !fiber.IsRoot)
+        if (state.TryGetActiveFiberScheduler(out var scheduler))
         {
             // Copy because the source may outlive `bytes`'s lifetime once we
             // yield. Cheap relative to the syscall.
             var data = bytes.ToArray();
-            scheduler.WriteStream(fiber, stream, data);
+            scheduler.WriteStream(stream, data);
             return MRubyValue.Nil;
         }
 

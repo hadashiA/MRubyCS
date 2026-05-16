@@ -1097,7 +1097,7 @@ MRubyCS exposes a CRuby-style `Fiber::Scheduler` hook surface (`IMRubyFiberSched
 | `Thread.pass` | `Yield` | Cooperative yield |
 | `IO#read(n)` / `File.read` | `ReadStream` / `ReadStreamToEnd` | Resumes with a `String` of the read bytes (or `nil` at EOF for bounded reads) |
 | `IO#write(s)` / `File.write` | `WriteStream` | Resumes with the bytes-written count as `Integer` |
-| (host-defined) | `Block` / `Unblock` | Park a fiber on an arbitrary external completion |
+| (host-defined) | `Suspend` → `FiberContinuation.Resume` | Park a fiber on an arbitrary external completion |
 
 > [!NOTE]
 > The `IO` / `File` classes are **opt-in** — `MRubyState.Create()` does NOT register them. Call `mrb.DefineIO()` before compiling/running Ruby code that uses them. Hosts that don't need stream/filesystem access can omit the call and the classes simply don't exist in Ruby.
@@ -1153,9 +1153,9 @@ await fiber.WaitForTerminateAsync();
 > [!IMPORTANT]
 > `MRubyState` takes ownership of the installed scheduler: disposing the state disposes the scheduler too. Don't share a single scheduler instance across multiple `MRubyState`s.
 
-#### Combining C# `async`/`await` with `Block` / `Unblock`
+#### Combining C# `async`/`await` with `Suspend`
 
-`Block` / `Unblock` lets you park a Ruby fiber on an arbitrary external event. The Ruby side stays suspended; the C# side completes its work off the VM thread and `Unblock`s the fiber with the result, which is delivered as the apparent return value of the C# method that parked it.
+`Suspend` parks the current fiber and returns a `FiberContinuation` handle. The Ruby side stays suspended; the C# side completes async work off the VM thread and calls `continuation.Resume(value)` (or `SetCancelled` / `SetException`) — the value is delivered as the apparent return of the C# method that called `Suspend`.
 
 ```cs
 mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
@@ -1164,22 +1164,21 @@ mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
 mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_http"u8), (state, _) =>
 {
     var url = state.GetArgumentAsStringAt(0).ToString();
-    var fiber = state.CurrentFiber;
-    var sched = state.FiberScheduler!;
+    var scheduler = state.FiberScheduler!;
+    var continuation = scheduler.Suspend(); // yields the fiber internally
 
-    // 1. Arrange the Unblock first — Block yields internally, so anything
-    //    after `Block(...)` won't run until the fiber is resumed.
     _ = Task.Run(async () =>
     {
-        using var client = new HttpClient();
-        var body = await client.GetStringAsync(url);
-        sched.Unblock(fiber, state.NewString(body));
+        try
+        {
+            using var client = new HttpClient();
+            var body = await client.GetStringAsync(url);
+            continuation.Resume(state.NewString(body));
+        }
+        catch (Exception ex) { continuation.SetException(ex); }
     });
 
-    // 2. Park + yield. The matching Unblock above delivers the response
-    //    body into Ruby as if it were this method's return value.
-    sched.Block(fiber);
-    return MRubyValue.Nil; // unreached — Unblock's value replaces this
+    return MRubyValue.Nil; // unreached — continuation.Resume's value replaces this
 });
 
 var fiber = compiler.LoadSourceCodeAsFiber("""
@@ -1192,11 +1191,12 @@ await fiber.WaitForTerminateAsync();
 
 Mechanics:
 
-- `Block(fiber)` records the fiber as parked, then internally calls `Fiber.yield` to unwind the VM back to the caller of `Resume` (mirroring CRuby's `Fiber::Scheduler#block` convention).
-- `Unblock(fiber, value)` schedules `fiber.Resume(value)`; `value` is delivered into Ruby as the apparent return of the C# method that called `Block`.
-- Arrange the `Unblock` plumbing *before* calling `Block`. Once `Block` returns control to the VM, the rest of your C# method body is dead code on the parking path.
-- Both calls may originate from any thread; the scheduler is responsible for hopping back to the VM thread before resuming (see [Custom Schedulers](#custom-schedulers) below).
-- Re-blocking an already-parked fiber throws `InvalidOperationException`. Each `Block` must be matched by an `Unblock` / cancellation before another can be issued.
+- `Suspend(mrb)` registers the parking state, then calls `Fiber.yield` to unwind the VM back to the caller of `Resume`. The returned `FiberContinuation` captures the parked fiber.
+- `continuation.Resume(value)` schedules `fiber.Resume(value)`. The actual resume is deferred to the scheduler's preferred thread, so calling from inline ContinueWith or sync-completed task is safe.
+- `continuation.SetCancelled()` resumes the fiber with `nil` (cancellation semantics).
+- `continuation.SetException(ex)` injects `ex` as a Ruby exception on resume (catchable by `rescue`).
+- Settling is **one-shot** — the first of Resume/SetCancelled/SetException wins; subsequent calls are no-op.
+- The fiber is yielded *inside* `Suspend` — there's no "arrange-Resume-before-Suspend" race window like with the old `Block`/`Unblock` API.
 
 #### Stream I/O hooks (`ReadStream` / `ReadStreamToEnd` / `WriteStream`)
 
@@ -1208,7 +1208,7 @@ The bundled `IO` / `File` primitives — once registered via `mrb.DefineIO()` (s
 
 All three accept an optional `disposeStream: true` flag — the scheduler disposes the stream after the I/O completes (before resume), convenient for `File.read` / `File.write` style operations.
 
-**No user callback in the continuation chain.** Hosts cannot inject code between the scheduler's `await stream.ReadAsync(...)` and `fiber.Resume(...)`: the only thing that runs there is the scheduler's own `state.NewString(buffer)` call. This keeps thread-affinity control entirely in the scheduler. For operations that need richer host logic (HTTP clients, custom marshalling, etc.), use `Block` / `Unblock` (above) and arrange the async work yourself.
+**No user callback in the continuation chain.** Hosts cannot inject code between the scheduler's `await stream.ReadAsync(...)` and `fiber.Resume(...)`: the only thing that runs there is the scheduler's own `state.NewString(buffer)` call. This keeps thread-affinity control entirely in the scheduler. For operations that need richer host logic (HTTP clients, custom marshalling, etc.), use `Suspend` (above) and arrange the async work yourself.
 
 ```cs
 // Host-defined: read up to n bytes from a custom stream.
@@ -1285,40 +1285,46 @@ mrb.SetFiberScheduler(new UnityFiberScheduler());
 Implement `IMRubyFiberScheduler` to integrate MRubyCS with your own async runtime:
 
 ```cs
+public abstract class FiberContinuation
+{
+    public RFiber Fiber { get; }
+    public void Resume(MRubyValue value = default);                       // one-shot
+    public void SetCancelled(CancellationToken ct = default);             // resumes with nil
+    public void SetException(Exception exception);                        // catchable by Ruby rescue
+}
+
 public interface IMRubyFiberScheduler : IDisposable
 {
-    // Parameter convention: RFiber first, CancellationToken last.
-    void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken ct = default);
-    void Block(RFiber fiber, CancellationToken ct = default);
-    void Unblock(RFiber fiber, MRubyValue resumeValue = default);
-    void Yield(RFiber fiber, CancellationToken ct = default);
+    // Called once by MRubyState.SetFiberScheduler to bind the scheduler.
+    void Attach(MRubyState mrb);
 
-    // Stream I/O. Resume values are fixed (String for reads, Integer for
-    // writes), so the scheduler owns the read buffer (ArrayPool /
-    // ArrayBufferWriter) and constructs the resulting RString on the VM
-    // thread — no user callback is invoked between scheduler-managed
-    // continuations.
+    // Operate on mrb.CurrentFiber (captured at hook entry).
+    void KernelSleep(TimeSpan duration, CancellationToken ct = default);
+    void Yield(CancellationToken ct = default);
+    FiberContinuation Suspend();
+
+    // Stream I/O — scheduler owns the read buffer and the RString construction.
     void ReadStream(
-        RFiber fiber, Stream stream, int maxBytes,
+        Stream stream, int maxBytes,
         bool disposeStream = false, CancellationToken ct = default);
 
     void ReadStreamToEnd(
-        RFiber fiber, Stream stream,
+        Stream stream,
         bool disposeStream = false, CancellationToken ct = default);
 
     void WriteStream(
-        RFiber fiber, Stream stream, ReadOnlyMemory<byte> data,
+        Stream stream, ReadOnlyMemory<byte> data,
         bool disposeStream = false, CancellationToken ct = default);
 }
 ```
 
 Contract:
 
-- **All wait hooks (`KernelSleep` / `Block` / `Yield` / `Await`) yield internally** (CRuby `Fiber::Scheduler` convention). The implementation registers the wake-up plumbing (Timer / completion source / etc.) and then calls `fiber.Yield()` before returning. The "return" the caller observes is actually the resume value being plumbed into the VM stack.
+- **All wait hooks (`KernelSleep` / `Yield` / `Suspend` / `Read*` / `WriteStream`) yield internally** (CRuby `Fiber::Scheduler` convention). The implementation registers the wake-up plumbing (Timer / completion source / etc.) and then calls `fiber.Yield()` before returning.
 - **Thread affinity is the scheduler's responsibility.** MRubyCS does not capture a `SynchronizationContext` on its own. The scheduler must arrange for `fiber.Resume()` to run on the same thread the VM was last entered on (or whichever thread your host designates as the VM thread).
 - **No Ruby re-entrancy.** Hooks must not call back into Ruby code (no `state.Send`, no synchronous `fiber.Resume`). `fiber.Yield()` is the one expected call into the VM — it unwinds rather than invokes.
-- **`Await` exceptions are deliverable to Ruby.** When the awaited task throws, set `fiber.PendingException = new RException(...)` and call `fiber.Resume()`. The VM raises that exception at the resume point, so a surrounding Ruby `begin / rescue` catches it normally.
-- **No double-parking.** A fiber is only parked under one wait at a time. The bundled schedulers throw `InvalidOperationException` on a second `Block`/`KernelSleep` for the already-parked fiber; custom schedulers should follow suit.
+- **Exceptions are deliverable to Ruby.** When async work throws, set `fiber.PendingException = new RException(...)` and call `fiber.Resume()` (or for `Suspend`, call `continuation.SetException(ex)`). The VM raises that exception at the resume point, so a surrounding Ruby `begin / rescue` catches it normally.
+- **No double-parking.** A fiber is only parked under one wait at a time. The bundled schedulers throw `InvalidOperationException` on a second `Suspend`/`KernelSleep` for the already-parked fiber; custom schedulers should follow suit.
 
 See [`ThreadPoolFiberScheduler.cs`](src/MRubyCS/ThreadPoolFiberScheduler.cs) and [`SynchronizationContextFiberScheduler.cs`](src/MRubyCS/SynchronizationContextFiberScheduler.cs) in the source tree for complete reference implementations, including cancellation handling and `PendingException` plumbing.
 

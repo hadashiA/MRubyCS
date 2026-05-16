@@ -16,11 +16,9 @@ static class ThreadMembers
     [MRubyMethod]
     public static MRubyMethod Pass = new((state, _) =>
     {
-        var fiber = state.CurrentFiber;
-        var scheduler = state.FiberScheduler;
-        if (scheduler is not null && !fiber.IsRoot)
+        if (state.TryGetActiveFiberScheduler(out var scheduler))
         {
-            scheduler.Yield(fiber);
+            scheduler.Yield();
         }
         return MRubyValue.Nil;
     });

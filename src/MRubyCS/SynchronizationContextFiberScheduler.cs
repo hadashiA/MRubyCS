@@ -22,8 +22,8 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
     readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
     readonly ConcurrentDictionary<RFiber, CancellationTokenSource> sleepCancellations = new();
 
-    readonly Action<object?> blockCancelCallback;
     readonly SendOrPostCallback postResumeCallback;
+    MRubyState mrb = default!;
 
     sealed class BlockEntry() : TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -78,15 +78,13 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
             try { fiber.Resume(value); }
             catch { /* propagated via resumeSource */ }
         };
-
-        blockCancelCallback = s =>
-        {
-            ((BlockEntry)s!).TrySetCanceled();
-        };
     }
 
-    public void KernelSleep(RFiber fiber, TimeSpan duration, CancellationToken cancellationToken = default)
+    public void Attach(MRubyState mrb) => this.mrb = mrb;
+
+    public void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         var cts = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
             : new CancellationTokenSource();
@@ -120,22 +118,19 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         }
     }
 
-    public void Block(RFiber fiber, CancellationToken cancellationToken = default)
+    public FiberContinuation Suspend()
     {
+        var fiber = mrb.CurrentFiber;
         var entry = new BlockEntry();
         if (!blockedFibers.TryAdd(fiber, entry))
         {
-            ThrowAlreadyParked(fiber, "Block");
-        }
-
-        if (cancellationToken.CanBeCanceled)
-        {
-            cancellationToken.UnsafeRegister(blockCancelCallback, entry);
+            ThrowAlreadyParked(fiber, "Suspend");
         }
 
         _ = RunAsync();
+        var continuation = new FiberContinuation(this, fiber);
         fiber.Yield();
-        return;
+        return continuation;
 
         async ValueTask RunAsync()
         {
@@ -143,11 +138,12 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
             // before our resume; otherwise an already-completed entry.Task
             // would trigger a "double resume" on the VM.
             await Task.Yield();
+            if (!blockedFibers.TryRemove(fiber, out _)) return;
+
             MRubyValue value;
             try { value = await entry.Task; }
-            catch { value = MRubyValue.Nil; }
-
-            if (!blockedFibers.TryRemove(fiber, out _)) return;
+            catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
+            catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
             TryResume(fiber, value);
         }
     }
@@ -155,18 +151,26 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
     [System.Diagnostics.CodeAnalysis.DoesNotReturn]
     static void ThrowAlreadyParked(RFiber fiber, string op) =>
         throw new InvalidOperationException(
-            $"{op}: fiber is already parked under this scheduler. Each park must be matched by an Unblock/timeout/cancel before another can be issued.");
+            $"{op}: fiber is already parked under this scheduler. Each park must be matched by Resume/SetCancelled/SetException/cancel before another can be issued.");
 
-    public void Unblock(RFiber fiber, MRubyValue resumeValue = default)
+    public void ResumeFiber(RFiber fiber, MRubyValue value)
     {
-        if (blockedFibers.TryGetValue(fiber, out var entry))
-        {
-            entry.TrySetResult(resumeValue);
-        }
+        if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetResult(value);
     }
 
-    public void Yield(RFiber fiber, CancellationToken cancellationToken = default)
+    public void CancelFiber(RFiber fiber, CancellationToken cancellationToken)
     {
+        if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetCanceled(cancellationToken);
+    }
+
+    public void FailFiber(RFiber fiber, Exception exception)
+    {
+        if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetException(exception);
+    }
+
+    public void Yield(CancellationToken cancellationToken = default)
+    {
+        var fiber = mrb.CurrentFiber;
         if (!cancellationToken.IsCancellationRequested)
         {
             ScheduleResume(fiber, default);
@@ -175,12 +179,12 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
     }
 
     public void ReadStream(
-        RFiber fiber,
         Stream stream,
         int maxBytes,
         bool disposeStream = false,
         CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         _ = RunAsync();
         fiber.Yield();
         return;
@@ -209,11 +213,11 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
     }
 
     public void ReadStreamToEnd(
-        RFiber fiber,
         Stream stream,
         bool disposeStream = false,
         CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         _ = RunAsync();
         fiber.Yield();
         return;
@@ -241,12 +245,12 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
     }
 
     public void WriteStream(
-        RFiber fiber,
         Stream stream,
         ReadOnlyMemory<byte> data,
         bool disposeStream = false,
         CancellationToken cancellationToken = default)
     {
+        var fiber = mrb.CurrentFiber;
         _ = RunAsync();
         fiber.Yield();
         return;
