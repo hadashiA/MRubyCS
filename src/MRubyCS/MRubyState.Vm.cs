@@ -24,6 +24,42 @@ partial class MRubyState
     public MRubyValue Send(MRubyValue self, Symbol methodId) =>
         Send(self, methodId, ReadOnlySpan<MRubyValue>.Empty);
 
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0) =>
+        Send(self, methodId, MemoryMarshal.CreateReadOnlySpan(ref arg0, 1), null, null);
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0, MRubyValue arg1)
+    {
+        var args = (arg0, arg1);
+        return Send(
+            self,
+            methodId,
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<(MRubyValue, MRubyValue), MRubyValue>(ref args), 2),
+            null,
+            null);
+    }
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0, MRubyValue arg1, MRubyValue arg2)
+    {
+        var args = (arg0, arg1, arg2);
+        return Send(
+            self,
+            methodId,
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<(MRubyValue, MRubyValue, MRubyValue), MRubyValue>(ref args), 3),
+            null,
+            null);
+    }
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0, MRubyValue arg1, MRubyValue arg2, MRubyValue arg3)
+    {
+        var args = (arg0, arg1, arg2, arg3);
+        return Send(
+            self,
+            methodId,
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<(MRubyValue, MRubyValue, MRubyValue, MRubyValue), MRubyValue>(ref args), 4),
+            null,
+            null);
+    }
+
     public MRubyValue Send(MRubyValue self, Symbol methodId, params ReadOnlySpan<MRubyValue> args) =>
         Send(self, methodId, args, null, null);
 
@@ -32,6 +68,45 @@ partial class MRubyState
         Symbol methodId,
         RProc block) =>
         Send(self, methodId, ReadOnlySpan<MRubyValue>.Empty, null, block);
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0, RProc block) =>
+        Send(self, methodId, MemoryMarshal.CreateReadOnlySpan(ref arg0, 1), null, block);
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0, MRubyValue arg1, RProc block)
+    {
+        var args = (arg0, arg1);
+        return Send(
+            self,
+            methodId,
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<(MRubyValue, MRubyValue), MRubyValue>(ref args), 2),
+            null,
+            block);
+    }
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0, MRubyValue arg1, MRubyValue arg2, RProc block)
+    {
+        var args = (arg0, arg1, arg2);
+        return Send(
+            self,
+            methodId,
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<(MRubyValue, MRubyValue, MRubyValue), MRubyValue>(ref args), 3),
+            null,
+            block);
+    }
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, MRubyValue arg0, MRubyValue arg1, MRubyValue arg2, MRubyValue arg3, RProc block)
+    {
+        var args = (arg0, arg1, arg2, arg3);
+        return Send(
+            self,
+            methodId,
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<(MRubyValue, MRubyValue, MRubyValue, MRubyValue), MRubyValue>(ref args), 4),
+            null,
+            block);
+    }
+
+    public MRubyValue Send(MRubyValue self, Symbol methodId, ReadOnlySpan<KeyValuePair<Symbol, MRubyValue>> kargs) =>
+        Send(self, methodId, ReadOnlySpan<MRubyValue>.Empty, kargs, null);
 
     public MRubyValue Send(
         MRubyValue self,
