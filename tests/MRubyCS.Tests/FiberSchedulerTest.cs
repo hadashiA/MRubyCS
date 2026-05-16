@@ -236,9 +236,9 @@ public class FiberSchedulerTest
         public void ReadStream(System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
         public void ReadStreamToEnd(System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
         public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void ResumeFiber(RFiber fiber, MRubyValue value) { }
-        public void CancelFiber(RFiber fiber, CancellationToken ct) { }
-        public void FailFiber(RFiber fiber, Exception ex) { }
+        public void SetResult(RFiber fiber, MRubyValue value) { }
+        public void SetCancelled(RFiber fiber, CancellationToken ct) { }
+        public void SetException(RFiber fiber, Exception ex) { }
         public void Dispose() { }
     }
 
@@ -465,9 +465,9 @@ public class FiberSchedulerTest
         public void ReadStream(System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
         public void ReadStreamToEnd(System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
         public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void ResumeFiber(RFiber fiber, MRubyValue value) { }
-        public void CancelFiber(RFiber fiber, CancellationToken ct) { }
-        public void FailFiber(RFiber fiber, Exception ex) { }
+        public void SetResult(RFiber fiber, MRubyValue value) { }
+        public void SetCancelled(RFiber fiber, CancellationToken ct) { }
+        public void SetException(RFiber fiber, Exception ex) { }
         public void Dispose() { }
     }
 }

@@ -57,7 +57,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 
 - As of mruby 4.0, almost all bundled classes/methods are supported.
     - Support for extensions split into [mrbgems](https://github.com/mruby/mruby/tree/master/mrbgems) remains limited.
-- `IO` / `File` are **opt-in**: `MRubyState.Create()` doesn't register them, so embedding hosts that don't need stream/filesystem access aren't paying for it. Call `mrb.DefineIO()` to add them. See [Fiber Scheduler — opt-in IO note](#fiber-scheduler).
+- `IO` / `File` are **opt-in**: `MRubyState.Create()` doesn't register them, so embedding hosts that don't need stream/filesystem access aren't paying for it. Call `mrb.DefineIO()` to add them. See [Define async Ruby method (FiberScheduler) — opt-in IO note](#define-async-ruby-method-fiberscheduler).
 
 ## Table of Contents
 
@@ -83,6 +83,13 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
         - [Array/Hash](#arrayhash)
         - [Embedded custom C# data into MRubyValue](#embedded-custom-c-data-into-mrubyvalue)
 - [Fiber (Coroutine)](#fiber-coroutine)
+- [Define async Ruby method (FiberScheduler)](#define-async-ruby-method-fiberscheduler)
+    - [Default behavior (no scheduler)](#default-behavior-no-scheduler)
+    - [With a scheduler installed](#with-a-scheduler-installed)
+    - [Combining C# `async`/`await` with `Suspend`](#combining-c-asyncawait-with-suspend)
+    - [Stream I/O hooks](#stream-io-hooks-readstream--readstreamtoend--writestream)
+    - [Built-in Schedulers](#built-in-schedulers)
+    - [Custom Schedulers](#custom-schedulers)
 - [MRubyCS.Serializer](#mrubycsserializer)
 
 ## Installation
@@ -1087,7 +1094,7 @@ mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self)
  fiber.resume_by_csharp
 ```
 
-### Fiber Scheduler
+## Define async Ruby method (FiberScheduler)
 
 MRubyCS exposes a CRuby-style `Fiber::Scheduler` hook surface (`IMRubyFiberScheduler`) so that blocking Ruby primitives can cooperate with a C# async runtime instead of blocking the host thread. The hooks currently route the following primitives:
 
@@ -1107,7 +1114,7 @@ MRubyCS exposes a CRuby-style `Fiber::Scheduler` hook surface (`IMRubyFiberSched
 > mrb.DefineIO();   // adds IO, File, IOError
 > ```
 
-#### Default behavior (no scheduler)
+### Default behavior (no scheduler)
 
 By default, no scheduler is installed. In this mode:
 
@@ -1127,7 +1134,7 @@ compiler.LoadSourceCode("sleep 1; :done"u8);
 
 This is the right default for CLI tools and tests that don't need cooperative scheduling.
 
-#### With a scheduler installed
+### With a scheduler installed
 
 `state.SetFiberScheduler(...)` swaps blocking primitives for cooperative ones. When a non-root fiber calls `sleep`, the VM yields back to its caller instead of blocking; the scheduler arranges for the fiber to be resumed when the deadline expires.
 
@@ -1153,7 +1160,7 @@ await fiber.WaitForTerminateAsync();
 > [!IMPORTANT]
 > `MRubyState` takes ownership of the installed scheduler: disposing the state disposes the scheduler too. Don't share a single scheduler instance across multiple `MRubyState`s.
 
-#### Combining C# `async`/`await` with `Suspend`
+### Combining C# `async`/`await` with `Suspend`
 
 `Suspend` parks the current fiber and returns a `FiberContinuation` handle. The Ruby side stays suspended; the C# side completes async work off the VM thread and calls `continuation.Resume(value)` (or `SetCancelled` / `SetException`) — the value is delivered as the apparent return of the C# method that called `Suspend`.
 
@@ -1198,7 +1205,7 @@ Mechanics:
 - Settling is **one-shot** — the first of Resume/SetCancelled/SetException wins; subsequent calls are no-op.
 - The fiber is yielded *inside* `Suspend` — there's no "arrange-Resume-before-Suspend" race window like with the old `Block`/`Unblock` API.
 
-#### Stream I/O hooks (`ReadStream` / `ReadStreamToEnd` / `WriteStream`)
+### Stream I/O hooks (`ReadStream` / `ReadStreamToEnd` / `WriteStream`)
 
 The bundled `IO` / `File` primitives — once registered via `mrb.DefineIO()` (see the opt-in note above) — delegate to specialized scheduler hooks for `Stream` reads and writes:
 
@@ -1234,6 +1241,7 @@ end
 ### Built-in Schedulers
 
 #### `ThreadPoolFiberScheduler`
+
 
 Default implementation, shipped in the `MRubyCS` package. Backed by .NET `Task`s and `Timer`s; resumes fire on threadpool threads. Suitable for tests, CLI tools, and any host that is happy to receive resumes on the threadpool (or that doesn't care about thread affinity).
 
@@ -1285,12 +1293,15 @@ mrb.SetFiberScheduler(new UnityFiberScheduler());
 Implement `IMRubyFiberScheduler` to integrate MRubyCS with your own async runtime:
 
 ```cs
-public abstract class FiberContinuation
+// readonly struct — holds the scheduler reference and dispatches settle
+// operations through it. Idempotency is delegated to the underlying parking
+// entry (one-shot).
+public readonly struct FiberContinuation
 {
     public RFiber Fiber { get; }
-    public void Resume(MRubyValue value = default);                       // one-shot
-    public void SetCancelled(CancellationToken ct = default);             // resumes with nil
-    public void SetException(Exception exception);                        // catchable by Ruby rescue
+    public void Resume(MRubyValue value = default);                       // → scheduler.SetResult
+    public void SetCancelled(CancellationToken ct = default);             // → scheduler.SetCancelled
+    public void SetException(Exception exception);                        // → scheduler.SetException
 }
 
 public interface IMRubyFiberScheduler : IDisposable
@@ -1315,6 +1326,11 @@ public interface IMRubyFiberScheduler : IDisposable
     void WriteStream(
         Stream stream, ReadOnlyMemory<byte> data,
         bool disposeStream = false, CancellationToken ct = default);
+
+    // FiberContinuation dispatch — called via the struct, not directly.
+    void SetResult(RFiber fiber, MRubyValue value);
+    void SetCancelled(RFiber fiber, CancellationToken cancellationToken);
+    void SetException(RFiber fiber, Exception exception);
 }
 ```
 

@@ -28,7 +28,7 @@ public readonly struct FiberContinuation
     /// <see cref="RFiber.Resume"/> is deferred to the scheduler's preferred
     /// thread; calling this from inside the parent VM execution is safe.
     /// </summary>
-    public void Resume(MRubyValue value = default) => scheduler.ResumeFiber(Fiber, value);
+    public void Resume(MRubyValue value = default) => scheduler.SetResult(Fiber, value);
 
     /// <summary>
     /// Resume the fiber as if cancelled. Delivers <c>nil</c> as the resume
@@ -37,7 +37,7 @@ public readonly struct FiberContinuation
     /// the underlying <see cref="OperationCanceledException"/>.
     /// </summary>
     public void SetCancelled(CancellationToken cancellationToken = default)
-        => scheduler.CancelFiber(Fiber, cancellationToken);
+        => scheduler.SetCancelled(Fiber, cancellationToken);
 
     /// <summary>
     /// Resume the fiber with an exception. The scheduler wraps
@@ -48,7 +48,7 @@ public readonly struct FiberContinuation
     public void SetException(Exception exception)
     {
         if (exception is null) throw new ArgumentNullException(nameof(exception));
-        scheduler.FailFiber(Fiber, exception);
+        scheduler.SetException(Fiber, exception);
     }
 }
 
@@ -126,7 +126,7 @@ public interface IMRubyFiberScheduler : IDisposable
     // First call wins; subsequent calls are no-op (the underlying parking
     // entry is one-shot).
 
-    void ResumeFiber(RFiber fiber, MRubyValue value);
-    void CancelFiber(RFiber fiber, CancellationToken cancellationToken);
-    void FailFiber(RFiber fiber, Exception exception);
+    void SetResult(RFiber fiber, MRubyValue value);
+    void SetCancelled(RFiber fiber, CancellationToken cancellationToken);
+    void SetException(RFiber fiber, Exception exception);
 }

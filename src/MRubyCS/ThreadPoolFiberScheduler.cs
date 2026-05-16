@@ -101,17 +101,17 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         return continuation;
     }
 
-    public void ResumeFiber(RFiber fiber, MRubyValue value)
+    public void SetResult(RFiber fiber, MRubyValue value)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetResult(value);
     }
 
-    public void CancelFiber(RFiber fiber, CancellationToken cancellationToken)
+    public void SetCancelled(RFiber fiber, CancellationToken cancellationToken)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetCanceled(cancellationToken);
     }
 
-    public void FailFiber(RFiber fiber, Exception exception)
+    public void SetException(RFiber fiber, Exception exception)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetException(exception);
     }

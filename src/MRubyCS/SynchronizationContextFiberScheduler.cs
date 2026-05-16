@@ -96,25 +96,26 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
 
         _ = SleepAsync(fiber, duration, cts);
         fiber.Yield();
-    }
+        return;
 
-    async ValueTask SleepAsync(RFiber fiber, TimeSpan duration, CancellationTokenSource cts)
-    {
-        try
+        async ValueTask SleepAsync(RFiber fiber, TimeSpan duration, CancellationTokenSource cts)
         {
-            // Force async boundary so the caller-side fiber.Yield() runs
-            // before our resume; otherwise a zero-duration Delay would
-            // trigger a "double resume" on the VM.
-            await Task.Yield();
-            try { await Task.Delay(duration, cts.Token); }
-            catch (OperationCanceledException) { /* fall through to resume */ }
+            try
+            {
+                // Force async boundary so the caller-side fiber.Yield() runs
+                // before our resume; otherwise a zero-duration Delay would
+                // trigger a "double resume" on the VM.
+                await Task.Yield();
+                try { await Task.Delay(duration, cts.Token); }
+                catch (OperationCanceledException) { /* fall through to resume */ }
 
-            if (!sleepCancellations.TryRemove(fiber, out _)) return;
-            TryResume(fiber, MRubyValue.Nil);
-        }
-        finally
-        {
-            cts.Dispose();
+                if (!sleepCancellations.TryRemove(fiber, out _)) return;
+                TryResume(fiber, MRubyValue.Nil);
+            }
+            finally
+            {
+                cts.Dispose();
+            }
         }
     }
 
@@ -153,17 +154,17 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         throw new InvalidOperationException(
             $"{op}: fiber is already parked under this scheduler. Each park must be matched by Resume/SetCancelled/SetException/cancel before another can be issued.");
 
-    public void ResumeFiber(RFiber fiber, MRubyValue value)
+    public void SetResult(RFiber fiber, MRubyValue value)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetResult(value);
     }
 
-    public void CancelFiber(RFiber fiber, CancellationToken cancellationToken)
+    public void SetCancelled(RFiber fiber, CancellationToken cancellationToken)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetCanceled(cancellationToken);
     }
 
-    public void FailFiber(RFiber fiber, Exception exception)
+    public void SetException(RFiber fiber, Exception exception)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetException(exception);
     }
