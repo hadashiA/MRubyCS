@@ -144,6 +144,41 @@ public class MRubyFiberScheduler : IDisposable
     }
 
     /// <summary>
+    /// Allocation-free overload of <see cref="Await(Func{MRubyState, bool, ValueTask{MRubyValue}})"/>.
+    /// Pass the closed-over data as <paramref name="state"/> and a static lambda for
+    /// <paramref name="body"/> to avoid the implicit closure allocation that a capturing
+    /// lambda would incur — useful on hot paths or in Unity where GC pressure matters.
+    /// </summary>
+    public void Await<TState>(TState state, Func<MRubyState, TState, bool, ValueTask<MRubyValue>> body)
+    {
+        if (body is null) throw new ArgumentNullException(nameof(body));
+        var continuation = Suspend();
+        _ = AwaitAsync(state, body, continuation);
+        return;
+
+        async ValueTask AwaitAsync(
+            TState state,
+            Func<MRubyState, TState, bool, ValueTask<MRubyValue>> body,
+            FiberContinuation continuation)
+        {
+            try
+            {
+                var value = await body(MRubyState, state, ContinueOnCapturedContext)
+                    .ConfigureAwait(ContinueOnCapturedContext);
+                continuation.Resume(value);
+            }
+            catch (OperationCanceledException ex)
+            {
+                continuation.SetCancelled(ex.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                continuation.SetException(ex);
+            }
+        }
+    }
+
+    /// <summary>
     /// Low-level park primitive. Use when the resume signal arrives from an
     /// arbitrary event source (callbacks, IObservable, custom event loops)
     /// that doesn't fit the <see cref="Await"/> single-task shape.
