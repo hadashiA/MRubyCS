@@ -70,7 +70,7 @@ public readonly struct FiberContinuation
 /// </summary>
 public class MRubyFiberScheduler : IDisposable
 {
-    protected MRubyState mrb = default!;
+    protected MRubyState MRubyState = default!;
     readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
 
     sealed class BlockEntry() : TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -94,16 +94,16 @@ public class MRubyFiberScheduler : IDisposable
     public bool ContinueOnCapturedContext { get; set; } = true;
 
     /// <summary>
-    /// Bind this scheduler to the given <see cref="MRubyState"/>. Invoked
-    /// once by <see cref="MRubyState.SetFiberScheduler"/>.
+    /// Bind this scheduler to the given <see cref="MRubyCS.MRubyState"/>. Invoked
+    /// once by <see cref="MRubyState.UseFiberScheduler"/>.
     /// </summary>
-    public virtual void Attach(MRubyState mrb) => this.mrb = mrb;
+    public virtual void Attach(MRubyState mrb) => MRubyState = mrb;
 
     /// <summary>
     /// Park the current fiber, run <paramref name="body"/> from the caller's
     /// thread (sync prefix runs there), and resume the fiber with body's
     /// result once it completes. The body receives the bound
-    /// <see cref="MRubyState"/> and the current
+    /// <see cref="MRubyCS.MRubyState"/> and the current
     /// <see cref="ContinueOnCapturedContext"/> value; pass the latter to
     /// every <c>await</c> in the body via
     /// <c>.ConfigureAwait(continueOnCapturedContext)</c>.
@@ -120,17 +120,27 @@ public class MRubyFiberScheduler : IDisposable
         if (body is null) throw new ArgumentNullException(nameof(body));
         var continuation = Suspend();
         _ = AwaitAsync(body, continuation);
-    }
+        return;
 
-    async ValueTask AwaitAsync(
-        Func<MRubyState, bool, ValueTask<MRubyValue>> body,
-        FiberContinuation continuation)
-    {
-        MRubyValue value;
-        try { value = await body(mrb, ContinueOnCapturedContext); }
-        catch (OperationCanceledException ex) { continuation.SetCancelled(ex.CancellationToken); return; }
-        catch (Exception ex) { continuation.SetException(ex); return; }
-        continuation.Resume(value);
+        async ValueTask AwaitAsync(
+            Func<MRubyState, bool, ValueTask<MRubyValue>> body,
+            FiberContinuation continuation)
+        {
+            try
+            {
+                var value = await body(MRubyState, ContinueOnCapturedContext)
+                    .ConfigureAwait(ContinueOnCapturedContext);
+                continuation.Resume(value);
+            }
+            catch (OperationCanceledException ex)
+            {
+                continuation.SetCancelled(ex.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                continuation.SetException(ex);
+            }
+        }
     }
 
     /// <summary>
@@ -146,7 +156,7 @@ public class MRubyFiberScheduler : IDisposable
     /// </summary>
     public virtual FiberContinuation Suspend()
     {
-        var fiber = mrb.CurrentFiber;
+        var fiber = MRubyState.CurrentFiber;
         var entry = new BlockEntry();
         if (!blockedFibers.TryAdd(fiber, entry))
         {
