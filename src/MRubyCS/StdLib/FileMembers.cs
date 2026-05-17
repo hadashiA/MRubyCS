@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Text;
 
@@ -48,7 +49,22 @@ static class FileMembers
         {
             var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.Read, 4096, useAsync: true);
-            scheduler.ReadStreamToEnd(stream, disposeStream: true);
+            scheduler.Await(async (mrb, continueOnCapturedContext) =>
+            {
+                try
+                {
+                    var writer = new ArrayBufferWriter<byte>();
+                    while (true)
+                    {
+                        var mem = writer.GetMemory(4096);
+                        var read = await stream.ReadAsync(mem).ConfigureAwait(continueOnCapturedContext);
+                        if (read == 0) break;
+                        writer.Advance(read);
+                    }
+                    return new MRubyValue(mrb.NewString(writer.WrittenSpan));
+                }
+                finally { stream.Dispose(); }
+            });
             return MRubyValue.Nil;
         }
 
@@ -70,7 +86,15 @@ static class FileMembers
         {
             var stream = new FileStream(path, FileMode.Create, FileAccess.Write,
                 FileShare.None, 4096, useAsync: true);
-            scheduler.WriteStream(stream, data, disposeStream: true);
+            scheduler.Await(async (_, continueOnCapturedContext) =>
+            {
+                try
+                {
+                    await stream.WriteAsync(data).ConfigureAwait(continueOnCapturedContext);
+                    return new MRubyValue((long)data.Length);
+                }
+                finally { stream.Dispose(); }
+            });
             return MRubyValue.Nil;
         }
 

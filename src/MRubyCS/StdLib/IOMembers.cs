@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 
 namespace MRubyCS.StdLib;
@@ -11,14 +12,24 @@ static class IOMembers
         var io = self.As<RIO>();
         EnsureOpen(state, io);
         var stream = io.Stream!;
-        state.TryGetActiveFiberScheduler(out var scheduler);
         var hasArg = state.GetArgumentCount() > 0 && !state.GetArgumentAt(0).IsNil;
 
         if (!hasArg)
         {
-            if (scheduler is not null)
+            if (state.TryGetActiveFiberScheduler(out var scheduler))
             {
-                scheduler.ReadStreamToEnd(stream);
+                scheduler.Await(async (mrb, continueOnCapturedContext) =>
+                {
+                    var writer = new ArrayBufferWriter<byte>();
+                    while (true)
+                    {
+                        var mem = writer.GetMemory(4096);
+                        var read = await stream.ReadAsync(mem).ConfigureAwait(continueOnCapturedContext);
+                        if (read == 0) break;
+                        writer.Advance(read);
+                    }
+                    return new MRubyValue(mrb.NewString(writer.WrittenSpan));
+                });
                 return MRubyValue.Nil;
             }
             using var ms = new MemoryStream();
@@ -30,17 +41,28 @@ static class IOMembers
         if (n < 0) state.Raise(Names.ArgumentError, "negative length"u8);
         if (n == 0) return state.NewString([]);
 
-        if (scheduler is not null)
+        if (state.TryGetActiveFiberScheduler(out var sched))
         {
-            scheduler.ReadStream(stream, n);
+            var buffer = ArrayPool<byte>.Shared.Rent(n);
+            sched.Await(async (mrb, continueOnCapturedContext) =>
+            {
+                try
+                {
+                    var read = await stream.ReadAsync(buffer.AsMemory(0, n)).ConfigureAwait(continueOnCapturedContext);
+                    return read == 0
+                        ? MRubyValue.Nil
+                        : new MRubyValue(mrb.NewString(buffer.AsSpan(0, read)));
+                }
+                finally { ArrayPool<byte>.Shared.Return(buffer); }
+            });
             return MRubyValue.Nil;
         }
 
-        var buffer = new byte[n];
-        var read = stream.Read(buffer, 0, n);
-        return read == 0
+        var buf = new byte[n];
+        var rd = stream.Read(buf, 0, n);
+        return rd == 0
             ? MRubyValue.Nil
-            : state.NewString(buffer.AsSpan(0, read));
+            : state.NewString(buf.AsSpan(0, rd));
     });
 
     [MRubyMethod(RequiredArguments = 1)]
@@ -58,7 +80,11 @@ static class IOMembers
             // Copy because the source may outlive `bytes`'s lifetime once we
             // yield. Cheap relative to the syscall.
             var data = bytes.ToArray();
-            scheduler.WriteStream(stream, data);
+            scheduler.Await(async (_, continueOnCapturedContext) =>
+            {
+                await stream.WriteAsync(data).ConfigureAwait(continueOnCapturedContext);
+                return new MRubyValue((long)data.Length);
+            });
             return MRubyValue.Nil;
         }
 

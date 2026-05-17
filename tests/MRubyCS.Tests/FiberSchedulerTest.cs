@@ -23,10 +23,14 @@ public class FiberSchedulerTest
         mrb.Dispose();
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Kernel#sleep / Thread.pass
+    // ─────────────────────────────────────────────────────────────────────
+
     [Test]
     public async Task Sleep_InsideFiber_YieldsToScheduler()
     {
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         var code = """
                    sleep 0.05
@@ -47,7 +51,7 @@ public class FiberSchedulerTest
     [Test]
     public async Task Sleep_InsideFiber_MultipleSleeps()
     {
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         var code = """
                    3.times { sleep 0.02 }
@@ -103,13 +107,14 @@ public class FiberSchedulerTest
     }
 
     [Test]
-    public async Task SyncContextScheduler_Sleep_RoundTrip()
+    public async Task Sleep_WithSyncContextHost_RoutesThroughContext()
     {
-        // SynchronizationContextFiberScheduler with a one-thread pumped
-        // context. Verifies that scheduler hooks route resume callbacks
-        // through SynchronizationContext.Post.
+        // MRubyFiberScheduler { ContinueOnCapturedContext = true } + a host-set
+        // SynchronizationContext on the VM thread routes fiber.Resume calls
+        // back through SynchronizationContext.Post. Replaces the
+        // SyncContextScheduler-specific test from the old design.
         using var ctx = new PumpedSyncContext();
-        using var scheduler = new SynchronizationContextFiberScheduler(ctx);
+        using var scheduler = new MRubyFiberScheduler { ContinueOnCapturedContext = true };
         mrb.SetFiberScheduler(scheduler);
 
         var fiber = compiler.LoadSourceCodeAsFiber("sleep 0.02; :done"u8);
@@ -125,58 +130,14 @@ public class FiberSchedulerTest
         Assert.That(ctx.PostCount, Is.GreaterThan(0), "Post should have been invoked");
     }
 
-    /// <summary>Minimal pumped SyncContext for the test above.</summary>
-    sealed class PumpedSyncContext : SynchronizationContext, IDisposable
-    {
-        readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback cb, object? state)> queue = new();
-        public int PostCount;
-
-        public override void Post(SendOrPostCallback d, object? state)
-        {
-            Interlocked.Increment(ref PostCount);
-            queue.Add((d, state));
-        }
-
-        public void Run(Action body)
-        {
-            var prev = Current;
-            SetSynchronizationContext(this);
-            try { body(); }
-            finally { SetSynchronizationContext(prev); }
-        }
-
-        public async Task PumpUntilAsync(Func<bool> condition, TimeSpan timeout)
-        {
-            var deadline = DateTime.UtcNow + timeout;
-            while (!condition() && DateTime.UtcNow < deadline)
-            {
-                if (queue.TryTake(out var item, 50))
-                {
-                    // Mirror real sync contexts: set Current=self while
-                    // invoking the callback so its inner awaits capture us.
-                    var prev = Current;
-                    SetSynchronizationContext(this);
-                    try { item.cb(item.state); }
-                    finally { SetSynchronizationContext(prev); }
-                }
-                else
-                {
-                    await Task.Yield();
-                }
-            }
-        }
-
-        public void Dispose() => queue.Dispose();
-    }
-
     [Test]
     public async Task ThreadPass_YieldsToScheduler()
     {
         // Thread.pass must hit the scheduler's Yield hook and resume on
-        // the next tick. With ThreadPoolFiberScheduler the resume hops
-        // through the threadpool, so a counter incremented before+after
-        // observes the yield round-trip.
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        // the next tick. With the default scheduler the resume hops through
+        // Task.Yield, so a counter incremented before+after observes the
+        // yield round-trip.
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         var code = """
                    x = 0
@@ -197,7 +158,7 @@ public class FiberSchedulerTest
     public async Task SleepZero_RoutesToYield()
     {
         // sleep 0 must NOT call KernelSleep — it routes to Yield to avoid
-        // an unnecessary Timer allocation.
+        // an unnecessary Timer / Task.Delay allocation.
         var spy = new TrackingScheduler();
         mrb.SetFiberScheduler(spy);
 
@@ -209,38 +170,159 @@ public class FiberSchedulerTest
         Assert.That(spy.YieldCalls, Is.EqualTo(1));
     }
 
-    sealed class TrackingScheduler : IMRubyFiberScheduler
+    [Test]
+    public async Task KernelSleep_Cancellation_ResumesFiberWithNil()
     {
-        public int KernelSleepCalls;
-        public int YieldCalls;
-        MRubyState mrb = default!;
+        // Regression: with the old per-scheduler timer-based KernelSleep,
+        // cancellation left the fiber permanently parked. The new default
+        // Await + Task.Delay implementation resumes the fiber with nil
+        // (CRuby fiber-scheduler convention) when cancellation fires.
+        var sched = new CancellableSleepScheduler();
+        mrb.SetFiberScheduler(sched);
 
-        public void Attach(MRubyState mrb) => this.mrb = mrb;
-        public void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
-        {
-            KernelSleepCalls++;
-            var fiber = mrb.CurrentFiber;
-            // We still have to drive the fiber to completion or the test
-            // hangs. Resume on threadpool to mimic ThreadPoolFiberScheduler.
-            ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
-            fiber.Yield();
-        }
-        public FiberContinuation Suspend() => throw new NotImplementedException();
-        public void Yield(CancellationToken cancellationToken = default)
-        {
-            YieldCalls++;
-            var fiber = mrb.CurrentFiber;
-            ThreadPool.UnsafeQueueUserWorkItem(static state => ((RFiber)state!).Resume(), fiber);
-            fiber.Yield();
-        }
-        public void ReadStream(System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void ReadStreamToEnd(System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void SetResult(RFiber fiber, MRubyValue value) { }
-        public void SetCancelled(RFiber fiber, CancellationToken ct) { }
-        public void SetException(RFiber fiber, Exception ex) { }
-        public void Dispose() { }
+        var fiber = compiler.LoadSourceCodeAsFiber("""
+            v = sleep 100
+            v.nil? ? :was_nil : :was_not_nil
+            """u8);
+        fiber.Resume();
+        sched.Cts.Cancel();
+
+        var result = await fiber.WaitForTerminateAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.That(fiber.IsAlive, Is.False);
+        Assert.That(result.SymbolValue, Is.EqualTo(mrb.Intern("was_nil"u8)));
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Await
+    // ─────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task Await_RunsBodyAndResumesFiberWithResult()
+    {
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
+
+        var helloSym = mrb.Intern("hello"u8);
+        var capturedRuby = new TaskCompletionSource<MRubyValue>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_value"u8),
+            new MRubyMethod((state, self) =>
+            {
+                state.FiberScheduler!.Await(async (_, continueOnCapturedContext) =>
+                {
+                    await Task.Delay(20).ConfigureAwait(continueOnCapturedContext);
+                    return new MRubyValue(helloSym);
+                });
+                return MRubyValue.Nil;
+            }));
+        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("record"u8),
+            new MRubyMethod((state, self) =>
+            {
+                capturedRuby.TrySetResult(state.GetArgumentAt(0));
+                return MRubyValue.Nil;
+            }));
+
+        var fiber = compiler.LoadSourceCodeAsFiber("""
+            v = await_value
+            record(v)
+            """u8);
+        fiber.Resume();
+
+        var captured = await capturedRuby.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.That(captured.IsSymbol, Is.True);
+        Assert.That(captured.SymbolValue, Is.EqualTo(helloSym));
+    }
+
+    [Test]
+    public async Task Await_BodyException_IsCatchableByRubyRescue()
+    {
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
+
+        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_boom"u8),
+            new MRubyMethod((state, self) =>
+            {
+                state.FiberScheduler!.Await(async (s, continueOnCapturedContext) =>
+                {
+                    await Task.Delay(1).ConfigureAwait(continueOnCapturedContext);
+                    throw new InvalidOperationException("boom");
+                });
+                return MRubyValue.Nil;
+            }));
+
+        var fiber = compiler.LoadSourceCodeAsFiber("""
+            begin
+              await_boom
+              :no_raise
+            rescue => e
+              e.message
+            end
+            """u8);
+        fiber.Resume();
+        var result = await fiber.WaitForTerminateAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.That(fiber.IsAlive, Is.False);
+        Assert.That(result.VType, Is.EqualTo(MRubyVType.String));
+        Assert.That(result.As<RString>().AsSpan().SequenceEqual("boom"u8), Is.True);
+    }
+
+    [Test]
+    public async Task Await_BodyCanceled_ResumesWithNil()
+    {
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
+
+        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_cancel"u8),
+            new MRubyMethod((state, self) =>
+            {
+                state.FiberScheduler!.Await(async (_, continueOnCapturedContext) =>
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
+                    await Task.Delay(TimeSpan.FromSeconds(10), cts.Token).ConfigureAwait(continueOnCapturedContext);
+                    return MRubyValue.Nil;
+                });
+                return MRubyValue.Nil;
+            }));
+
+        var fiber = compiler.LoadSourceCodeAsFiber("""
+            v = await_cancel
+            v.nil? ? :was_nil : :was_not_nil
+            """u8);
+        fiber.Resume();
+        var result = await fiber.WaitForTerminateAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.That(fiber.IsAlive, Is.False);
+        Assert.That(result.SymbolValue, Is.EqualTo(mrb.Intern("was_nil"u8)));
+    }
+
+    [Test]
+    public async Task Await_ForwardsConfigureAwaitToBody()
+    {
+        // The bool param the lambda receives is the scheduler's
+        // ContinueOnCapturedContext property at call time.
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
+
+        bool? observed = null;
+        mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_observe"u8),
+            new MRubyMethod((state, self) =>
+            {
+                state.FiberScheduler!.Await(async (_, continueOnCapturedContext) =>
+                {
+                    observed = continueOnCapturedContext;
+                    await Task.Yield();
+                    return MRubyValue.Nil;
+                });
+                return MRubyValue.Nil;
+            }));
+
+        var fiber = compiler.LoadSourceCodeAsFiber("await_observe; :done"u8);
+        fiber.Resume();
+        await fiber.WaitForTerminateAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.That(observed, Is.EqualTo(false));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Existing fiber semantics regression
+    // ─────────────────────────────────────────────────────────────────────
 
     [Test]
     public void ExistingFiberSemantics_Unchanged()
@@ -265,16 +347,15 @@ public class FiberSchedulerTest
     }
 
     [Test]
-    public async Task Resume_From_ThreadPool_Delivers_Value_To_Ruby()
+    public async Task Resume_From_OtherThread_Delivers_Value_To_Ruby()
     {
-        // Same as the next test but Resume(:hello) is called from a
-        // thread-pool task instead of the test thread. This isolates
-        // whether the resume-value flow has thread-affinity issues.
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        // Calls Resume(:hello) from a non-VM thread. This isolates whether
+        // the resume-value flow has thread-affinity issues.
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         var helloSym = mrb.Intern("hello"u8);
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("yield_only"u8),
-            new MRubyMethod((state, _) =>
+            new MRubyMethod((state, self) =>
             {
                 state.CurrentFiber.Yield();
                 return MRubyValue.Nil;
@@ -282,9 +363,7 @@ public class FiberSchedulerTest
 
         var fiber = compiler.LoadSourceCodeAsFiber("yield_only"u8);
         fiber.Resume(); // first run -> hits Yield
-        // From thread pool: do the second Resume(:hello).
         var second = await Task.Run(() => fiber.Resume(new MRubyValue(helloSym)));
-        TestContext.Out.WriteLine($"second VType={second.VType} sym={(second.IsSymbol ? mrb.NameOf(second.SymbolValue).ToString() : "?")}");
         Assert.That(fiber.IsAlive, Is.False);
         Assert.That(second.SymbolValue, Is.EqualTo(helloSym));
     }
@@ -294,14 +373,14 @@ public class FiberSchedulerTest
     {
         // Direct test of the VM-level resume-value contract for top-level
         // programs. Calls fiber.Yield from inside a C# method, then the
-        // test thread directly Resume(value)'s the fiber. The value
-        // should land in Ruby (the C# method's apparent return).
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        // test thread directly Resume(value)'s the fiber. The value should
+        // land in Ruby (the C# method's apparent return).
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         RFiber fiberRef = null!;
         var helloSym = mrb.Intern("hello"u8);
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("yield_then_resume"u8),
-            new MRubyMethod((state, _) =>
+            new MRubyMethod((state, self) =>
             {
                 fiberRef = state.CurrentFiber;
                 fiberRef.Yield();
@@ -310,26 +389,22 @@ public class FiberSchedulerTest
 
         var fiber = compiler.LoadSourceCodeAsFiber("yield_then_resume"u8);
         var first = fiber.Resume();
-        // Explicit second resume from test thread (no scheduler involvement)
         var second = fiber.Resume(new MRubyValue(helloSym));
-        TestContext.Out.WriteLine($"first VType={first.VType} sym={(first.IsSymbol ? mrb.NameOf(first.SymbolValue).ToString() : "?")}");
-        TestContext.Out.WriteLine($"second VType={second.VType} sym={(second.IsSymbol ? mrb.NameOf(second.SymbolValue).ToString() : "?")}");
         Assert.That(fiber.IsAlive, Is.False);
-        // The value Resume(:hello) passed in should be the program's
-        // final value.
         Assert.That(second.SymbolValue, Is.EqualTo(helloSym));
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Low-level Suspend / FiberContinuation
+    // ─────────────────────────────────────────────────────────────────────
+
     [Test]
-    public async Task Block_Unblock_DeliversResumeValueToRuby()
+    public async Task Suspend_ExternalResume_DeliversValueToRuby()
     {
-        // End-to-end: scheduler.Unblock(blocker, fiber, value) delivers
-        // value into Ruby as the apparent return of the C# method that
-        // invoked Block. Block yields internally (CRuby-style), so the
-        // caller arranges the Unblock task *before* calling Block.
-        // Captured via a Ruby-side helper (record) so we observe what the
-        // running program actually sees.
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        // End-to-end: scheduler.Suspend() + continuation.Resume(value)
+        // delivers value into Ruby as the apparent return of the C# method
+        // that invoked Suspend.
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         var helloSym = mrb.Intern("hello"u8);
         var capturedRuby = new TaskCompletionSource<MRubyValue>(
@@ -348,7 +423,7 @@ public class FiberSchedulerTest
                 return MRubyValue.Nil;
             }));
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("record"u8),
-            new MRubyMethod((state, _) =>
+            new MRubyMethod((state, self) =>
             {
                 capturedRuby.TrySetResult(state.GetArgumentAt(0));
                 return MRubyValue.Nil;
@@ -366,14 +441,11 @@ public class FiberSchedulerTest
     }
 
     [Test]
-    public async Task Block_Cancelled_ResumesEvenWithoutUnblock()
+    public async Task Suspend_Cancelled_ResumesEvenWithoutUnblock()
     {
-        // When Block has a finite timeout and Unblock never arrives, the
-        // continuation must still run and Resume the fiber (with Nil).
-        // This guards against the regression where ContinueWith was
-        // cancelled along with the fiber-cancellation token, leaving the
-        // fiber permanently parked.
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        // When the only settle path is cancellation, the fiber must resume
+        // with nil (not stay permanently parked).
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_value"u8),
             new MRubyMethod((state, self) =>
@@ -394,7 +466,7 @@ public class FiberSchedulerTest
         {
             await Task.Delay(5);
         }
-        Assert.That(fiber.IsAlive, Is.False, "fiber should resume after timeout (not stay parked)");
+        Assert.That(fiber.IsAlive, Is.False, "fiber should resume after cancellation (not stay parked)");
     }
 
     [Test]
@@ -404,20 +476,9 @@ public class FiberSchedulerTest
         // before Resume. The fiber wraps the parking call in begin/rescue
         // and must observe a normal Ruby raise that the rescue clause
         // catches — not a fiber-killing unwind.
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
-        // Gates the threadpool Resume on the fiber actually having yielded.
-        // Without it, Task.Run can win the race and call Resume while the
-        // fiber is still Running → FiberError lost on the threadpool thread,
-        // leaving the fiber parked forever.
         var yielded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        // Capture the terminal value of the fiber directly from the threadpool
-        // Resume's return value. We deliberately avoid fiber.WaitForTerminateAsync
-        // from the test thread: it races with the threadpool MoveNext's
-        // SetResult — MultiConsumerValueTaskNotifier auto-resets after notifying
-        // waiters, so a waiter registered after Resume completes never observes
-        // the terminal value (CI Linux reliably loses this race).
         var resumed = new TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_boom"u8),
@@ -458,31 +519,90 @@ public class FiberSchedulerTest
         var result = await resumed.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.That(fiber.IsAlive, Is.False);
-        Assert.That(result.VType, Is.EqualTo(MRubyVType.String), $"expected rescue to catch and return e.message; got {result.VType}");
+        Assert.That(result.VType, Is.EqualTo(MRubyVType.String),
+            $"expected rescue to catch and return e.message; got {result.VType}");
         Assert.That(result.As<RString>().AsSpan().SequenceEqual("boom"u8), Is.True);
     }
 
-    // Note: the dictionary "TryAdd guard" against re-parking a fiber lives in
-    // the scheduler; testing it externally now requires targeting a specific
-    // fiber that isn't `mrb.CurrentFiber`, which the new API intentionally
-    // doesn't expose. The guard remains in code as a defensive check.
+    // ─────────────────────────────────────────────────────────────────────
+    // Test helpers
+    // ─────────────────────────────────────────────────────────────────────
 
-    sealed class SpyScheduler : IMRubyFiberScheduler
+    /// <summary>Counts KernelSleep / Yield calls.</summary>
+    sealed class TrackingScheduler : MRubyFiberScheduler
+    {
+        public int KernelSleepCalls;
+        public int YieldCalls;
+        public override void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
+        {
+            KernelSleepCalls++;
+            base.KernelSleep(duration, cancellationToken);
+        }
+        public override void Yield(CancellationToken cancellationToken = default)
+        {
+            YieldCalls++;
+            base.Yield(cancellationToken);
+        }
+    }
+
+    /// <summary>Counts KernelSleep invocations only.</summary>
+    sealed class SpyScheduler : MRubyFiberScheduler
     {
         public int SleepCallCount;
+        public override void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
+        {
+            SleepCallCount++;
+            base.KernelSleep(duration, cancellationToken);
+        }
+    }
 
-        public void Attach(MRubyState mrb) { }
-        public void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
-            => SleepCallCount++;
+    /// <summary>Routes KernelSleep through a host-controlled cancellation token.</summary>
+    sealed class CancellableSleepScheduler : MRubyFiberScheduler
+    {
+        public readonly CancellationTokenSource Cts = new();
+        public override void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
+            => base.KernelSleep(duration, Cts.Token);
+    }
 
-        public FiberContinuation Suspend() => throw new NotImplementedException();
-        public void Yield(CancellationToken cancellationToken = default) { }
-        public void ReadStream(System.IO.Stream stream, int maxBytes, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void ReadStreamToEnd(System.IO.Stream stream, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void WriteStream(System.IO.Stream stream, ReadOnlyMemory<byte> data, bool disposeStream = false, CancellationToken cancellationToken = default) { }
-        public void SetResult(RFiber fiber, MRubyValue value) { }
-        public void SetCancelled(RFiber fiber, CancellationToken ct) { }
-        public void SetException(RFiber fiber, Exception ex) { }
-        public void Dispose() { }
+    /// <summary>Minimal pumped SyncContext for the SyncContext-host test.</summary>
+    sealed class PumpedSyncContext : SynchronizationContext, IDisposable
+    {
+        readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback cb, object? state)> queue = new();
+        public int PostCount;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref PostCount);
+            queue.Add((d, state));
+        }
+
+        public void Run(Action body)
+        {
+            var prev = Current;
+            SetSynchronizationContext(this);
+            try { body(); }
+            finally { SetSynchronizationContext(prev); }
+        }
+
+        public async Task PumpUntilAsync(Func<bool> condition, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (!condition() && DateTime.UtcNow < deadline)
+            {
+                if (queue.TryTake(out var item, 50))
+                {
+                    var prev = Current;
+                    SetSynchronizationContext(this);
+                    try { item.cb(item.state); }
+                    finally { SetSynchronizationContext(prev); }
+                }
+                else
+                {
+                    await Task.Yield();
+                }
+            }
+        }
+
+        public void Dispose() => queue.Dispose();
     }
 }
