@@ -182,7 +182,7 @@ public class RiteParser(MRubyState state)
         var flen = BinaryPrimitives.ReadUInt16BigEndian(bin);
         bin = bin[sizeof(ushort)..];
 
-        var files = new IrepDebugInfoFile[flen];
+        var files = new IrepDebugInfoFileEntry[flen];
         for (var f = 0; f < flen; f++)
         {
             var startPos = BinaryPrimitives.ReadUInt32BigEndian(bin);
@@ -225,7 +225,7 @@ public class RiteParser(MRubyState state)
                     throw new RiteParseException($"unknown debug line type {(byte)lineType}");
             }
 
-            files[f] = new IrepDebugInfoFile
+            files[f] = new IrepDebugInfoFileEntry
             {
                 StartPos = startPos,
                 Filename = (uint)fnameIdx < (uint)filenames.Length ? filenames[fnameIdx] : "",
