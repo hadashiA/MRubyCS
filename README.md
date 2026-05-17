@@ -69,7 +69,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 
 - As of mruby 4.0, almost all bundled classes/methods are supported.
     - Support for extensions split into [mrbgems](https://github.com/mruby/mruby/tree/master/mrbgems) remains limited.
-- `Regexp` and `IO` / `File` are **opt-in**: `MRubyState.Create()` doesn't register them, so embedding hosts that don't need them aren't paying for it. Call `mrb.DefineRegexp()` / `mrb.DefineIO()` to add them. See [Optional Classes](#optional-classes-opt-in).
+- `Regexp` and `IO` / `File` are **opt-in**: Call `mrb.DefineRegexp()` / `mrb.DefineIO()` to add them. See [Optional Classes](#optional-classes-opt-in).
 
 ## Table of Contents
 
@@ -919,10 +919,11 @@ Some bundled classes are **not** registered by `MRubyState.Create()` so that emb
 Both calls are idempotent and must be made **before** compiling/running Ruby code that references the classes.
 
 ```cs
-using var mrb = MRubyState.Create();
-mrb.DefineRegexp();
-mrb.DefineIO();
-using var compiler = MRubyCompiler.Create(mrb);
+using var mrb = MRubyState.Create(x =>
+{
+    x.DefineRegexp();
+    x.DefineIO();
+});
 ```
 
 ### Regexp
@@ -930,8 +931,11 @@ using var compiler = MRubyCompiler.Create(mrb);
 Once enabled, both literal `/.../` regular expressions and `Regexp.new` are available, along with `MatchData` and the regexp-related `String` methods.
 
 ```cs
-using var mrb = MRubyState.Create();
-mrb.DefineRegexp();
+using var mrb = MRubyState.Create(x =>
+{
+    x.DefineRegexp();
+});
+
 using var compiler = MRubyCompiler.Create(mrb);
 
 compiler.LoadSourceCode("""
@@ -956,8 +960,11 @@ compiler.LoadSourceCode("""
 `File.read` / `File.write` provide a quick round-trip; `File.open` returns an `IO`/`File` instance for streaming reads and writes. `IOError` is raised when operating on a closed handle.
 
 ```cs
-using var mrb = MRubyState.Create();
-mrb.DefineIO();
+using var mrb = MRubyState.Create(x =>
+{
+    x.DefineIO();
+});
+
 using var compiler = MRubyCompiler.Create(mrb);
 
 compiler.LoadSourceCode("""
