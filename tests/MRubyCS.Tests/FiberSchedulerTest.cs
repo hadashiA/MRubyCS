@@ -412,6 +412,14 @@ public class FiberSchedulerTest
         // leaving the fiber parked forever.
         var yielded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        // Capture the terminal value of the fiber directly from the threadpool
+        // Resume's return value. We deliberately avoid fiber.WaitForTerminateAsync
+        // from the test thread: it races with the threadpool MoveNext's
+        // SetResult — MultiConsumerValueTaskNotifier auto-resets after notifying
+        // waiters, so a waiter registered after Resume completes never observes
+        // the terminal value (CI Linux reliably loses this race).
+        var resumed = new TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
+
         mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_boom"u8),
             new MRubyMethod((state, self) =>
             {
@@ -419,10 +427,17 @@ public class FiberSchedulerTest
                 _ = Task.Run(async () =>
                 {
                     await yielded.Task;
-                    fiber.PendingException = new RException(
-                        state.NewString("boom"u8),
-                        state.GetExceptionClass(Names.RuntimeError));
-                    fiber.Resume();
+                    try
+                    {
+                        fiber.PendingException = new RException(
+                            state.NewString("boom"u8),
+                            state.GetExceptionClass(Names.RuntimeError));
+                        resumed.SetResult(fiber.Resume());
+                    }
+                    catch (Exception ex)
+                    {
+                        resumed.SetException(ex);
+                    }
                 });
                 fiber.Yield();
                 return MRubyValue.Nil;
@@ -440,7 +455,7 @@ public class FiberSchedulerTest
         var fiber = compiler.LoadSourceCodeAsFiber(code);
         fiber.Resume();
         yielded.SetResult();
-        var result = await fiber.WaitForTerminateAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        var result = await resumed.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.That(fiber.IsAlive, Is.False);
         Assert.That(result.VType, Is.EqualTo(MRubyVType.String), $"expected rescue to catch and return e.message; got {result.VType}");
