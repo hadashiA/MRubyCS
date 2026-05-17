@@ -101,6 +101,25 @@ public sealed class ThreadPoolFiberScheduler : IMRubyFiberScheduler
         return continuation;
     }
 
+    public void Await(Func<ValueTask<MRubyValue>> body)
+    {
+        if (body is null) throw new ArgumentNullException(nameof(body));
+        var continuation = Suspend();
+        ThreadPool.UnsafeQueueUserWorkItem(
+            static s => { _ = AwaitAsync(s.body, s.continuation); },
+            (body, continuation),
+            preferLocal: false);
+    }
+
+    static async ValueTask AwaitAsync(Func<ValueTask<MRubyValue>> body, FiberContinuation continuation)
+    {
+        MRubyValue value;
+        try { value = await body().ConfigureAwait(false); }
+        catch (OperationCanceledException ex) { continuation.SetCancelled(ex.CancellationToken); return; }
+        catch (Exception ex) { continuation.SetException(ex); return; }
+        continuation.Resume(value);
+    }
+
     public void SetResult(RFiber fiber, MRubyValue value)
     {
         if (blockedFibers.TryGetValue(fiber, out var entry)) entry.TrySetResult(value);

@@ -101,7 +101,8 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
 - [Define async Ruby method (FiberScheduler)](#define-async-ruby-method-fiberscheduler)
     - [Default behavior (no scheduler)](#default-behavior-no-scheduler)
     - [With a scheduler installed](#with-a-scheduler-installed)
-    - [Combining C# `async`/`await` with `Suspend`](#combining-c-asyncawait-with-suspend)
+    - [Defining async Ruby methods with `Await`](#defining-async-ruby-methods-with-await)
+    - [Low-level: `Suspend` + `FiberContinuation`](#low-level-suspend--fibercontinuation)
     - [Stream I/O hooks](#stream-io-hooks-readstream--readstreamtoend--writestream)
     - [Built-in Schedulers](#built-in-schedulers)
     - [Custom Schedulers](#custom-schedulers)
@@ -1197,7 +1198,8 @@ MRubyCS exposes a CRuby-style `Fiber::Scheduler` hook surface (`IMRubyFiberSched
 | `Thread.pass` | `Yield` | Cooperative yield |
 | `IO#read(n)` / `File.read` | `ReadStream` / `ReadStreamToEnd` | Resumes with a `String` of the read bytes (or `nil` at EOF for bounded reads) |
 | `IO#write(s)` / `File.write` | `WriteStream` | Resumes with the bytes-written count as `Integer` |
-| (host-defined) | `Suspend` → `FiberContinuation.Resume` | Park a fiber on an arbitrary external completion |
+| (host-defined async lambda) | `Await(async () => …)` | High-level: scheduler-chosen runner, auto exception/cancellation routing |
+| (host-defined external event) | `Suspend` → `FiberContinuation.Resume` | Low-level: park a fiber on an arbitrary external completion |
 
 > [!NOTE]
 > The `IO` / `File` classes are **opt-in** — `MRubyState.Create()` does NOT register them. Call `mrb.DefineIO()` before compiling/running Ruby code that uses them. Hosts that don't need stream/filesystem access can omit the call and the classes simply don't exist in Ruby.
@@ -1253,9 +1255,9 @@ await fiber.WaitForTerminateAsync();
 > [!IMPORTANT]
 > `MRubyState` takes ownership of the installed scheduler: disposing the state disposes the scheduler too. Don't share a single scheduler instance across multiple `MRubyState`s.
 
-### Combining C# `async`/`await` with `Suspend`
+### Defining async Ruby methods with `Await`
 
-`Suspend` parks the current fiber and returns a `FiberContinuation` handle. The Ruby side stays suspended; the C# side completes async work off the VM thread and calls `continuation.Resume(value)` (or `SetCancelled` / `SetException`) — the value is delivered as the apparent return of the C# method that called `Suspend`.
+`Await(async () => …)` is the high-level convenience for bridging an `async` C# lambda into a Ruby method. The scheduler parks the current fiber, runs `body` on a runner of *its* choosing (so caller code stays portable across ThreadPool-friendly and ThreadPool-less hosts like Unity WebGL), and resumes the fiber with body's result.
 
 ```cs
 mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
@@ -1264,21 +1266,13 @@ mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
 mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_http"u8), (state, _) =>
 {
     var url = state.GetArgumentAsStringAt(0).ToString();
-    var scheduler = state.FiberScheduler!;
-    var continuation = scheduler.Suspend(); // yields the fiber internally
-
-    _ = Task.Run(async () =>
+    state.FiberScheduler!.Await(async () =>
     {
-        try
-        {
-            using var client = new HttpClient();
-            var body = await client.GetStringAsync(url);
-            continuation.Resume(state.NewString(body));
-        }
-        catch (Exception ex) { continuation.SetException(ex); }
+        using var client = new HttpClient();
+        var body = await client.GetStringAsync(url);
+        return state.NewString(body);
     });
-
-    return MRubyValue.Nil; // unreached — continuation.Resume's value replaces this
+    return MRubyValue.Nil; // unreached on the async path — Ruby observes the body's return
 });
 
 var fiber = compiler.LoadSourceCodeAsFiber("""
@@ -1289,14 +1283,57 @@ fiber.Resume();
 await fiber.WaitForTerminateAsync();
 ```
 
+To time out, wire a `CancellationTokenSource` into `body` via closure:
+
+```cs
+state.FiberScheduler!.Await(async () =>
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    using var client = new HttpClient();
+    var body = await client.GetStringAsync(url, cts.Token);
+    return state.NewString(body);
+});
+```
+
 Mechanics:
 
-- `Suspend(mrb)` registers the parking state, then calls `Fiber.yield` to unwind the VM back to the caller of `Resume`. The returned `FiberContinuation` captures the parked fiber.
-- `continuation.Resume(value)` schedules `fiber.Resume(value)`. The actual resume is deferred to the scheduler's preferred thread, so calling from inline ContinueWith or sync-completed task is safe.
+- The scheduler invokes `body` on its preferred runner (`Task.Run` for `ThreadPoolFiberScheduler`; on the captured context for `SynchronizationContextFiberScheduler`; main-loop tick for Unity-style schedulers). Callers never write `Task.Run` themselves.
+- `body`'s return value is delivered to Ruby as the apparent return of the host `MRubyMethod`.
+- `OperationCanceledException` from `body` → fiber resumes with `nil` (CRuby fiber-scheduler convention; the OCE's own token is preserved).
+- Any other exception from `body` → delivered as a Ruby exception, catchable by a surrounding `begin/rescue`.
+- `return MRubyValue.Nil;` is required at the end of the host method, but it is unreached on the async path — Ruby observes the value `body` resolved to.
+
+### Low-level: `Suspend` + `FiberContinuation`
+
+When the resume signal comes from somewhere other than a single async lambda — an external event source, a custom completion primitive, a callback you don't control — use `Suspend()`. It parks the current fiber and returns a `FiberContinuation` handle that you call `Resume(value)` / `SetCancelled()` / `SetException(ex)` on from arbitrary code.
+
+```cs
+mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+
+mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_event"u8), (state, _) =>
+{
+    var continuation = state.FiberScheduler!.Suspend(); // yields the fiber internally
+
+    myEventSource.Once(payload =>
+    {
+        continuation.Resume(state.NewString(payload));   // arbitrary callback site
+    });
+
+    return MRubyValue.Nil;
+});
+```
+
+Mechanics:
+
+- `Suspend()` registers the parking state, then calls `Fiber.yield` to unwind the VM back to the caller of `Resume`. The returned `FiberContinuation` captures the parked fiber.
+- `continuation.Resume(value)` schedules `fiber.Resume(value)`. The actual resume is deferred to the scheduler's preferred thread, so calling from inline `ContinueWith` or sync-completed task is safe.
 - `continuation.SetCancelled()` resumes the fiber with `nil` (cancellation semantics).
 - `continuation.SetException(ex)` injects `ex` as a Ruby exception on resume (catchable by `rescue`).
-- Settling is **one-shot** — the first of Resume/SetCancelled/SetException wins; subsequent calls are no-op.
-- The fiber is yielded *inside* `Suspend` — there's no "arrange-Resume-before-Suspend" race window like with the old `Block`/`Unblock` API.
+- Settling is **one-shot** — the first of `Resume`/`SetCancelled`/`SetException` wins; subsequent calls are no-op.
+- The fiber is yielded *inside* `Suspend` — there's no "arrange-Resume-before-Suspend" race window.
+
+> [!TIP]
+> Prefer `Await` when the body fits as a single `async` lambda. Drop to `Suspend` only when you need to hand the continuation to external code that completes asynchronously without an awaitable surface.
 
 ### Stream I/O hooks (`ReadStream` / `ReadStreamToEnd` / `WriteStream`)
 
@@ -1406,6 +1443,12 @@ public interface IMRubyFiberScheduler : IDisposable
     void KernelSleep(TimeSpan duration, CancellationToken ct = default);
     void Yield(CancellationToken ct = default);
     FiberContinuation Suspend();
+
+    // High-level Await: scheduler picks where body runs (Task.Run for the
+    // bundled ThreadPool scheduler, captured context for SyncContext, etc.).
+    // Auto-routes OperationCanceledException → SetCancelled and other
+    // exceptions → SetException.
+    void Await(Func<ValueTask<MRubyValue>> body);
 
     // Stream I/O — scheduler owns the read buffer and the RString construction.
     void ReadStream(

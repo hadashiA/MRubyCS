@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace MRubyCS;
 
@@ -89,6 +90,33 @@ public interface IMRubyFiberScheduler : IDisposable
     /// (e.g. <c>ct.Register(continuation.SetCancelled)</c>).
     /// </summary>
     FiberContinuation Suspend();
+
+    /// <summary>
+    /// High-level convenience over <see cref="Suspend"/>: park the current
+    /// fiber, invoke <paramref name="body"/> on a runner of this scheduler's
+    /// choosing, and resume the fiber with body's result. Prefer this over
+    /// hand-rolled <c>Suspend</c> + <c>Task.Run</c> when the body is a single
+    /// async lambda — it keeps caller code portable across ThreadPool-friendly
+    /// and ThreadPool-less hosts (Unity WebGL, custom main-loop schedulers).
+    /// The scheduler decides where body runs.
+    /// </summary>
+    /// <remarks>
+    /// Cancellation: if body throws <see cref="OperationCanceledException"/>
+    /// the fiber resumes with <c>nil</c> (CRuby fiber-scheduler convention).
+    /// The OCE's own token is forwarded to <see cref="SetCancelled"/> so the
+    /// originator is preserved. To time out, wire a
+    /// <see cref="CancellationTokenSource"/> into body via closure.
+    /// <para>
+    /// Exceptions: any other exception from body is delivered as a Ruby
+    /// exception (catchable by surrounding <c>begin/rescue</c>).
+    /// </para>
+    /// <para>
+    /// Returns <c>void</c>. The host <see cref="MRubyMethod"/> body should
+    /// still <c>return MRubyValue.Nil;</c> on the next line — that return is
+    /// unreached on the async path; Ruby observes the value body resolved to.
+    /// </para>
+    /// </remarks>
+    void Await(Func<ValueTask<MRubyValue>> body);
 
     /// <summary>
     /// Bounded async read: reads up to <paramref name="maxBytes"/> from

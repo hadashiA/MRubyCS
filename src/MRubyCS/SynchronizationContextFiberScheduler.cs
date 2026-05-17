@@ -149,6 +149,38 @@ public sealed class SynchronizationContextFiberScheduler : IMRubyFiberScheduler
         }
     }
 
+    public void Await(Func<ValueTask<MRubyValue>> body)
+    {
+        if (body is null) throw new ArgumentNullException(nameof(body));
+        var continuation = Suspend();
+        // Post the body kickoff to the captured context. context.Post is
+        // asynchronous, so the caller-side fiber.Yield() runs first — no
+        // need for an explicit Task.Yield boundary inside body. Body's
+        // inner awaits naturally capture the context (no ConfigureAwait).
+        context.Post(awaitDispatchCallback, new AwaitState(body, continuation));
+    }
+
+    sealed class AwaitState(Func<ValueTask<MRubyValue>> body, FiberContinuation continuation)
+    {
+        public readonly Func<ValueTask<MRubyValue>> Body = body;
+        public readonly FiberContinuation Continuation = continuation;
+    }
+
+    static readonly SendOrPostCallback awaitDispatchCallback = static s =>
+    {
+        var st = (AwaitState)s!;
+        _ = AwaitAsync(st.Body, st.Continuation);
+    };
+
+    static async ValueTask AwaitAsync(Func<ValueTask<MRubyValue>> body, FiberContinuation continuation)
+    {
+        MRubyValue value;
+        try { value = await body(); }
+        catch (OperationCanceledException ex) { continuation.SetCancelled(ex.CancellationToken); return; }
+        catch (Exception ex) { continuation.SetException(ex); return; }
+        continuation.Resume(value);
+    }
+
     [System.Diagnostics.CodeAnalysis.DoesNotReturn]
     static void ThrowAlreadyParked(RFiber fiber, string op) =>
         throw new InvalidOperationException(
