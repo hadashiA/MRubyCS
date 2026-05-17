@@ -7,7 +7,7 @@ partial class MRubyState
 {
     public RFiber CurrentFiber => Context.Fiber ??= new RFiber(Context, this, FiberClass);
 
-    public IMRubyFiberScheduler? FiberScheduler { get; private set; }
+    public MRubyFiberScheduler? FiberScheduler { get; private set; }
 
     /// <summary>
     /// Returns the installed scheduler iff it can drive the current call
@@ -16,13 +16,13 @@ partial class MRubyState
     /// the cooperative path and the synchronous fallback.
     /// </summary>
     public bool TryGetActiveFiberScheduler(
-        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IMRubyFiberScheduler? scheduler)
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out MRubyFiberScheduler? scheduler)
     {
         scheduler = FiberScheduler is { } s && !CurrentFiber.IsRoot ? s : null;
         return scheduler is not null;
     }
 
-    public void SetFiberScheduler(IMRubyFiberScheduler scheduler)
+    public void SetFiberScheduler(MRubyFiberScheduler scheduler)
     {
         if (scheduler is null) throw new ArgumentNullException(nameof(scheduler));
         scheduler.Attach(this);

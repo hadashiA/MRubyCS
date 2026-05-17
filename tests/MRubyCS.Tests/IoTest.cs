@@ -49,10 +49,10 @@ public class IoTest
     [Test]
     public async Task File_Write_Then_Read_InsideFiber_WithScheduler()
     {
-        // Async path: ThreadPoolFiberScheduler should route File.write /
-        // File.read through Await + Yield. Verifies the I/O hooks work
-        // end-to-end with the scheduler installed.
-        mrb.SetFiberScheduler(new ThreadPoolFiberScheduler());
+        // Async path: with a scheduler installed, File.write / File.read
+        // route through MRubyFiberScheduler.Await so the host thread isn't
+        // blocked on stream I/O. Verifies end-to-end fiber + I/O.
+        mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
 
         var path = Path.Combine(tempDir, "b.txt");
         var script = Encoding.UTF8.GetBytes($$"""

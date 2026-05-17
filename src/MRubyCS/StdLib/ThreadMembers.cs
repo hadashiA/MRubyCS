@@ -9,7 +9,7 @@ static class ThreadMembers
 {
     /// <summary>
     /// <c>Thread.pass</c> — CRuby-compatible cooperative yield. Hands
-    /// control back to the <see cref="IMRubyFiberScheduler"/> so other
+    /// control back to the <see cref="MRubyFiberScheduler"/> so other
     /// in-flight fibers and host async work can run before this fiber is
     /// resumed. No-op at the root fiber or when no scheduler is installed.
     /// </summary>

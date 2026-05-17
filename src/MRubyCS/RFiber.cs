@@ -18,10 +18,10 @@ public sealed class RFiber : RObject
 
     /// <summary>
     /// Exception to raise inside the fiber on the next resume. Set by
-    /// <see cref="IMRubyFiberScheduler"/> implementations when an awaited
-    /// task throws, so Ruby code at the yield point observes a normal
-    /// <c>raise</c> (catchable by <c>rescue</c>) instead of the fiber
-    /// silently returning. Cleared automatically once consumed.
+    /// <see cref="MRubyFiberScheduler"/> when an awaited task throws, so
+    /// Ruby code at the yield point observes a normal <c>raise</c>
+    /// (catchable by <c>rescue</c>) instead of the fiber silently returning.
+    /// Cleared automatically once consumed.
     /// </summary>
     public RException? PendingException { get; set; }
 
