@@ -494,6 +494,24 @@ public partial class MRubyState : IDisposable
             state.NewString("UTF-8"u8));
 
         StringClass = DefineClass(Intern("String"u8), ObjectClass, MRubyVType.String);
+
+        // Early bootstrap (in InitClass) calls NewString before StringClass exists,
+        // producing RStrings cached on BasicObject/Object/Module/Class with Class == null.
+        // Patch them up now that StringClass is available so later Class#to_s + Send works.
+        FixupBootstrapClassName(BasicObjectClass);
+        FixupBootstrapClassName(ObjectClass);
+        FixupBootstrapClassName(ModuleClass);
+        FixupBootstrapClassName(ClassClass);
+
+        void FixupBootstrapClassName(RClass klass)
+        {
+            if (klass.InstanceVariables.TryGet(Names.ClassNameKey, out var v) &&
+                v.Object is RString str && str.Class == null!)
+            {
+                str.Class = StringClass;
+            }
+        }
+
         DefineMethod(StringClass, Names.Initialize, StringMembers.Initialize);
         DefineMethod(StringClass, Names.InitializeCopy, StringMembers.InitializeCopy);
         DefineMethod(StringClass, Names.OpEq, StringMembers.OpEq);
