@@ -25,7 +25,7 @@ namespace MRubyCS.Compiler.Editor
                 compiler = MRubyCompiler.Create(state);
             }
 
-            using var compilationResult = compiler.Compile(source);
+            using var compilationResult = compiler.Compile(source, filename: ctx.assetPath);
             foreach (var x in compilationResult.Diagnostics)
             {
                 if (x.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.GeneratorError)
