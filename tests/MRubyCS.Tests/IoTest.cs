@@ -52,7 +52,7 @@ public class IoTest
         // Async path: with a scheduler installed, File.write / File.read
         // route through MRubyFiberScheduler.Await so the host thread isn't
         // blocked on stream I/O. Verifies end-to-end fiber + I/O.
-        mrb.UseFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = false });
+        mrb.UseFiberScheduler();
 
         var path = Path.Combine(tempDir, "b.txt");
         var script = Encoding.UTF8.GetBytes($$"""

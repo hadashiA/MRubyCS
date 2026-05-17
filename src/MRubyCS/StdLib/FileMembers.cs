@@ -49,7 +49,7 @@ static class FileMembers
         {
             var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.Read, 4096, useAsync: true);
-            scheduler.Await(async (mrb, continueOnCapturedContext) =>
+            scheduler.Await(async mrb =>
             {
                 try
                 {
@@ -57,7 +57,7 @@ static class FileMembers
                     while (true)
                     {
                         var mem = writer.GetMemory(4096);
-                        var read = await stream.ReadAsync(mem).ConfigureAwait(continueOnCapturedContext);
+                        var read = await stream.ReadAsync(mem);
                         if (read == 0) break;
                         writer.Advance(read);
                     }
@@ -86,11 +86,11 @@ static class FileMembers
         {
             var stream = new FileStream(path, FileMode.Create, FileAccess.Write,
                 FileShare.None, 4096, useAsync: true);
-            scheduler.Await(async (_, continueOnCapturedContext) =>
+            scheduler.Await(async _ =>
             {
                 try
                 {
-                    await stream.WriteAsync(data).ConfigureAwait(continueOnCapturedContext);
+                    await stream.WriteAsync(data);
                     return new MRubyValue((long)data.Length);
                 }
                 finally { stream.Dispose(); }
