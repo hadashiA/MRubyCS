@@ -22,15 +22,37 @@ public class Backtrace
         this.entries = entries;
     }
 
-    // TODO: Use debug info
     public RArray ToRArray(MRubyState state)
     {
         var array = state.NewArray(64);
         foreach (var entry in entries)
         {
-            if (entry.MethodId == default) continue;
-            var methodName = state.NameOf(entry.MethodId);
-            var line = state.NewString($"{methodName} in byte sequence: {entry.Index}");
+            // Top-level / fiber-root frames have MethodId == default but still carry an
+            // Irep and a useful pc. Show them as "<main>" so the user sees their script's
+            // file:line in the trace.
+            var methodName = entry.MethodId == default
+                ? "<main>"u8
+                : state.NameOf(entry.MethodId).AsSpan();
+
+            RString line;
+            if (entry.Irep?.DebugInfo is { } dbg &&
+                dbg.TryFindPosition(entry.Index, out var file, out var lineNo))
+            {
+                line = state.NewString($"{file}:{lineNo}:in `{methodName}'");
+            }
+            else if (entry.Irep is not null)
+            {
+                line = state.NewString($"in `{methodName}' (no debug info, byte sequence: {entry.Index})");
+            }
+            else if (entry.MethodId != default)
+            {
+                // C# method frame (Proc=null). No source position.
+                line = state.NewString($"in `{methodName}'");
+            }
+            else
+            {
+                continue; // truly empty frame; skip
+            }
             array.Push(line);
         }
         return array;
@@ -64,7 +86,12 @@ public class Backtrace
             if (callInfo.Proc is { } proc)
             {
                 location.Irep = proc.Irep;
-                location.Index = proc.ProgramCounter;
+                // Use the call frame's current pc rather than proc.ProgramCounter
+                // (which is just the proc's starting pc, the same for every frame
+                // and therefore useless for backtrace). For the innermost frame this is
+                // where execution is right now; for ancestors it points just past the
+                // Send opcode that pushed the child, i.e. the call site.
+                location.Index = callInfo.ProgramCounter;
             }
             entries.Add(location);
         }

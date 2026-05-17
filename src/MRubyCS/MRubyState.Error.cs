@@ -46,6 +46,15 @@ partial class MRubyState
             ? $"{ex.Message} ({typeName})"
             : typeName.ToString();
 
+        // Capture a backtrace at the raise site if the exception doesn't already have
+        // one (e.g. `raise SomeError.new(...)` from Ruby creates the RException up-front
+        // without an attached trace). Without this, debugger UIs / Exception#backtrace
+        // would see an empty trace for these raises.
+        if (ex.Backtrace is null)
+        {
+            ex.Backtrace = Backtrace.Capture(Context);
+        }
+
         Exception = new MRubyRaiseException(message, this, ex, Context.CallDepth);
         throw Exception;
     }

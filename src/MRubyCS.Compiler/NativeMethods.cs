@@ -119,6 +119,12 @@ unsafe class NativeMethods
     [DllImport(DllName, EntryPoint = "mrc_ccontext_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern MrcCContext* MrcCContextFree(MrcCContext* c);
 
+    // const char *mrc_ccontext_filename(mrc_ccontext *c, const char *s);
+    // Sets the source filename used to populate the DBG section. mrc owns the resulting
+    // copy; the returned char* points into mrc-managed memory.
+    [DllImport(DllName, EntryPoint = "mrc_ccontext_filename", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    public static extern byte* MrcCContextFilename(MrcCContext* c, byte* filename);
+
     [DllImport(DllName, EntryPoint = "mrc_load_string_cxt", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern MrcIrep* MrcLoadStringCxt(
         MrcCContext* c,

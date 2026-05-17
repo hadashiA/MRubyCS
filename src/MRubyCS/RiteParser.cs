@@ -148,9 +148,104 @@ public class RiteParser(MRubyState state)
         ReadLocalVariablesRecursive(ref bin, symbols, irep);
     }
 
-    void ReadSectionDebug(ReadOnlySpan<byte> bin, Irep irep)
+    static void ReadSectionDebug(ReadOnlySpan<byte> bin, Irep irep)
     {
-        // currently not supported
+        // Layout (per mruby/src/load.c::read_section_debug):
+        //   [section header] uint8[4] "DBG\0", uint8[4] section_size
+        //   filenames_len   uint16
+        //   for i in 0..filenames_len:
+        //     f_len uint16
+        //     bytes uint8[f_len]
+        //   then per-irep debug records, DFS-order matching the IREP section.
+        bin = bin[RiteSectionHeader.Size..];
+
+        var filenamesLen = BinaryPrimitives.ReadUInt16BigEndian(bin);
+        bin = bin[sizeof(ushort)..];
+
+        var filenames = new string[filenamesLen];
+        for (var i = 0; i < filenamesLen; i++)
+        {
+            var fLen = BinaryPrimitives.ReadUInt16BigEndian(bin);
+            bin = bin[sizeof(ushort)..];
+            filenames[i] = Encoding.UTF8.GetString(bin[..fLen]);
+            bin = bin[fLen..];
+        }
+
+        ReadDebugRecordRecursive(ref bin, filenames, irep);
+    }
+
+    static void ReadDebugRecordRecursive(ref ReadOnlySpan<byte> bin, string[] filenames, Irep irep)
+    {
+        // record_size uint32 (skip — we walk forward by reading each field)
+        bin = bin[sizeof(uint)..];
+
+        var flen = BinaryPrimitives.ReadUInt16BigEndian(bin);
+        bin = bin[sizeof(ushort)..];
+
+        var files = new IrepDebugInfoFile[flen];
+        for (var f = 0; f < flen; f++)
+        {
+            var startPos = BinaryPrimitives.ReadUInt32BigEndian(bin);
+            bin = bin[sizeof(uint)..];
+
+            var fnameIdx = BinaryPrimitives.ReadUInt16BigEndian(bin);
+            bin = bin[sizeof(ushort)..];
+
+            var entryCount = BinaryPrimitives.ReadUInt32BigEndian(bin);
+            bin = bin[sizeof(uint)..];
+
+            var lineType = (DebugLineType)bin[0];
+            bin = bin[1..];
+
+            byte[] lineData;
+            switch (lineType)
+            {
+                case DebugLineType.Ary:
+                {
+                    var byteLen = (int)entryCount * sizeof(ushort);
+                    lineData = bin[..byteLen].ToArray();
+                    bin = bin[byteLen..];
+                    break;
+                }
+                case DebugLineType.FlatMap:
+                {
+                    var byteLen = (int)entryCount * (sizeof(uint) + sizeof(ushort));
+                    lineData = bin[..byteLen].ToArray();
+                    bin = bin[byteLen..];
+                    break;
+                }
+                case DebugLineType.PackedMap:
+                {
+                    var byteLen = (int)entryCount;
+                    lineData = bin[..byteLen].ToArray();
+                    bin = bin[byteLen..];
+                    break;
+                }
+                default:
+                    throw new RiteParseException($"unknown debug line type {(byte)lineType}");
+            }
+
+            files[f] = new IrepDebugInfoFile
+            {
+                StartPos = startPos,
+                Filename = (uint)fnameIdx < (uint)filenames.Length ? filenames[fnameIdx] : "",
+                LineType = lineType,
+                LineEntryCount = entryCount,
+                LineData = lineData,
+            };
+        }
+
+        irep.DebugInfo = new IrepDebugInfo
+        {
+            PcCount = (uint)irep.Sequence.Length,
+            Files = files,
+        };
+
+        // Recurse for child ireps (same DFS order as IREP section).
+        foreach (var child in irep.Children)
+        {
+            ReadDebugRecordRecursive(ref bin, filenames, child);
+        }
     }
 
     void ReadIrepRecordRecursive(ref ReadOnlySpan<byte> bin, out Irep irep)
