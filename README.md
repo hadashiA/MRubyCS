@@ -103,7 +103,7 @@ Please refer to the following for the [benchmark code](https://github.com/hadash
     - [With a scheduler installed](#with-a-scheduler-installed)
     - [Defining async Ruby methods with `Await`](#defining-async-ruby-methods-with-await)
     - [Low-level: `Suspend` + `FiberContinuation`](#low-level-suspend--fibercontinuation)
-    - [Thread routing (`ConfigureAwait` + `SynchronizationContext`)](#thread-routing-configureawait--synchronizationcontext)
+    - [Thread routing (`ContinueOnCapturedContext` + `SynchronizationContext`)](#thread-routing-continueoncapturedcontext--synchronizationcontext)
     - [Custom Schedulers (subclassing)](#custom-schedulers-subclassing)
 - [MRubyCS.Serializer](#mrubycsserializer)
 
@@ -1189,13 +1189,13 @@ mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self)
 
 ## Define async Ruby method (FiberScheduler)
 
-MRubyCS exposes `MRubyFiberScheduler` — a single, host-subclassable scheduler class — so that blocking Ruby primitives can cooperate with a C# async runtime instead of blocking the host thread. Thread routing (ThreadPool vs main thread / UI thread) is controlled by `ConfigureAwait` + the ambient `SynchronizationContext`, not by per-scheduler dispatch.
+MRubyCS exposes `MRubyFiberScheduler` — a single, host-subclassable scheduler class — so that blocking Ruby primitives can cooperate with a C# async runtime instead of blocking the host thread. Thread routing (ThreadPool vs main thread / UI thread) is controlled by `ContinueOnCapturedContext` + the ambient `SynchronizationContext`, not by per-scheduler dispatch.
 
 | Ruby primitive | Scheduler hook | Notes |
 |---|---|---|
 | `Kernel#sleep` | `KernelSleep` | Default: `Await` + `Task.Delay`. `sleep 0` routes to `Yield` |
 | `Thread.pass` | `Yield` | Default: `Await` + `Task.Yield` |
-| (host-defined async lambda) | `Await(async (mrb, ca) => …)` | Park, run body on caller thread, resume with body's result |
+| (host-defined async lambda) | `Await(async (mrb, continueOnCapturedContext) => …)` | Park, run body on caller thread, resume with body's result |
 | (host-defined external event) | `Suspend` → `FiberContinuation.Resume` | Low-level: park a fiber on an arbitrary external completion |
 
 > [!NOTE]
@@ -1254,7 +1254,7 @@ await fiber.WaitForTerminateAsync();
 
 ### Defining async Ruby methods with `Await`
 
-`Await(async (mrb, continueOnCapturedContext) => …)` is the high-level convenience for bridging an `async` C# lambda into a Ruby method. The body runs starting on the caller (VM) thread; after the first `await`, thread routing is determined by the body's own `ConfigureAwait` choices and the ambient `SynchronizationContext` — the scheduler doesn't try to dispatch body to any particular thread.
+`Await(async (mrb, continueOnCapturedContext) => …)` is the high-level convenience for bridging an `async` C# lambda into a Ruby method. The body runs starting on the caller (VM) thread; after the first `await`, thread routing is determined by the body's own `.ConfigureAwait(...)` choices and the ambient `SynchronizationContext` — the scheduler doesn't try to dispatch body to any particular thread.
 
 ```cs
 using var mrb = MRubyState.Create();
@@ -1267,7 +1267,7 @@ mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_http"u8), (state, _) =>
     state.FiberScheduler!.Await(async (mrb, continueOnCapturedContext) =>
     {
         using var client = new HttpClient();
-        var body = await client.GetStringAsync(url).ConfigureAwait(configureAwait);
+        var body = await client.GetStringAsync(url).ConfigureAwait(continueOnCapturedContext);
         return mrb.NewString(body);
     });
     return MRubyValue.Nil; // unreached on the async path — Ruby observes body's return
@@ -1283,8 +1283,8 @@ await fiber.WaitForTerminateAsync();
 
 Body contract:
 
-- The body receives `(MRubyState mrb, bool configureAwait)`. `mrb` is the bound state; `configureAwait` is `scheduler.ConfigureAwait` at call time.
-- **You must pass `configureAwait` to every `await` in the body** (`.ConfigureAwait(configureAwait)`). Forgetting one silently changes thread routing — there is no analyzer enforcement.
+- The body receives `(MRubyState mrb, bool continueOnCapturedContext)`. `mrb` is the bound state; `continueOnCapturedContext` is `scheduler.ContinueOnCapturedContext` at call time.
+- **You must pass `continueOnCapturedContext` to every `await` in the body** (`.ConfigureAwait(continueOnCapturedContext)`). Forgetting one silently changes thread routing — there is no analyzer enforcement.
 - Body returns `ValueTask<MRubyValue>`; the value is delivered to Ruby as the apparent return of the host `MRubyMethod`. The host method must still end with `return MRubyValue.Nil;` — that return is unreached on the async path.
 - `OperationCanceledException` from body → fiber resumes with `nil` (CRuby fiber-scheduler convention; the OCE's own token is preserved).
 - Any other exception → delivered as a Ruby exception, catchable by surrounding `begin/rescue`.
@@ -1292,11 +1292,11 @@ Body contract:
 To time out, wire a `CancellationTokenSource` into body via closure:
 
 ```cs
-state.FiberScheduler!.Await(async (mrb, ca) =>
+state.FiberScheduler!.Await(async (mrb, continueOnCapturedContext) =>
 {
-    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
     using var client = new HttpClient();
-    var body = await client.GetStringAsync(url, cts.Token).ConfigureAwait(ca);
+    var body = await client.GetStringAsync(url, cancellationSource.Token).ConfigureAwait(continueOnCapturedContext);
     return mrb.NewString(body);
 });
 ```
@@ -1331,16 +1331,16 @@ Mechanics:
 > [!TIP]
 > Prefer `Await` when the body fits as a single `async` lambda. Drop to `Suspend` only when you need to hand the continuation to external code that completes asynchronously without an awaitable surface.
 
-### Thread routing (`ConfigureAwait` + `SynchronizationContext`)
+### Thread routing (`ContinueOnCapturedContext` + `SynchronizationContext`)
 
 `MRubyFiberScheduler` does **not** install any per-scheduler dispatch (no Task.Run, no captured context). Thread routing of `fiber.Resume` and body continuations is determined entirely by:
 
-1. **`scheduler.ConfigureAwait`** — the `bool` forwarded to every `Await` body, and used internally by `Suspend()` on its `await entry.Task`.
-2. **The ambient `SynchronizationContext.Current`** — captured at await sites when `ConfigureAwait(true)` is in effect.
+1. **`scheduler.ContinueOnCapturedContext`** — the `bool` forwarded to every `Await` body, and used internally by `Suspend()` on its `await entry.Task`.
+2. **The ambient `SynchronizationContext.Current`** — captured at await sites when `.ConfigureAwait(true)` is in effect.
 
 Common configurations:
 
-| Host | `SynchronizationContext.Current` on VM thread | `scheduler.ConfigureAwait` | Result |
+| Host | `SynchronizationContext.Current` on VM thread | `scheduler.ContinueOnCapturedContext` | Result |
 |---|---|---|---|
 | CLI / test / server backend | `null` | `false` (or `true`; no effect) | All continuations on ThreadPool |
 | WPF / WinForms / ASP.NET UI | set by host | `true` (default) | Continuations back to UI thread |
@@ -1348,7 +1348,7 @@ Common configurations:
 | Unity WebGL (no ThreadPool) | host-set main-thread context required | `true` (default) | All continuations on main thread |
 
 > [!WARNING]
-> `ContinueOnCapturedContext = false` in a host that has a designated VM thread (Unity, WPF, …) routes continuations to the ThreadPool and will corrupt VM state. The default `true` is the safe choice; switch to `false` only on ThreadPool-friendly hosts where you want to avoid the context capture overhead.
+> `ContinueOnCapturedContext = false` in a host that has a designated VM thread (Unity, WPF, …) routes continuations to the ThreadPool and will corrupt VM state. The default `true` is the safe choice; switch to `false` only on ThreadPool-friendly hosts where you want to avoid the context-capture overhead.
 
 ### Custom Schedulers (subclassing)
 
@@ -1357,21 +1357,21 @@ Common configurations:
 ```cs
 public class MRubyFiberScheduler : IDisposable
 {
-    public bool ConfigureAwait { get; set; } = true;
+    public bool ContinueOnCapturedContext { get; set; } = true;
 
     public virtual void Attach(MRubyState mrb);
 
     // High-level: park, run body, resume with body's result. Not virtual —
     // its behavior is intentionally fixed (caller-thread sync prefix +
-    // ConfigureAwait-controlled continuations).
+    // continueOnCapturedContext-controlled continuations).
     public void Await(Func<MRubyState, bool, ValueTask<MRubyValue>> body);
 
     // Low-level park primitive. Override only for custom park bookkeeping.
     public virtual FiberContinuation Suspend();
 
     // Ruby `sleep` / `Thread.pass`. Default: Await + Task.Delay / Task.Yield.
-    public virtual void KernelSleep(TimeSpan duration, CancellationToken ct = default);
-    public virtual void Yield(CancellationToken ct = default);
+    public virtual void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default);
+    public virtual void Yield(CancellationToken cancellationToken = default);
 
     public virtual void Dispose();
 }
@@ -1379,9 +1379,9 @@ public class MRubyFiberScheduler : IDisposable
 public readonly struct FiberContinuation
 {
     public RFiber Fiber { get; }
-    public void Resume(MRubyValue value = default);             // → scheduler.SetResult
-    public void SetCancelled(CancellationToken ct = default);   // → scheduler.SetCancelled
-    public void SetException(Exception exception);              // → scheduler.SetException
+    public void Resume(MRubyValue value = default);                           // → scheduler.SetResult
+    public void SetCancelled(CancellationToken cancellationToken = default);  // → scheduler.SetCancelled
+    public void SetException(Exception exception);                            // → scheduler.SetException
 }
 ```
 
@@ -1390,15 +1390,15 @@ Override example — host-managed cancellation on `KernelSleep`:
 ```cs
 class HostCancellableScheduler : MRubyFiberScheduler
 {
-    public CancellationTokenSource ShutdownCts { get; } = new();
+    public CancellationTokenSource ShutdownSource { get; } = new();
 
-    public override void KernelSleep(TimeSpan duration, CancellationToken ct = default)
-        => base.KernelSleep(duration, ShutdownCts.Token);   // ignore caller's ct, use ours
+    public override void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
+        => base.KernelSleep(duration, ShutdownSource.Token);   // ignore caller's token, use ours
 
     public override void Dispose()
     {
-        ShutdownCts.Cancel();
-        ShutdownCts.Dispose();
+        ShutdownSource.Cancel();
+        ShutdownSource.Dispose();
         base.Dispose();
     }
 }
