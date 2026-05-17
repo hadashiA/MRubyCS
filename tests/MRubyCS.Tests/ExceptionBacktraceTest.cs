@@ -70,22 +70,41 @@ public class ExceptionBacktraceTest
     }
 
     [Test]
-    public void MRubyRaiseException_ToString_IncludesMRubyBacktrace()
+    public void MRubyRaiseException_Message_IncludesMRubyBacktrace()
     {
         var ex = Run(Encoding.UTF8.GetBytes("""
             def deep
               raise "boom"
             end
             deep
-            """), "tostring.rb");
+            """), "msg.rb");
 
-        var text = ex.ToString();
-        TestContext.Out.WriteLine(text);
+        TestContext.Out.WriteLine(ex.Message);
 
-        Assert.That(text, Does.Contain(nameof(MRubyRaiseException)));
-        Assert.That(text, Does.Contain("mruby backtrace:"));
-        Assert.That(text, Does.Contain("\tfrom tostring.rb:2:in `deep'"));
-        Assert.That(text, Does.Contain("tostring.rb:4:in `<main>'"));
+        Assert.That(ex.Message, Does.Contain("mruby backtrace:"));
+        Assert.That(ex.Message, Does.Contain("\tfrom msg.rb:2:in `deep'"));
+        Assert.That(ex.Message, Does.Contain("msg.rb:4:in `<main>'"));
+    }
+
+    [Test]
+    public void MRubyRaiseException_GetMRubyStacktrace_ReturnsFullTrace()
+    {
+        var ex = Run(Encoding.UTF8.GetBytes("""
+            def a
+              b
+            end
+            def b
+              raise "x"
+            end
+            a
+            """), "trace.rb");
+
+        var trace = ex.GetMRubyStacktrace();
+        TestContext.Out.WriteLine(trace);
+
+        Assert.That(trace, Does.Contain("trace.rb:5:in `b'"));
+        Assert.That(trace, Does.Contain("trace.rb:2:in `a'"));
+        Assert.That(trace, Does.Contain("trace.rb:7:in `<main>'"));
     }
 
     [Test]

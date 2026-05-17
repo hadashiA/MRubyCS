@@ -1,68 +1,10 @@
 using System;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using MRubyCS.Internals;
 using Utf8StringInterpolation;
 
 namespace MRubyCS;
-
-public class MRubyLongJumpException(string message) : Exception(message);
-
-public class MRubyBreakException(MRubyState state, RBreak breakObject)
-    : MRubyLongJumpException("break")
-{
-    public MRubyState State => state;
-    public RBreak BreakObject => breakObject;
-}
-
-public class MRubyRaiseException(
-    string message,
-    MRubyState state,
-    RException exceptionObject,
-    int callDepth)
-    : MRubyLongJumpException(message)
-{
-    public MRubyState State { get; } = state;
-    public RException ExceptionObject { get; } = exceptionObject;
-    public int CallDepth { get; } = callDepth;
-
-    public MRubyRaiseException(
-        MRubyState state,
-        RException exceptionObject,
-        int callDepth)
-        : this(exceptionObject.Message?.ToString() ?? "exception raised", state, exceptionObject, callDepth)
-    {
-    }
-
-    public override string ToString()
-    {
-        var sb = new StringBuilder();
-        sb.Append(GetType().FullName);
-        sb.Append(": ");
-        sb.Append(Message);
-
-        if (ExceptionObject.Backtrace is { Entries.Count: > 0 } bt)
-        {
-            var trace = bt.ToString(State);
-            sb.AppendLine();
-            sb.Append("mruby backtrace:");
-            foreach (var line in trace.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-            {
-                sb.AppendLine();
-                sb.Append("\tfrom ");
-                sb.Append(line);
-            }
-        }
-
-        if (StackTrace is { } st)
-        {
-            sb.AppendLine();
-            sb.Append(st);
-        }
-        return sb.ToString();
-    }
-}
 
 partial class MRubyState
 {
