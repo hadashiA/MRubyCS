@@ -6,7 +6,9 @@ public sealed class RException(
     : RObject(MRubyVType.Exception, exceptionClass)
 {
     public RString? Message { get; set; } = message;
-    public Backtrace? Backtrace { get; init; }
+    // Settable so the runtime can attach a backtrace at the raise site when the
+    // exception object was constructed without one (e.g. `raise SomeError.new(...)`).
+    public Backtrace? Backtrace { get; set; }
 
     internal override RObject Clone()
     {

@@ -43,6 +43,13 @@ public class Irep
     public Irep[] Children { get; init; } = [];
     public CatchHandler[] CatchHandlers { get; init; } = [];
 
+    /// <summary>
+    /// Source-position information recovered from the .mrb file's DBG section, if it was
+    /// emitted (controlled by <c>MRubyCompiler.Compile(..., debugInfo: true)</c>). Null
+    /// when the bytecode was produced without debug info.
+    /// </summary>
+    public IrepDebugInfo? DebugInfo { get; internal set; }
+
     public bool TryFindCatchHandler(int pc, CatchHandlerType filter, out CatchHandler handler)
     {
         var noFilter = filter == CatchHandlerType.All;
