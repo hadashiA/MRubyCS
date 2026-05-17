@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using MRubyCS.Internals;
 using Utf8StringInterpolation;
 
@@ -20,7 +21,7 @@ public class MRubyRaiseException(
     MRubyState state,
     RException exceptionObject,
     int callDepth)
-    : MRubyLongJumpException(message)
+    : MRubyLongJumpException(BuildMessage(message, state, exceptionObject))
 {
     public MRubyState State { get; } = state;
     public RException ExceptionObject { get; } = exceptionObject;
@@ -32,6 +33,46 @@ public class MRubyRaiseException(
         int callDepth)
         : this(exceptionObject.Message?.ToString() ?? "exception raised", state, exceptionObject, callDepth)
     {
+    }
+
+    // Embed the full mruby backtrace into `Message` so generic .NET log sinks
+    // (Unity Console etc.) that surface only `Exception.Message` still show
+    // where the raise originated.
+    static string BuildMessage(string message, MRubyState state, RException exceptionObject)
+    {
+        if (exceptionObject.Backtrace is not { Entries.Count: > 0 } bt) return message;
+        var sb = new StringBuilder();
+        sb.Append(message);
+        sb.AppendLine();
+        sb.Append("mruby backtrace:");
+        foreach (var line in bt.ToString(state)
+                     .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            sb.AppendLine();
+            sb.Append("\tfrom ");
+            sb.Append(line);
+        }
+        return sb.ToString();
+    }
+
+    public string GetMRubyStacktrace()
+    {
+        if (ExceptionObject.Backtrace is not { Entries.Count: > 0 } bt) return string.Empty;
+        return bt.ToString(State);
+    }
+
+    public override string ToString()
+    {
+        var sb = new StringBuilder();
+        sb.Append(GetType().FullName);
+        sb.Append(": ");
+        sb.Append(Message);
+        if (StackTrace is { } st)
+        {
+            sb.AppendLine();
+            sb.Append(st);
+        }
+        return sb.ToString();
     }
 }
 

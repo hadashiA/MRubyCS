@@ -123,8 +123,9 @@ public sealed class IrepDebugInfoFile
         var i = 0;
         while (i < p.Length)
         {
-            pos += DecodePackedInt(p, ref i);
-            var lineDelta = DecodePackedInt(p, ref i);
+            if (!TryDecodePackedInt(p, ref i, out var posDelta)) break;
+            pos += posDelta;
+            if (!TryDecodePackedInt(p, ref i, out var lineDelta)) break;
             if ((uint)pc < pos) break;
             line += lineDelta;
         }
@@ -134,18 +135,25 @@ public sealed class IrepDebugInfoFile
     /// <summary>
     /// Decode a 32-bit varint from <paramref name="bytes"/> starting at <paramref name="offset"/>,
     /// advancing <paramref name="offset"/> past the consumed bytes. Mirrors mruby's
-    /// <c>mrb_packed_int_decode</c> in <c>debug.c</c>.
+    /// <c>mrb_packed_int_decode</c> in <c>debug.c</c>. Returns false if the input runs out
+    /// before a complete varint is read.
     /// </summary>
-    static uint DecodePackedInt(ReadOnlySpan<byte> bytes, ref int offset)
+    static bool TryDecodePackedInt(ReadOnlySpan<byte> bytes, ref int offset, out uint value)
     {
         uint n = 0;
         var shift = 0;
-        while (true)
+        while (offset < bytes.Length)
         {
             var b = bytes[offset++];
             n |= (uint)(b & 0x7f) << shift;
-            if ((b & 0x80) == 0 || shift >= 21) return n;
+            if ((b & 0x80) == 0 || shift >= 21)
+            {
+                value = n;
+                return true;
+            }
             shift += 7;
         }
+        value = 0;
+        return false;
     }
 }

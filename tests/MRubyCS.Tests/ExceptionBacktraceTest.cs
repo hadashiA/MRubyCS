@@ -70,6 +70,44 @@ public class ExceptionBacktraceTest
     }
 
     [Test]
+    public void MRubyRaiseException_Message_IncludesMRubyBacktrace()
+    {
+        var ex = Run(Encoding.UTF8.GetBytes("""
+            def deep
+              raise "boom"
+            end
+            deep
+            """), "msg.rb");
+
+        TestContext.Out.WriteLine(ex.Message);
+
+        Assert.That(ex.Message, Does.Contain("mruby backtrace:"));
+        Assert.That(ex.Message, Does.Contain("\tfrom msg.rb:2:in `deep'"));
+        Assert.That(ex.Message, Does.Contain("msg.rb:4:in `<main>'"));
+    }
+
+    [Test]
+    public void MRubyRaiseException_GetMRubyStacktrace_ReturnsFullTrace()
+    {
+        var ex = Run(Encoding.UTF8.GetBytes("""
+            def a
+              b
+            end
+            def b
+              raise "x"
+            end
+            a
+            """), "trace.rb");
+
+        var trace = ex.GetMRubyStacktrace();
+        TestContext.Out.WriteLine(trace);
+
+        Assert.That(trace, Does.Contain("trace.rb:5:in `b'"));
+        Assert.That(trace, Does.Contain("trace.rb:2:in `a'"));
+        Assert.That(trace, Does.Contain("trace.rb:7:in `<main>'"));
+    }
+
+    [Test]
     public void BacktraceIncludesCallSiteLine_NotMerelyProcStart()
     {
         // Pre-existing bug: Backtrace.Capture used proc.ProgramCounter (always the
