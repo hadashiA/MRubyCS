@@ -25,10 +25,7 @@ public readonly struct FiberContinuation
     }
 
     /// <summary>
-    /// Resume the suspended fiber with <paramref name="value"/>. The actual
-    /// <see cref="RFiber.Resume"/> is deferred (the parking entry uses
-    /// <see cref="TaskCreationOptions.RunContinuationsAsynchronously"/>), so
-    /// calling this from inside the VM frame is safe.
+    /// Resume the suspended fiber with <paramref name="value"/>.
     /// </summary>
     public void Resume(MRubyValue value = default) => scheduler.SetResult(Fiber, value);
 
@@ -57,9 +54,10 @@ public readonly struct FiberContinuation
 /// <summary>
 /// Cooperative scheduler that bridges Ruby fibers to C# async code. Single
 /// concrete class — hosts may subclass to override <see cref="KernelSleep"/>
-/// / <see cref="Yield"/> / <see cref="Suspend"/>, but thread routing is
-/// controlled by <see cref="ContinueOnCapturedContext"/> + the ambient
-/// <see cref="SynchronizationContext"/>, not by per-scheduler dispatch.
+/// / <see cref="Yield"/> / <see cref="Suspend"/>. Thread routing of resumes
+/// is determined by the ambient <see cref="SynchronizationContext"/> at the
+/// time of the <c>await</c> (e.g. the player-loop context on Unity), not
+/// by any per-scheduler dispatch.
 ///
 /// <para>
 /// Hooks operate on <see cref="MRubyState.CurrentFiber"/> (captured at hook
@@ -71,27 +69,7 @@ public readonly struct FiberContinuation
 public class MRubyFiberScheduler : IDisposable
 {
     protected MRubyState MRubyState = default!;
-    readonly ConcurrentDictionary<RFiber, BlockEntry> blockedFibers = new();
-
-    sealed class BlockEntry() : TaskCompletionSource<MRubyValue>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    /// <summary>
-    /// Whether body awaits should continue on the captured
-    /// <see cref="SynchronizationContext"/> (<c>true</c>: equivalent to
-    /// <c>ConfigureAwait(true)</c>; <c>false</c>: let continuations land on
-    /// the threadpool). Forwarded to the body lambda passed to
-    /// <see cref="Await"/>; hosts must thread it through every <c>await</c>
-    /// in their lambda for the setting to take effect.
-    ///
-    /// <para>
-    /// Default: <c>true</c>. Hosts with a designated VM thread (Unity main
-    /// thread, WPF / WinForms UI thread, custom pumped loops) should keep
-    /// this and ensure <see cref="SynchronizationContext.Current"/> is set
-    /// on the VM thread. Threadpool-friendly hosts (CLI, server backends)
-    /// may set this to <c>false</c> for lower overhead.
-    /// </para>
-    /// </summary>
-    public bool ContinueOnCapturedContext { get; set; } = true;
+    readonly ConcurrentDictionary<RFiber, TaskCompletionSource<MRubyValue>> blockedFibers = new();
 
     /// <summary>
     /// Bind this scheduler to the given <see cref="MRubyCS.MRubyState"/>. Invoked
@@ -103,10 +81,7 @@ public class MRubyFiberScheduler : IDisposable
     /// Park the current fiber, run <paramref name="body"/> from the caller's
     /// thread (sync prefix runs there), and resume the fiber with body's
     /// result once it completes. The body receives the bound
-    /// <see cref="MRubyCS.MRubyState"/> and the current
-    /// <see cref="ContinueOnCapturedContext"/> value; pass the latter to
-    /// every <c>await</c> in the body via
-    /// <c>.ConfigureAwait(continueOnCapturedContext)</c>.
+    /// <see cref="MRubyCS.MRubyState"/>.
     ///
     /// <para>
     /// On <see cref="OperationCanceledException"/> from body, the fiber
@@ -115,7 +90,7 @@ public class MRubyFiberScheduler : IDisposable
     /// (catchable by <c>begin/rescue</c>).
     /// </para>
     /// </summary>
-    public void Await(Func<MRubyState, bool, ValueTask<MRubyValue>> body)
+    public void Await(Func<MRubyState, ValueTask<MRubyValue>> body)
     {
         if (body is null) throw new ArgumentNullException(nameof(body));
         var continuation = Suspend();
@@ -123,13 +98,46 @@ public class MRubyFiberScheduler : IDisposable
         return;
 
         async ValueTask AwaitAsync(
-            Func<MRubyState, bool, ValueTask<MRubyValue>> body,
+            Func<MRubyState, ValueTask<MRubyValue>> body,
             FiberContinuation continuation)
         {
             try
             {
-                var value = await body(MRubyState, ContinueOnCapturedContext)
-                    .ConfigureAwait(ContinueOnCapturedContext);
+                var value = await body(MRubyState);
+                continuation.Resume(value);
+            }
+            catch (OperationCanceledException ex)
+            {
+                continuation.SetCancelled(ex.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                continuation.SetException(ex);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Allocation-free overload of <see cref="Await(Func{MRubyState, ValueTask{MRubyValue}})"/>.
+    /// Pass the closed-over data as <paramref name="state"/> and a static lambda for
+    /// <paramref name="body"/> to avoid the implicit closure allocation that a capturing
+    /// lambda would incur — useful on hot paths or in Unity where GC pressure matters.
+    /// </summary>
+    public void Await<TState>(TState state, Func<MRubyState, TState, ValueTask<MRubyValue>> body)
+    {
+        if (body is null) throw new ArgumentNullException(nameof(body));
+        var continuation = Suspend();
+        _ = AwaitAsync(state, body, continuation);
+        return;
+
+        async ValueTask AwaitAsync(
+            TState state,
+            Func<MRubyState, TState, ValueTask<MRubyValue>> body,
+            FiberContinuation continuation)
+        {
+            try
+            {
+                var value = await body(MRubyState, state);
                 continuation.Resume(value);
             }
             catch (OperationCanceledException ex)
@@ -157,7 +165,7 @@ public class MRubyFiberScheduler : IDisposable
     public virtual FiberContinuation Suspend()
     {
         var fiber = MRubyState.CurrentFiber;
-        var entry = new BlockEntry();
+        var entry = new TaskCompletionSource<MRubyValue>();
         if (!blockedFibers.TryAdd(fiber, entry))
         {
             ThrowAlreadyParked(fiber, "Suspend");
@@ -177,7 +185,7 @@ public class MRubyFiberScheduler : IDisposable
             await Task.Yield();
 
             MRubyValue value;
-            try { value = await entry.Task.ConfigureAwait(ContinueOnCapturedContext); }
+            try { value = await entry.Task; }
             catch (OperationCanceledException) { TryResume(fiber, MRubyValue.Nil); return; }
             catch (Exception ex) { TryResumeWithException(fiber, ex); return; }
             TryResume(fiber, value);
@@ -191,9 +199,9 @@ public class MRubyFiberScheduler : IDisposable
     /// </remarks>
     public virtual void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
     {
-        Await(async (_, continueOnCapturedContext) =>
+        Await((duration, cancellationToken), async (_, x) =>
         {
-            await Task.Delay(duration, cancellationToken).ConfigureAwait(continueOnCapturedContext);
+            await Task.Delay(x.duration, x.cancellationToken);
             return MRubyValue.Nil;
         });
     }
@@ -201,14 +209,11 @@ public class MRubyFiberScheduler : IDisposable
     /// <summary><c>Thread.pass</c>: cooperative yield.</summary>
     /// <remarks>
     /// Default implementation routes through <see cref="Await"/> + <see cref="Task.Yield"/>.
-    /// Note that <see cref="Task.Yield"/> has no <c>ConfigureAwait</c> control — it always
-    /// captures <see cref="SynchronizationContext.Current"/>; this is expected for a yield
-    /// primitive that exists to relinquish the current step to other work.
     /// </remarks>
     public virtual void Yield(CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested) return;
-        Await(async (_, _) =>
+        Await(async _ =>
         {
             await Task.Yield();
             return MRubyValue.Nil;
@@ -216,28 +221,29 @@ public class MRubyFiberScheduler : IDisposable
     }
 
     // ── FiberContinuation dispatch (called via the struct). ─────────────
-    // First call wins; subsequent calls are no-op (the underlying parking
-    // entry is one-shot via TaskCompletionSource.TrySet*). Removing from
-    // blockedFibers atomically with the successful settle releases the
-    // park slot before TryResume runs the fiber, so the fiber can re-park
-    // (next `sleep`, next `Suspend`) without hitting "already parked".
+    // First call wins: TryRemove is atomic so only one settler pulls the
+    // entry. Removing from the dict BEFORE settling matters because the
+    // TCS continuation runs synchronously inline with TrySet*; that
+    // continuation hops into fiber.Resume, which may re-park the fiber
+    // via another Suspend. The slot must already be free by then or
+    // re-park hits "already parked".
 
     internal void SetResult(RFiber fiber, MRubyValue value)
     {
-        if (blockedFibers.TryGetValue(fiber, out var entry) && entry.TrySetResult(value))
-            blockedFibers.TryRemove(fiber, out _);
+        if (blockedFibers.TryRemove(fiber, out var entry))
+            entry.TrySetResult(value);
     }
 
     internal void SetCancelled(RFiber fiber, CancellationToken cancellationToken)
     {
-        if (blockedFibers.TryGetValue(fiber, out var entry) && entry.TrySetCanceled(cancellationToken))
-            blockedFibers.TryRemove(fiber, out _);
+        if (blockedFibers.TryRemove(fiber, out var entry))
+            entry.TrySetCanceled(cancellationToken);
     }
 
     internal void SetException(RFiber fiber, Exception exception)
     {
-        if (blockedFibers.TryGetValue(fiber, out var entry) && entry.TrySetException(exception))
-            blockedFibers.TryRemove(fiber, out _);
+        if (blockedFibers.TryRemove(fiber, out var entry))
+            entry.TrySetException(exception);
     }
 
     static void TryResume(RFiber fiber, MRubyValue value)

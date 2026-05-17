@@ -18,13 +18,13 @@ static class IOMembers
         {
             if (state.TryGetActiveFiberScheduler(out var scheduler))
             {
-                scheduler.Await(async (mrb, continueOnCapturedContext) =>
+                scheduler.Await(async mrb =>
                 {
                     var writer = new ArrayBufferWriter<byte>();
                     while (true)
                     {
                         var mem = writer.GetMemory(4096);
-                        var read = await stream.ReadAsync(mem).ConfigureAwait(continueOnCapturedContext);
+                        var read = await stream.ReadAsync(mem);
                         if (read == 0) break;
                         writer.Advance(read);
                     }
@@ -44,11 +44,11 @@ static class IOMembers
         if (state.TryGetActiveFiberScheduler(out var sched))
         {
             var buffer = ArrayPool<byte>.Shared.Rent(n);
-            sched.Await(async (mrb, continueOnCapturedContext) =>
+            sched.Await(async mrb =>
             {
                 try
                 {
-                    var read = await stream.ReadAsync(buffer.AsMemory(0, n)).ConfigureAwait(continueOnCapturedContext);
+                    var read = await stream.ReadAsync(buffer.AsMemory(0, n));
                     return read == 0
                         ? MRubyValue.Nil
                         : new MRubyValue(mrb.NewString(buffer.AsSpan(0, read)));
@@ -80,9 +80,9 @@ static class IOMembers
             // Copy because the source may outlive `bytes`'s lifetime once we
             // yield. Cheap relative to the syscall.
             var data = bytes.ToArray();
-            scheduler.Await(async (_, continueOnCapturedContext) =>
+            scheduler.Await(async _ =>
             {
-                await stream.WriteAsync(data).ConfigureAwait(continueOnCapturedContext);
+                await stream.WriteAsync(data);
                 return new MRubyValue((long)data.Length);
             });
             return MRubyValue.Nil;
