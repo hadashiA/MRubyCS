@@ -1210,23 +1210,6 @@ mrb.DefineMethod(mrb.FiberClass, mrb.Intern("resume_by_csharp"u8), (state, self)
 
 ## Define async Ruby method (FiberScheduler)
 
-MRubyCS exposes `MRubyFiberScheduler` — a single, host-subclassable scheduler class — so that blocking Ruby primitives can cooperate with a C# async runtime instead of blocking the host thread. Thread routing (ThreadPool vs main thread / UI thread) is determined by the ambient `SynchronizationContext` at await sites, not by per-scheduler dispatch.
-
-| Ruby primitive | Scheduler hook | Notes |
-|---|---|---|
-| `Kernel#sleep` | `KernelSleep` | Default: `Await` + `Task.Delay`. `sleep 0` routes to `Yield` |
-| `Thread.pass` | `Yield` | Default: `Await` + `Task.Yield` |
-| (host-defined async lambda) | `Await(async mrb => …)` | Park, run body on caller thread, resume with body's result |
-| (host-defined external event) | `Suspend` → `FiberContinuation.Resume` | Low-level: park a fiber on an arbitrary external completion |
-
-> [!NOTE]
-> The `IO` / `File` classes are **opt-in** — `MRubyState.Create()` does NOT register them. Call `mrb.DefineIO()` before compiling/running Ruby code that uses them. Hosts that don't need stream/filesystem access can omit the call and the classes simply don't exist in Ruby.
->
-> ```cs
-> using var mrb = MRubyState.Create();
-> mrb.DefineIO();   // adds IO, File, IOError
-> ```
-
 ### Default behavior (no scheduler)
 
 By default, no scheduler is installed. In this mode:
@@ -1259,21 +1242,18 @@ using var mrb = MRubyState.Create(x =>
 using var compiler = MRubyCompiler.Create(mrb);
 
 var fiber = compiler.LoadSourceCodeAsFiber("""
-    sleep 0.05
+    sleep 0.05   // -> same as `await Task.Delay(TimeSpan.FromSeconds(0.05))`
+    Thread.pass  // -> same as `await Task.Yield()`
     :done
     """u8);
 
 fiber.Resume();
 await fiber.WaitForTerminateAsync();
-// `sleep` did not block any thread; the scheduler woke the fiber.
-// `mrb.Dispose()` (the `using`) disposes the installed scheduler too.
+// `sleep`, `pass` did not block any thread; the scheduler wake the fiber.
 ```
 
 > [!NOTE]
-> `sleep` on the *root* fiber still falls back to `Thread.Sleep`, even when a scheduler is installed — there is no caller to yield to. The scheduler hooks only fire from inside `Fiber.new { ... }` bodies (including `LoadSourceCodeAsFiber`).
-
-> [!IMPORTANT]
-> `MRubyState` takes ownership of the installed scheduler: disposing the state disposes the scheduler too. Don't share a single scheduler instance across multiple `MRubyState`s.
+> The *root* fiber still falls back to `Thread.Sleep`, even when a scheduler is installed — there is no caller to yield to. The scheduler hooks only fire from inside `Fiber.new { ... }` bodies (including `LoadSourceCodeAsFiber`).
 
 ### Defining async Ruby methods with `Await`
 
@@ -1354,22 +1334,6 @@ Mechanics:
 
 > [!TIP]
 > Prefer `Await` when the body fits as a single `async` lambda. Drop to `Suspend` only when you need to hand the continuation to external code that completes asynchronously without an awaitable surface.
-
-### Thread routing (`SynchronizationContext`)
-
-`MRubyFiberScheduler` does **not** install any per-scheduler dispatch (no Task.Run, no per-scheduler context). Thread routing of `fiber.Resume` and body continuations is determined entirely by the ambient `SynchronizationContext.Current` at the time of each `await` (default capture behavior — no `ConfigureAwait` games inside the scheduler).
-
-Common configurations:
-
-| Host | `SynchronizationContext.Current` on VM thread | Result |
-|---|---|---|
-| CLI / test / server backend | `null` | All continuations on ThreadPool |
-| WPF / WinForms / ASP.NET UI | set by host | Continuations back to UI thread |
-| Unity main thread | set by host (e.g., `UnitySynchronizationContext`) | Continuations back to main thread |
-| Unity WebGL (no ThreadPool) | host-set main-thread context required | All continuations on main thread |
-
-> [!WARNING]
-> Hosts with a designated VM thread (Unity, WPF, …) **must** ensure `SynchronizationContext.Current` is set on that thread before the first `await`. Without it, continuations land on the ThreadPool and will corrupt VM state.
 
 ### Custom Schedulers (subclassing)
 
