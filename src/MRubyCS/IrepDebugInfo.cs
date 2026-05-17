@@ -2,7 +2,7 @@ using System;
 
 namespace MRubyCS;
 
-/// <summary>Format of the per-pc line table inside an <see cref="IrepDebugInfoFile"/>.</summary>
+/// <summary>Format of the per-pc line table inside an <see cref="IrepDebugInfoFileEntry"/>.</summary>
 public enum DebugLineType : byte
 {
     /// <summary>One <see cref="ushort"/> per pc (legacy, rarely emitted).</summary>
@@ -24,8 +24,8 @@ public sealed class IrepDebugInfo
     /// <summary>Number of bytecode positions covered by this debug info (typically <c>Irep.Sequence.Length</c>).</summary>
     public uint PcCount { get; init; }
 
-    /// <summary>File entries covering disjoint pc ranges of this Irep. Sorted by <see cref="IrepDebugInfoFile.StartPos"/> ascending.</summary>
-    public IrepDebugInfoFile[] Files { get; init; } = [];
+    /// <summary>File entries covering disjoint pc ranges of this Irep. Sorted by <see cref="IrepDebugInfoFileEntry.StartPos"/> ascending.</summary>
+    public IrepDebugInfoFileEntry[] Files { get; init; } = [];
 
     /// <summary>Look up the source line for a given program counter. Returns -1 if no entry covers it.</summary>
     public int FindLine(int pc)
@@ -53,10 +53,10 @@ public sealed class IrepDebugInfo
     }
 
     /// <summary>
-    /// Binary-search-style lookup for the <see cref="IrepDebugInfoFile"/> whose pc-range
+    /// Binary-search-style lookup for the <see cref="IrepDebugInfoFileEntry"/> whose pc-range
     /// covers <paramref name="pc"/>. Mirrors the algorithm used by mruby's <c>debug.c</c>.
     /// </summary>
-    public IrepDebugInfoFile? FindFile(int pc)
+    public IrepDebugInfoFileEntry? FindFile(int pc)
     {
         if (pc < 0 || pc >= PcCount || Files.Length == 0) return null;
         // Upper-bound search: find the last file whose StartPos <= pc.
@@ -78,7 +78,7 @@ public sealed class IrepDebugInfo
 /// One Irep may contain multiple of these if a single function body was assembled from
 /// several source files (extremely rare in mruby; the common case is one entry per Irep).
 /// </summary>
-public sealed class IrepDebugInfoFile
+public sealed class IrepDebugInfoFileEntry
 {
     /// <summary>Inclusive pc at which this file entry starts being authoritative.</summary>
     public uint StartPos { get; init; }
