@@ -22,9 +22,9 @@ partial class MRubyState
         return scheduler is not null;
     }
 
-    public void SetFiberScheduler(MRubyFiberScheduler scheduler)
+    public void UseFiberScheduler(MRubyFiberScheduler? scheduler = null)
     {
-        if (scheduler is null) throw new ArgumentNullException(nameof(scheduler));
+        scheduler ??= new MRubyFiberScheduler();
         scheduler.Attach(this);
         FiberScheduler = scheduler;
     }

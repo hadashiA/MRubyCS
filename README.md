@@ -253,7 +253,7 @@ mrb.Execute(irep);
 `Irep` can be executed as is, or converted to `Proc`, `Fiber` before use. For details on Fiber, refer to the [Fiber](#fiber-coroutine) section.
 
 > [!NOTE]
-> - **`Dispose` when finished** — `MRubyState` is `IDisposable`. The VM itself has no unmanaged resources, but an installed `MRubyFiberScheduler` may hold cancellation tokens for parked fibers; `Dispose` cleans those up. A finalizer is in place as a backstop, but explicit disposal is preferred. If you never call `SetFiberScheduler`, omitting `Dispose` is harmless.
+> - **`Dispose` when finished** — `MRubyState` is `IDisposable`. The VM itself has no unmanaged resources, but an installed `MRubyFiberScheduler` may hold cancellation tokens for parked fibers; `Dispose` cleans those up. A finalizer is in place as a backstop, but explicit disposal is preferred. If you never call `UseFiberScheduler`, omitting `Dispose` is harmless.
 > - **Not thread-safe** — each `MRubyState` instance must be used from a single thread. For multi-threaded scenarios, create a separate instance per thread.
 
 ---
@@ -1228,12 +1228,14 @@ This is the right default for CLI tools and tests that don't need cooperative sc
 
 ### With a scheduler installed
 
-`state.SetFiberScheduler(...)` swaps blocking primitives for cooperative ones. When a non-root fiber calls `sleep`, the VM yields back to its caller instead of blocking; the scheduler arranges for the fiber to be resumed when the deadline expires.
+`mrb.useFiberScheduler(...)` swaps blocking primitives for cooperative ones. When a non-root fiber calls `sleep`, the VM yields back to its caller instead of blocking; the scheduler arranges for the fiber to be resumed when the deadline expires.
 
 ```cs
-using var mrb = MRubyState.Create();
+using var mrb = MRubyState.Create(x =>
+{
+    x.UseFiberScheduler();
+});
 using var compiler = MRubyCompiler.Create(mrb);
-mrb.SetFiberScheduler(new MRubyFiberScheduler());
 
 var fiber = compiler.LoadSourceCodeAsFiber("""
     sleep 0.05
@@ -1257,8 +1259,13 @@ await fiber.WaitForTerminateAsync();
 `Await(async (mrb, continueOnCapturedContext) => …)` is the high-level convenience for bridging an `async` C# lambda into a Ruby method. The body runs starting on the caller (VM) thread; after the first `await`, thread routing is determined by the body's own `.ConfigureAwait(...)` choices and the ambient `SynchronizationContext` — the scheduler doesn't try to dispatch body to any particular thread.
 
 ```cs
-using var mrb = MRubyState.Create();
-mrb.SetFiberScheduler(new MRubyFiberScheduler { ContinueOnCapturedContext = true });
+using var mrb = MRubyState.Create(x =>
+{
+    x.UseFiberScheduler(new MRubyFiberScheduler
+    { 
+        ContinueOnCapturedContext = true
+    })
+});
 
 // Defines `await_http(url)` — fetches a URL without blocking the VM.
 mrb.DefineMethod(mrb.KernelModule, mrb.Intern("await_http"u8), (state, _) =>
@@ -1354,36 +1361,6 @@ Common configurations:
 
 `MRubyFiberScheduler` is a concrete class — host customization is done by subclassing and overriding `KernelSleep` / `Yield` / `Suspend` as needed. The default implementations cover most hosts; subclass only when you need different timer behavior or a custom yield primitive.
 
-```cs
-public class MRubyFiberScheduler : IDisposable
-{
-    public bool ContinueOnCapturedContext { get; set; } = true;
-
-    public virtual void Attach(MRubyState mrb);
-
-    // High-level: park, run body, resume with body's result. Not virtual —
-    // its behavior is intentionally fixed (caller-thread sync prefix +
-    // continueOnCapturedContext-controlled continuations).
-    public void Await(Func<MRubyState, bool, ValueTask<MRubyValue>> body);
-
-    // Low-level park primitive. Override only for custom park bookkeeping.
-    public virtual FiberContinuation Suspend();
-
-    // Ruby `sleep` / `Thread.pass`. Default: Await + Task.Delay / Task.Yield.
-    public virtual void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default);
-    public virtual void Yield(CancellationToken cancellationToken = default);
-
-    public virtual void Dispose();
-}
-
-public readonly struct FiberContinuation
-{
-    public RFiber Fiber { get; }
-    public void Resume(MRubyValue value = default);                           // → scheduler.SetResult
-    public void SetCancelled(CancellationToken cancellationToken = default);  // → scheduler.SetCancelled
-    public void SetException(Exception exception);                            // → scheduler.SetException
-}
-```
 
 Override example — host-managed cancellation on `KernelSleep`:
 
