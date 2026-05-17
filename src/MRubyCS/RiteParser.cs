@@ -134,6 +134,14 @@ public class RiteParser(MRubyState state)
             var nameLength = BinaryPrimitives.ReadUInt16BigEndian(bin);
             bin = bin[sizeof(ushort)..];
 
+            // 0xFFFF in the LVAR symbol table means "no symbol" (placeholder
+            // for slots that have no human-readable name). Skip the byte read.
+            if (nameLength == 0xFFFF)
+            {
+                symbols[i] = Symbol.Empty;
+                continue;
+            }
+
             symbols[i] = state.Intern(bin[..nameLength]);
             bin = bin[nameLength..];
         }
@@ -329,17 +337,29 @@ public class RiteParser(MRubyState state)
 
     bool ReadLocalVariablesRecursive(ref ReadOnlySpan<byte> bin, Symbol[] symbols, Irep irep)
     {
-        for (var i = 0; i < irep.LocalVariables.Length; i++)
+        // mruby stores names for (nlocals - 1) slots: slot 0 is always self and is omitted
+        // from the on-disk LVAR table. The on-disk slot at index `i` therefore corresponds
+        // to the in-memory slot at `i + 1`. Leaving LocalVariables[0] as Symbol.Empty matches
+        // that semantics. Previously this loop ran nlocals times, off-by-one, which both
+        // corrupted slot 0 and threw the parser's read cursor out of alignment for sibling
+        // / child ireps (so all subsequent LocalVariables came out empty).
+        for (var i = 1; i < irep.LocalVariables.Length; i++)
         {
             var symbolIndex = BinaryPrimitives.ReadUInt16BigEndian(bin);
             bin = bin[sizeof(ushort)..];
+
+            if (symbolIndex == 0xFFFF)
+            {
+                irep.LocalVariables[i] = Symbol.Empty;
+                continue;
+            }
 
             if (symbolIndex > symbols.Length - 1)
             {
                 return false;
             }
 
-            irep.LocalVariables[i] = symbolIndex == 0xFFFF ? Symbol.Empty : symbols[symbolIndex];
+            irep.LocalVariables[i] = symbols[symbolIndex];
         }
 
         foreach (var child in irep.Children)
