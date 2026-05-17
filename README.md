@@ -1,6 +1,6 @@
 # mruby/cs
 
-MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine implementation  It combines high Ruby-level compatibility with the performance and extensibility of modern C#. 
+MRubyCS is a pure C# [mruby](https://github.com/mruby/mruby) virtual machine implementation  It combines high Ruby-level compatibility with the performance and extensibility of modern C#.
 
 Easily embed Ruby into Unity or .NET—empowering users to script game logic while keeping your core engine in C#.
 
@@ -1269,7 +1269,7 @@ await fiber.WaitForTerminateAsync();
 using var mrb = MRubyState.Create(x =>
 {
     x.UseFiberScheduler(new MRubyFiberScheduler
-    { 
+    {
         ContinueOnCapturedContext = true
     })
 });
@@ -1369,23 +1369,39 @@ Common configurations:
 `MRubyFiberScheduler` is a concrete class — host customization is done by subclassing and overriding `KernelSleep` / `Yield` / `Suspend` as needed. The default implementations cover most hosts; subclass only when you need different timer behavior or a custom yield primitive.
 
 
-Override example — host-managed cancellation on `KernelSleep`:
+Override example — `UnityFiberScheduler` that routes `sleep` / `Thread.pass` through Unity's `Awaitable` instead of `Task.Delay` / `Task.Yield`. This keeps fiber resumes on the player loop (main thread):
 
 ```cs
-class HostCancellableScheduler : MRubyFiberScheduler
+using UnityEngine;
+using System;
+using System.Threading;
+using MRubyCS;
+
+class UnityFiberScheduler : MRubyFiberScheduler
 {
-    public CancellationTokenSource ShutdownSource { get; } = new();
-
     public override void KernelSleep(TimeSpan duration, CancellationToken cancellationToken = default)
-        => base.KernelSleep(duration, ShutdownSource.Token);   // ignore caller's token, use ours
-
-    public override void Dispose()
     {
-        ShutdownSource.Cancel();
-        ShutdownSource.Dispose();
-        base.Dispose();
+        Await(async (_, _) =>
+        {
+            await Awaitable.WaitForSecondsAsync((float)duration.TotalSeconds, cancellationToken);
+            return MRubyValue.Nil;
+        });
+    }
+
+    public override void Yield(CancellationToken cancellationToken = default)
+    {
+        if (cancellationToken.IsCancellationRequested) return;
+        Await(async (_, _) =>
+        {
+            await Awaitable.NextFrameAsync(cancellationToken);
+            return MRubyValue.Nil;
+        });
     }
 }
+```
+
+```cs
+mrb.UseFiberScheduler(new UnityFiberScheduler());
 ```
 
 Contract:
