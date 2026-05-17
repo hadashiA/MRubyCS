@@ -378,6 +378,20 @@ To read a subasset in Addressables, you would do the following.
 Addressables.LoadAssetAsync<TextAsset>("Assets/hoge.rb[hoge.mrb]")
 ```
 
+##### Hot reload in the Editor
+
+Bundling pre-compiled `.mrb` bytecode via the importer is the production path, but it is **not** the only option.
+
+In environments where MRubyCS.Compiler is supported (macOS, Windows, Linux), it is possible to dynamically load .rb source code at any time, even while it is running.
+
+- **Hot-reload Ruby scripts in Play Mode** — re-`LoadSourceCode` a modified `.rb` file without exiting Play Mode and reattaching the player.
+
+```cs
+using var compiler = MRubyCompiler.Create(mrb);
+var src = File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "scripts/player.rb"));
+compiler.LoadSourceCode(src); // re-evaluates, replacing previous definitions
+```
+
 ### Define ruby class/module/method by C#
 
 ```cs
