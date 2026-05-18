@@ -223,7 +223,7 @@ static class KernelMembers
         var args = state.GetRestArgumentsAfter(0);
         foreach (var arg in args)
         {
-            var s = state.InspectObject(arg);
+            var s = state.Inspect(arg);
             Console.WriteLine(System.Text.Encoding.UTF8.GetString(s.AsSpan()));
         }
 

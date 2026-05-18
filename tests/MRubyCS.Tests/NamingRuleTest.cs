@@ -19,6 +19,9 @@ public class NamingRuleTest
     [TestCase("abcde123", "\"abcde123\"")]
     [TestCase("\"", "\"\\\"\"")]
     [TestCase("\n", "\"\\n\"")]
+    [TestCase("る", "\"る\"")]
+    [TestCase("あい", "\"あい\"")]
+    [TestCase("木の棒", "\"木の棒\"")]
     public void Escape(string input, string expected)
     {
         var src = Encoding.UTF8.GetBytes(input);

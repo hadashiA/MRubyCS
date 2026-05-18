@@ -186,7 +186,9 @@ static class NamingRule
                 if (sequenceLength > 1)
                 {
                     name.Slice(i, sequenceLength).CopyTo(output[offset..]);
-                    i += sequenceLength;
+                    // The for-loop's i++ adds one more, so advance by (sequenceLength - 1)
+                    // here to net out at +sequenceLength per multi-byte char.
+                    i += sequenceLength - 1;
                     offset += sequenceLength;
                     continue;
                 }
